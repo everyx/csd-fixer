@@ -1,0 +1,8 @@
+{
+    "uuid": "csd-fixer@everyx.github.io",
+    "name": "CSD Fixer",
+    "description": "给 GNOME Wayland 下没有 client-side decorations 的窗口（Qt/Electron 等）补齐 GNOME 原生风格的圆角与阴影，实现桌面视觉一致。",
+    "url": "https://github.com/everyx/csd-fixer",
+    "shell-version": ["50"],
+    "settings-schema": "org.gnome.shell.extensions.csd-fixer"
+}

@@ -1,0 +1,16 @@
+{
+  "name": "csd-fixer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "GNOME Shell 扩展：给 Wayland 下无 CSD 的窗口补齐 GNOME 原生风格的圆角与阴影",
+  "scripts": {
+    "test": "jasmine --module tests/",
+    "shell": "tools/dev.sh shell",
+    "log": "tools/dev.sh log",
+    "app": "tools/dev.sh app",
+    "stop": "tools/dev.sh stop",
+    "gen-style": "node tools/gen-style.mjs",
+    "check-style": "node tools/gen-style.mjs --check"
+  }
+}

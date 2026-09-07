@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <!-- CSD Fixer 扩展设置：仅黑白名单（功能性过滤），样式不可自定义（遵循 GNOME 原生） -->
+  <schema id="org.gnome.shell.extensions.csd-fixer"
+          path="/org/gnome/shell/extensions/csd-fixer/">
+    <key name="blacklist" type="as">
+      <default>[]</default>
+      <summary>跳过不处理的窗口（按 wm_class）</summary>
+      <description>
+        列出的 wm_class（如 game-overlayui）即使被判定为无 CSD 也不补装饰。
+        用于修复误判或主动跳过特殊窗口。
+      </description>
+    </key>
+    <key name="whitelist" type="as">
+      <default>[]</default>
+      <summary>只处理列出的窗口（按 wm_class）</summary>
+      <description>
+        留空表示处理所有被判定为无 CSD 的窗口。设置后只处理列出的 wm_class。
+        优先级高于黑名单。
+      </description>
+    </key>
+    <key name="skip-xwayland" type="b">
+      <default>true</default>
+      <summary>跳过 XWayland 窗口</summary>
+      <description>
+        XWayland 窗口已由 Mutter 提供阴影（GNOME 47+ 还有 SSD 标题栏），
+        默认跳过避免双重阴影。仅当发现异常时关闭。
+      </description>
+    </key>
+    <key name="debug" type="b">
+      <default>false</default>
+      <summary>调试日志</summary>
+      <description>输出窗口判定与效果应用日志（console.debug）。</description>
+    </key>
+  </schema>
+</schemalist>
