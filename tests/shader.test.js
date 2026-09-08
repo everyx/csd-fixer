@@ -32,6 +32,10 @@ describe('shadowShader.generated', () => {
         expect(CODE).toContain('evalShadowLayer(uShadow1');
         expect(CODE).toContain('evalShadowLayer(uShadow2');
         expect(CODE).toContain('evalShadowLayer(uShadow3');
-        expect(CODE).toContain('cogl_color_out = vec4(vec3(0.0), min(a, 1.0));');
+        expect(CODE).toContain('cogl_color_out = vec4(vec3(0.0), min(a, 1.0) * cogl_color_in.a);');
+    });
+
+    it('CODE 包含完全透明时的提早短路优化', () => {
+        expect(CODE).toContain('if (cogl_color_in.a <= 0.0)');
     });
 });

@@ -41,9 +41,9 @@ const CODE = `
     vec2 p = cogl_tex_coord0_in.xy * quadSize;
     float d = sdRoundedBox(p - c, halfSize, uRadius);
 
-    // 内亮边：紧贴窗口边缘内侧 1px（d ∈ [-1.0, 0.0]），跟随圆角形状
+    // 内亮边：紧贴窗口边缘内侧 1px（d ∈ [-1.0, 0.0]），跟随圆角形状并同步淡入淡出动效
     if (uOutline.a > 0.0) {
-        float m = clamp(1.0 + d, 0.0, 1.0) * uOutline.a;
+        float m = clamp(1.0 + d, 0.0, 1.0) * uOutline.a * cogl_color_in.a;
         cogl_color_out.rgb = uOutline.rgb * m + cogl_color_out.rgb * (1.0 - m);
         cogl_color_out.a = m + cogl_color_out.a * (1.0 - m);
     }

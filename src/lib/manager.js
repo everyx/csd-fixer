@@ -102,10 +102,19 @@ export class Manager {
         // actor allocation 变化（首帧尺寸 0 → 就绪重判 + 尺寸跟随）
         const actor = win.get_compositor_private();
         if (actor) {
-            this._windows.get(win).signals.push([actor, actor.connect('notify::allocation',
-                () => this._reconcileDebounced())]);
+            this._windows.get(win).signals.push([actor, actor.connect('notify::allocation', () => {
+                const state = this._windows.get(win);
+                // 首帧就绪（尚未装饰但已取得尺寸）：立刻同步，杜绝 50ms 延迟导致打开动效丢失阴影淡入
+                if (state && (!state.clip && !state.shadow) && actor.width > 0 && actor.height > 0)
+                    this._reconcileWindow(win);
+                else
+                    this._reconcileDebounced();
+            })]);
         }
-        this._reconcileDebounced();
+        if (actor && actor.width > 0 && actor.height > 0)
+            this._reconcileWindow(win);
+        else
+            this._reconcileDebounced();
     }
 
     _forgetWindow(win) {
@@ -197,20 +206,27 @@ export class Manager {
         }
     }
 
+    /** 对单个窗口执行幂等重判与装饰同步 */
+    _reconcileWindow(win) {
+        const state = this._windows.get(win);
+        if (!state)
+            return;
+        const actor = win.get_compositor_private();
+        if (!actor || actor.width === 0 || actor.height === 0)
+            return;
+
+        const actions = this._evaluateActions(win);
+        this._syncClip(win, actions.applyClip);
+        this._syncShadow(win, actions.applyShadow);
+
+        if (state.clip || state.shadow)
+            this._updateStyle(win);
+    }
+
     /** 全量幂等重判：对每个已跟踪窗口分别同步 clip 与 shadow */
     _reconcile() {
-        for (const [win, state] of this._windows) {
-            const actor = win.get_compositor_private();
-            if (!actor || actor.width === 0 || actor.height === 0)
-                continue;
-
-            const actions = this._evaluateActions(win);
-            this._syncClip(win, actions.applyClip);
-            this._syncShadow(win, actions.applyShadow);
-
-            if (state.clip || state.shadow)
-                this._updateStyle(win);
-        }
+        for (const [win] of this._windows)
+            this._reconcileWindow(win);
     }
 
     /** restack 后重排所有阴影 actor 到对应窗口下方 */

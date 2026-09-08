@@ -158,6 +158,12 @@ float evalShadowLayer(vec4 s, vec2 p, vec2 winOrigin, vec2 winSize, float radius
 const SNAP_BLEED = 0.8;
 
 const code = `
+    // 若当前 actor 处于完全透明状态（如打开/关闭动画起点或终点），提前终止
+    if (cogl_color_in.a <= 0.0) {
+        cogl_color_out = vec4(0.0);
+        return;
+    }
+
     vec2 halfSize = uWinSize * 0.5;
     vec2 quadSize = uWinSize + uPad * 2.0 + FBO_EXTRA;
     vec2 winOrigin = uPad + FBO_OFFSET;
@@ -177,7 +183,8 @@ const code = `
             + evalShadowLayer(uShadow2, p, winOrigin, uWinSize, uRadius, d)
             + evalShadowLayer(uShadow3, p, winOrigin, uWinSize, uRadius, d)) * clipAlpha;
 
-    cogl_color_out = vec4(vec3(0.0), min(a, 1.0));
+    // 阴影透明度乘以顶点透明度 (cogl_color_in.a)，严丝合缝跟随窗口打开与关闭淡入淡出动画
+    cogl_color_out = vec4(vec3(0.0), min(a, 1.0) * cogl_color_in.a);
 `;
 
 const outputContent = `${header}
