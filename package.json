@@ -10,7 +10,8 @@
     "log": "tools/dev.sh log",
     "app": "tools/dev.sh app",
     "stop": "tools/dev.sh stop",
-    "gen-style": "node tools/gen-style.mjs",
-    "check-style": "node tools/gen-style.mjs --check"
+    "devkit": "tools/devkit.sh",
+    "gen-style": "node tools/gen-style.mjs && node tools/gen-shader.mjs",
+    "check-style": "node tools/gen-style.mjs --check && node tools/gen-shader.mjs --check"
   }
 }

@@ -113,3 +113,47 @@ gnome-extension-reviewer（ego-lint 门禁，clone 到 ~/.local/share/…
   半透明白而非纯透/纯白——真机验证是否复现）
 - 帧率基准（真机 GPU 下拖拽窗口 + POC shader vs rwc box-shadow 对比）
 - 探针代码在 poc/sdf/extension.js（_stageProbe），真机可直接启用观察
+
+## 热重载调研（2026-02-15，决定测试流程）
+
+**问题**：改一版代码就要重启 shell 验证，真机只能注销重登，迭代太慢。
+能否像 Web dev 那样热重载扩展？
+
+**结论**：GNOME 50（gjs 1.88）下**进程内热重载不可行，无官方途径**；
+开发迭代靠嵌套会话（每次全新 shell 进程），真机只做最终验收。
+
+证据链：
+
+| # | 证据 | 来源 |
+|---|---|---|
+| 1 | gjs 模块 registry 按 `uriWithQuery` 缓存：同 URI 二次 `import()` 命中缓存返回旧模块；换 query 参数则重新读盘编译（实测 gjs 1.88：`file:///x.js?v=1` 和 `?v=2` 各自编译，覆盖文件后 `?v=2` 拿到新内容） | gjs modules/internal/loader.js moduleResolveAsyncHook + /tmp 实测 |
+| 2 | shell `extensionSystem.js` 的 `import(extensionJs.get_uri())` **不带 query**，且 `isImported` 标志防重；unload 后重 load 时 metadata.version 变了直接拒绝（"A different version was loaded previously. You need to log out for changes to take effect."） | extensionSystem.js 462-511 |
+| 3 | 官方 D-Bus `ReloadExtension` 方法已是空壳：直接返回 NOT_SUPPORTED "deprecated and does not work" | shellDBus.js 488 |
+| 4 | shell 内部 `reloadExtension()`（版本校验切换/更新安装时用）能走通是因为 unload→重 import 走同一缓存 URI：**拿到的是旧模块**，仅适合 metadata/样式变更，代码不变 | extensionSystem.js 462 |
+| 5 | Wayland 下无进程内重启：GNOME 50 runDialog 内置命令只剩 `lg`/`debugexit`/`rt`（重载主题），**老版本的 `r`（reexec_self）已移除**；注销重登是唯一路径 | runDialog.js 44-56 |
+
+**推论**（测试流程定稿）：
+
+- 嵌套会话（headless/devkit）：每轮 stop+restart 全新进程，天然规避模块缓存——逻辑冒烟主战场
+- 真机：批量修完 bug 一次注销重登验收（不变式，沿用）
+- mutter 50 已移除 `--nested`；嵌套开发会话的官方姿势是 devkit（headless + 虚拟监视器 +
+  pipewire 屏流 + libei 输入，见 mdk/ 源码树）。本机 mutter-everyx 编译时 `-D devkit=disabled`
+  不可用——重编需开 `-D devkit=enabled`，交接文档在 archlinuxcn/mutter-everyx/HANDOFF-devkit.md
+
+**未来可选的伪热重载**（不采用，记录备查）：gjs 的 query-busting 机制理论上可以让
+扩展自己 import 依赖时带 `?v=` 时间戳 query 实现"重载子模块"，但仅覆盖子模块，
+extension.js 入口本身仍由 shell import（无 query），且效果 actor/信号残留清理极易
+出错——复杂度远超收益，不做。
+
+## POC 3：GTK4 原生 2D 解析高斯着色器与互补遮罩渲染流水线（2026-09-08）
+
+### 验证结论
+
+| 验证项 | 结果 | 证据 / 关键突破 |
+|---|---|---|
+| GTK4 原生高斯内核 | ✅ | `tools/gen-shader.mjs` 自动转译 `gskgpuboxshadow.glsl`（commit `539d28f3`）；二维误差函数 erf 双重积分 + 4 角落 8 步缺角解析扣减，根除 1D SDF 圆角偏亮发胖问题，数值与 GTK4 GSK 完全重合（误差 0.000000） |
+| 互补镂空遮罩 | ✅ | 窗口裁剪 $1.0 - \text{clamp}(d + 0.5, 0.0, 1.0)$ 与阴影挖空 $\text{clamp}(d + 0.5, 0.0, 1.0)$ 严格互补（和恒为 1.000000），消除浅色边缘透底黑带，杜绝漏光接缝 |
+| 窗口关闭直角闪烁 | ✅ | 窗口 `unmanaging` 时保持 clip 与 shadow 存活，随窗口 actor 的 `destroy` 自然谢幕，关闭动画全程圆角 |
+| Resize allocation 警告 | ✅ | X/Y/WIDTH/HEIGHT 四维全由 `Clutter.BindConstraint` 底层 C 核心处理，移除 JS 侧 `set_size`，彻底根除 `needs an allocation` 警告 |
+| 动效全维缩放跟随 | ✅ | 绑定 `scale-x/y`、`pivot-point`、`translation-x/y`、`opacity`、`visible`，阴影与窗口弹出、关闭、最小化动效完全同步 |
+

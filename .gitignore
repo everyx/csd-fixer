@@ -5,5 +5,9 @@ package-lock.json
 # 嵌套会话运行时
 /tmp/csd-fixer-dev/
 
-# 调研备查仓库（mutter/gnome-shell/libadwaita/rwc，浅 clone，不入库）
+# 调研备查仓库（mutter/gnome-shell/libadwaita/rwc/gtk，浅 clone，不入库）
 research/
+
+# 会话记录与临时脚本
+*.html
+scratch/

@@ -3,21 +3,26 @@
  *
  * 为什么必须是独立 actor：GLSL fragment 只在 actor 自身矩形内执行，
  * 画不出 actor 边界外——阴影可绘制区必须由本 actor 的尺寸预留
- * （窗口尺寸 + PAD×2）。rwc 用 CSS box-shadow 可溢出绘制所以只需
- * 贴合窗口；SDF 方案必须自身外扩（POC 2 架构考据定稿）。
+ * （窗口尺寸 + PAD×2）。
  *
- * 跟随机制（rwc 实现考据）：
- *   - 移动（高频）：X/Y BindConstraint offset=-PAD——约束系统内同步，零 JS
- *   - 尺寸（低频）：监听窗口 actor notify::allocation → set_size + 通知
- *     manager 更新 uniform（manager 持有 style/effect 参数）
+ * 跟随机制：
+ *   - 几何跟随（位置与尺寸）：X/Y/WIDTH/HEIGHT 4 维全部由 Clutter.BindConstraint
+ *     在合成器 C 核心内原子完成同步，零 JS 帧开销，绝不触发 needs_allocation 警告。
+ *   - 动效跟随（打开/关闭/最小化动画）：通过 GObject.bind_property 绑定
+ *     scale-x/y、pivot-point、translation-x/y、opacity、visible，
+ *     确保阴影严丝合缝地跟随窗口弹出、收缩与淡入淡出动效。
+ *   - z 序（restack）：由 manager 的 display 'restacked' 信号统一维护
+ *     （set_child_below_sibling），本类只管创建与自毁。
  *
- * 本类自管信号与生命周期：destroy() 幂等（含窗口 actor 已销毁的兜底）。
+ * 本类自管信号与生命周期：随 windowActor 的 destroy 信号自然自毁，零内存泄漏。
  */
 
 import Clutter from 'gi://Clutter';
+import GObject from 'gi://GObject';
+import St from 'gi://St';
 
-/** 阴影可绘制余量：最大 blur 14 + spread 5 = 19px，+5 安全余量 */
-export const SHADOW_PAD = 24;
+/** 阴影可绘制余量：最大 blur 14 (σ=7) + spread 5 = 26px (3σ)，+2 安全余量 */
+export const SHADOW_PAD = 28;
 
 export class ShadowActor {
     /**
@@ -30,23 +35,59 @@ export class ShadowActor {
         this._container = container;
         this._destroyed = false;
 
-        this._actor = new Clutter.Actor({
+        this._actor = new St.Bin({
+            name: 'CsdFixerShadowActor',
             reactive: false,
             opacity: 255,
+            style: 'background-color: transparent;',
         });
 
-        // 移动跟随：X/Y 约束（约束在 mutter 内部同步，不占 JS 帧）
-        for (const coordinate of [Clutter.BindCoordinate.X, Clutter.BindCoordinate.Y]) {
-            this._actor.add_constraint(new Clutter.BindConstraint({
-                source: windowActor,
-                coordinate,
-                offset: -SHADOW_PAD,
-            }));
+        // 位置与尺寸跟随：X/Y/WIDTH/HEIGHT 4 维约束全部由 Clutter 内部 C 语言原生同步
+        // 彻底杜绝在 notify::allocation 回调中调用 set_size 破坏 layout 顺序抛出
+        // "Can't update stage views actor unnamed [StBin] is on because it needs an allocation" 警告。
+        this._actor.add_constraint(new Clutter.BindConstraint({
+            source: windowActor,
+            coordinate: Clutter.BindCoordinate.X,
+            offset: -SHADOW_PAD,
+        }));
+        this._actor.add_constraint(new Clutter.BindConstraint({
+            source: windowActor,
+            coordinate: Clutter.BindCoordinate.Y,
+            offset: -SHADOW_PAD,
+        }));
+        this._actor.add_constraint(new Clutter.BindConstraint({
+            source: windowActor,
+            coordinate: Clutter.BindCoordinate.WIDTH,
+            offset: SHADOW_PAD * 2,
+        }));
+        this._actor.add_constraint(new Clutter.BindConstraint({
+            source: windowActor,
+            coordinate: Clutter.BindCoordinate.HEIGHT,
+            offset: SHADOW_PAD * 2,
+        }));
+
+        // 属性与动画跟随：透明度/可见性/缩放/支点/平移全部与窗口同步
+        // 确保窗口在打开（map）、关闭（destroy）、最小化等动画期间，阴影严丝合缝地跟随窗口缩放动画
+        const syncProps = [
+            'opacity',
+            'visible',
+            'pivot-point',
+            'scale-x',
+            'scale-y',
+            'translation-x',
+            'translation-y',
+        ];
+        this._bindings = [];
+        for (const prop of syncProps) {
+            this._bindings.push(windowActor.bind_property(
+                prop, this._actor, prop, GObject.BindingFlags.SYNC_CREATE));
         }
 
-        // 尺寸跟随：窗口 actor allocation 变化 → relayout
+        // 尺寸跟随：仅负责在 allocation 就绪后驱动着色器 uniform 更新，不干扰 actor 自身尺寸
+        this._lastW = 0;
+        this._lastH = 0;
         this._allocId = windowActor.connect('notify::allocation',
-            () => this._emitRelayout());
+            () => this._notifySizeChange());
         // 窗口 actor 销毁 → 兜底自杀（manager 正常路径也会先调 destroy）
         this._destroyId = windowActor.connect('destroy', () => this.destroy());
 
@@ -64,21 +105,24 @@ export class ShadowActor {
         this._relayoutCallbacks.push(cb);
     }
 
-    /** 按窗口 actor 当前尺寸重排（manager 在 decorate 后调用一次） */
+    /** 按窗口 actor 当前尺寸刷新 uniform（manager 在 decorate 后调用一次） */
     relayout() {
+        this._notifySizeChange(true);
+    }
+
+    _notifySizeChange(force = false) {
         if (this._destroyed)
             return;
         const w = this._windowActor.width;
         const h = this._windowActor.height;
         if (w === 0 || h === 0)
             return;  // 尚未映射，等 allocation 信号
-        this._actor.set_size(w + SHADOW_PAD * 2, h + SHADOW_PAD * 2);
+        if (!force && w === this._lastW && h === this._lastH)
+            return;
+        this._lastW = w;
+        this._lastH = h;
         for (const cb of this._relayoutCallbacks)
             cb(w, h);
-    }
-
-    _emitRelayout() {
-        this.relayout();
     }
 
     destroy() {
@@ -86,6 +130,9 @@ export class ShadowActor {
             return;
         this._destroyed = true;
         this._relayoutCallbacks = [];
+        for (const b of this._bindings)
+            b.unbind();
+        this._bindings = [];
         // 窗口 actor 可能已销毁（destroy 信号路径），disconnect 会抛错
         try {
             this._windowActor.disconnect(this._allocId);

@@ -4,7 +4,7 @@
  * 职责：
  *   - 监听窗口创建/销毁/状态变化（幂等：每事件重新求值 → 对比 → 增删效果）
  *   - 读 GSettings（黑白名单、XWayland 跳过、debug）
- *   - 对每个判定命中的窗口挂载装饰效果（effects/shadow 模块，骨架期占位）
+ *   - 对每个判定命中的窗口挂载装饰效果（effects/shadow 模块）
  *
  * 设计约束：
  *   - 所有窗口状态读取都走 detector.shouldDecorate（纯函数，可单测）
@@ -38,6 +38,11 @@ export class Manager {
         this._connect(wm, 'switch-workspace', () => this._reconcile());
         this._connect(global.display, 'window-created', (_, win) => this._trackWindow(win));
         this._connect(global.display, 'grab-op-end', () => this._reconcile());
+        // 窗口 restack（focus/raise/lower）→ 阴影 actor 必须跟着窗口重新垫底
+        // （rwc 同款：insert_child_below 只在插入时有效，restack 后需重新 set）
+        this._connect(global.display, 'restacked', () => this._restackShadows());
+        // 焦点切换（active ↔ backdrop 阴影深度切换）
+        this._connect(global.display, 'notify::focus-window', () => this._reconcileDebounced());
 
         // GSettings 变化 → 全量重判（所有键）
         this._settingsHandlerIds = [];
@@ -92,11 +97,16 @@ export class Manager {
     }
 
     _forgetWindow(win) {
-        this._undecorate(win);
         const state = this._windows.get(win);
         if (state) {
             for (const [obj, id] of state.signals)
                 obj.disconnect(id);
+            // 关键：不要在 unmanaging 阶段同步调用 _undecorate(win)！
+            // 此时窗口即将播放关闭动画并销毁；若在此刻提前拔掉 clipEffect，关闭动画期间
+            // 窗口会瞬间退化为直角，导致原本被圆角裁切的关闭按钮和直角边缘闪现。
+            // 保持 clipEffect 与 shadowActor，让它们随 windowActor 的 destroy 信号自然谢幕。
+            if (this._settings.get_boolean(DEBUG_KEY))
+                console.debug(`[csd-fixer] forget window (closing): ${win.get_wm_class()}`);
         }
         this._windows.delete(win);
     }
@@ -131,6 +141,18 @@ export class Manager {
             // 已装饰的窗口：样式状态可能变（focus/tiled/maximized）→ 更新参数
             if (want)
                 this._updateStyle(win);
+        }
+    }
+
+    /** restack 后重排所有阴影 actor 到对应窗口下方（rwc onRestacked 同款） */
+    _restackShadows() {
+        for (const [win, state] of this._windows) {
+            if (!state.decorated || !state.shadow)
+                continue;
+            const actor = win.get_compositor_private();
+            if (!actor)
+                continue;
+            global.windowGroup.set_child_below_sibling(state.shadow.actor, actor);
         }
     }
 
