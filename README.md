@@ -60,23 +60,23 @@
 
 ```mermaid
 graph TD
-    WinCreated[窗口创建 / 状态变化] --> Detector{detector.shouldDecorate}
-    Detector -- "buffer_rect == frame_rect (无 CSD)" --> Decorate[Manager._decorate]
-    Detector -- "buffer_rect > frame_rect (自带 CSD)" --> Skip[跳过, 保持原样]
+    WinCreated["窗口创建 / 状态变化"] --> Detector{"detector.shouldDecorate"}
+    Detector -- "buffer_rect == frame_rect (无 CSD)" --> Decorate["Manager._decorate"]
+    Detector -- "buffer_rect > frame_rect (自带 CSD)" --> Skip["跳过, 保持原样"]
 
-    subgraph WindowDecoration [窗口装饰体系]
-        Decorate --> Clip[RoundedClipEffect]
-        Clip -->|GLSL 裁剪 + 1px 内亮边| WinActor[Window Actor (Clutter)]
+    subgraph WindowDecoration ["窗口装饰体系"]
+        Decorate --> Clip["RoundedClipEffect"]
+        Clip -->|"GLSL 裁剪 + 1px 内亮边"| WinActor["Window Actor (Clutter)"]
 
-        Decorate --> Shadow[ShadowActor]
-        Shadow -->|4维 BindConstraint: X/Y/W/H| WinActor
-        Shadow -->|bind_property: scale/pivot/opacity| WinActor
-        Shadow --> SdfEffect[SdfShadowEffect]
-        SdfEffect -->|GTK4 原生 2D erf 高斯着色器| ShadowActorBin[St.Bin 阴影层]
+        Decorate --> Shadow["ShadowActor"]
+        Shadow -->|"4维 BindConstraint: X/Y/W/H"| WinActor
+        Shadow -->|"bind_property: scale/pivot/opacity"| WinActor
+        Shadow --> SdfEffect["SdfShadowEffect"]
+        SdfEffect -->|"GTK4 原生 2D erf 高斯着色器"| ShadowActorBin["St.Bin 阴影层"]
     end
 
-    StyleSync[libadwaita SCSS 状态机] -.->|聚焦/失焦/贴边/高对比| SdfEffect
-    StyleSync -.->|圆角半径/内亮边色| Clip
+    StyleSync["libadwaita SCSS 状态机"] -.->|"聚焦/失焦/贴边/高对比"| SdfEffect
+    StyleSync -.->|"圆角半径/内亮边色"| Clip
 ```
 
 ---
