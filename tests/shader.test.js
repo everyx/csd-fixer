@@ -27,8 +27,8 @@ describe('shadowShader.generated', () => {
         expect(DECLARATIONS).toContain('uniform vec2 uPad;');
     });
 
-    it('CODE 包含三层阴影求值、GTK 原生互补剪裁与累加', () => {
-        expect(CODE).toContain('float clipAlpha = clamp(d + 0.5, 0.0, 1.0);');
+    it('CODE 包含三层阴影求值、GTK 原生 SNAP_BLEED 保守外溢剪裁与累加', () => {
+        expect(CODE).toContain('clipAlpha = clamp(d + 0.5 + 0.8, 0.0, 1.0);');
         expect(CODE).toContain('evalShadowLayer(uShadow1');
         expect(CODE).toContain('evalShadowLayer(uShadow2');
         expect(CODE).toContain('evalShadowLayer(uShadow3');

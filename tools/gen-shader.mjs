@@ -146,6 +146,17 @@ float evalShadowLayer(vec4 s, vec2 p, vec2 winOrigin, vec2 winSize, float radius
 }
 `;
 
+/**
+ * 对齐 GTK4 GSK_RECT_SNAP_GROW 机制的亚像素保守重叠裕量 (逻辑像素)。
+ *
+ * 物理依据：
+ * 在分数缩放 (如 1.25x / 1.5x / 1.75x) 下，窗口 actor 与阴影 actor 因独立矩阵变换，
+ * GPU 光栅化测试与 Shader UV 插值之间存在最大 1 个物理像素的相位差。
+ * 注入 0.8px 的重叠裕量，确保阴影镂空向窗体底板内收缩，
+ * 永远有一层微阴影作为底层兜底，彻底吸收亚像素拖动舍入抖动，根除 1px 亮缝。
+ */
+const SNAP_BLEED = 0.8;
+
 const code = `
     vec2 halfSize = uWinSize * 0.5;
     vec2 quadSize = uWinSize + uPad * 2.0 + FBO_EXTRA;
@@ -154,10 +165,9 @@ const code = `
     vec2 p = cogl_tex_coord0_in.xy * quadSize;
     float d = sdRoundedBox(p - c, halfSize, uRadius);
 
-    // GTK 原生镂空剪裁：与 RoundedClipEffect (1.0 - clamp(d + 0.5, 0.0, 1.0))
-    // 严格互补。窗内完全剔除，避免透过窗口半透明边缘污染导致近端发黑；
-    // 边界处连续过渡，总覆盖度恒为 1.0，杜绝亮缝。
-    float clipAlpha = clamp(d + 0.5, 0.0, 1.0);
+    // 对齐 GTK4 GSK_RECT_SNAP_GROW 哲学：引入亚像素保守外溢 (SNAP_BLEED = ${SNAP_BLEED.toFixed(1)})
+    // 允许阴影向窗口底部延伸兜底，彻底杜绝分数缩放拖动时的 1px 漏光缝隙
+    float clipAlpha = clamp(d + 0.5 + ${SNAP_BLEED.toFixed(1)}, 0.0, 1.0);
     if (clipAlpha <= 0.0) {
         cogl_color_out = vec4(0.0);
         return;
