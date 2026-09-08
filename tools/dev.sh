@@ -40,6 +40,10 @@ cmd_shell() {
         mkdir -p "$EXT_DIR/schemas"
         cp "$SRC_DIR/schemas/"*.xml "$EXT_DIR/schemas/"
         glib-compile-schemas "$EXT_DIR/schemas"
+        # 注册到用户级 glib-2.0 schemas，使终端直接运行 gsettings 无需加环境变量
+        mkdir -p "$HOME/.local/share/glib-2.0/schemas"
+        ln -sf "$EXT_DIR/schemas/"*.xml "$HOME/.local/share/glib-2.0/schemas/"
+        glib-compile-schemas "$HOME/.local/share/glib-2.0/schemas"
     fi
     rm -f "$PIDFILE" "$LOG"   # 清旧日志，避免新旧会话输出混淆
 

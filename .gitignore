@@ -11,3 +11,4 @@ research/
 # 会话记录与临时脚本
 *.html
 scratch/
+gschemas.compiled

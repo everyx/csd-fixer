@@ -15,7 +15,7 @@ import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import St from 'gi://St';
 
-import {shouldDecorate} from './detector.js';
+import {shouldDecorate, shouldClipWindow} from './detector.js';
 import {styleForWindow} from './style.js';
 import {RoundedClipEffect} from '../effects/clipEffect.js';
 import {SdfShadowEffect} from '../effects/shadowEffect.js';
@@ -44,9 +44,14 @@ export class Manager {
         // 焦点切换（active ↔ backdrop 阴影深度切换）
         this._connect(global.display, 'notify::focus-window', () => this._reconcileDebounced());
 
+        // 监听显示器变化（缩放改变、外接屏插拔等）
+        const monitorManager = global.backend?.get_monitor_manager?.();
+        if (monitorManager)
+            this._connect(monitorManager, 'monitors-changed', () => this._reconcile());
+
         // GSettings 变化 → 全量重判（所有键）
         this._settingsHandlerIds = [];
-        for (const key of ['blacklist', 'whitelist', 'skip-xwayland', DEBUG_KEY]) {
+        for (const key of ['blacklist', 'whitelist', 'skip-xwayland', 'prefer-crisp-text', DEBUG_KEY]) {
             const id = this._settings.connect(`changed::${key}`, () => this._reconcile());
             this._settingsHandlerIds.push(id);
         }
@@ -82,11 +87,19 @@ export class Manager {
         if (this._windows.has(win))
             return;
         this._windows.set(win, {decorated: null, signals: []});
-        // 窗口级信号（位置/尺寸/焦点变化 → 幂等重判）
-        for (const sig of ['position-changed', 'size-changed', 'notify::appears-focused',
-                           'notify::maximized-horizontally', 'notify::maximized-vertically',
-                           'notify::fullscreen'])
-            this._windows.get(win).signals.push([win, win.connect(sig, () => this._reconcileDebounced())]);
+        // 窗口级信号（位置/尺寸/焦点/显示器变化 → 幂等重判）
+        const windowSignals = [
+            'position-changed', 'size-changed', 'notify::appears-focused',
+            'notify::maximized-horizontally', 'notify::maximized-vertically',
+            'notify::fullscreen', 'notify::main-monitor', 'highest-scale-monitor-changed',
+        ];
+        for (const sig of windowSignals) {
+            try {
+                this._windows.get(win).signals.push([win, win.connect(sig, () => this._reconcileDebounced())]);
+            } catch (e) {
+                // 部分 Mutter 版本可能缺少某些信号，静默忽略
+            }
+        }
         this._connect(win, 'unmanaging', () => this._forgetWindow(win));
         // actor allocation 变化（首帧尺寸 0 → 就绪重判 + 尺寸跟随）
         const actor = win.get_compositor_private();
@@ -122,6 +135,45 @@ export class Manager {
             });
     }
 
+    /** 获取窗口所在显示器的物理/逻辑缩放比例 */
+    _getMonitorScale(win) {
+        const monitor = win.get_monitor();
+        if (monitor < 0)
+            return 1;
+        if (typeof global.display?.get_monitor_scale === 'function')
+            return global.display.get_monitor_scale(monitor);
+        return 1;
+    }
+
+    /** 是否应为该窗口启用离线圆角剪裁 */
+    _shouldClipWindow(win) {
+        const preferCrisp = this._settings.get_boolean('prefer-crisp-text');
+        const scale = this._getMonitorScale(win);
+        return shouldClipWindow({preferCrispText: preferCrisp, scale});
+    }
+
+    /** 动态同步已装饰窗口的 clipEffect（用于跨屏拖拽或设置实时切换） */
+    _syncClip(win) {
+        const state = this._windows.get(win);
+        if (!state)
+            return;
+        const actor = win.get_compositor_private();
+        if (!actor)
+            return;
+
+        const wantClip = this._shouldClipWindow(win);
+        const hasClip = Boolean(state.clip);
+        if (wantClip !== hasClip) {
+            if (wantClip) {
+                state.clip = new RoundedClipEffect();
+                actor.add_effect(state.clip);
+            } else {
+                actor.remove_effect(state.clip);
+                state.clip = null;
+            }
+        }
+    }
+
     /** 全量幂等重判：对每个已跟踪窗口求值 → 与当前状态对比 → 增删 */
     _reconcile() {
         for (const [win, state] of this._windows) {
@@ -137,6 +189,8 @@ export class Manager {
                 else
                     this._undecorate(win);
                 state.decorated = want;
+            } else if (want) {
+                this._syncClip(win);
             }
             // 已装饰的窗口：样式状态可能变（focus/tiled/maximized）→ 更新参数
             if (want)
@@ -163,7 +217,7 @@ export class Manager {
             return false;
         const b = win.get_buffer_rect();
         const f = win.get_frame_rect();
-        return shouldDecorate({
+        const res = shouldDecorate({
             bufferWidth: b.width, bufferHeight: b.height,
             frameWidth: f.width, frameHeight: f.height,
             scale: actor.get_geometry_scale?.() ?? 1,
@@ -175,16 +229,24 @@ export class Manager {
             wmClass: win.get_wm_class(),
             blacklist: this._settings.get_strv('blacklist'),
             whitelist: this._settings.get_strv('whitelist'),
-        }).apply;
+        });
+        if (this._settings.get_boolean(DEBUG_KEY)) {
+            console.debug(`[csd-fixer] evaluate: "${win.get_title() ?? ''}" wmClass=${win.get_wm_class()} type=${win.get_window_type()} apply=${res.apply} reason=${res.reason} buf=${b.width}x${b.height} frame=${f.width}x${f.height}`);
+        }
+        return res.apply;
     }
 
     _decorate(win) {
         const actor = win.get_compositor_private();
         const state = this._windows.get(win);
 
-        // 1) 圆角裁剪 + 内亮边：挂窗口 actor 本体
-        state.clip = new RoundedClipEffect();
-        actor.add_effect(state.clip);
+        // 1) 圆角裁剪 + 内亮边：按需挂窗口 actor 本体
+        if (this._shouldClipWindow(win)) {
+            state.clip = new RoundedClipEffect();
+            actor.add_effect(state.clip);
+        } else {
+            state.clip = null;
+        }
 
         // 2) SDF 阴影：独立 actor 垫窗口下（尺寸含 PAD 余量）
         state.shadowFx = new SdfShadowEffect();
@@ -199,7 +261,7 @@ export class Manager {
 
         this._applyStyle(win, this._styleOf(win));
         if (this._settings.get_boolean(DEBUG_KEY))
-            console.debug(`[csd-fixer] decorate: ${win.get_wm_class()} "${win.get_title() ?? ''}" ${actor.width}x${actor.height}`);
+            console.debug(`[csd-fixer] decorate: ${win.get_wm_class()} "${win.get_title() ?? ''}" ${actor.width}x${actor.height} (clip=${Boolean(state.clip)})`);
     }
 
     _undecorate(win) {
@@ -237,13 +299,18 @@ export class Manager {
     _applyStyle(win, style, wOverride, hOverride) {
         const state = this._windows.get(win);
         const actor = win.get_compositor_private();
-        if (!state?.clip || !actor)
+        if (!state || !actor)
             return;
 
         const w = wOverride ?? actor.width;
         const h = hOverride ?? actor.height;
-        state.clip.setParams(w, h, style.radius, style.outline);
-        state.shadowFx.setParams(w, h, style.radius, SHADOW_PAD, style.shadows);
+        if (state.clip)
+            state.clip.setParams(w, h, style.radius, style.outline);
+        if (state.shadowFx) {
+            // 若免除了圆角裁剪（直角窗口），阴影半径同步为 0 以保证 SDF 阴影与直角外轮廓严丝合缝
+            const shadowRadius = state.clip ? style.radius : 0;
+            state.shadowFx.setParams(w, h, shadowRadius, SHADOW_PAD, style.shadows);
+        }
     }
 
     _updateStyle(win) {

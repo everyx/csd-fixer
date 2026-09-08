@@ -27,6 +27,13 @@
         默认跳过避免双重阴影。仅当发现异常时关闭。
       </description>
     </key>
+    <key name="prefer-crisp-text" type="b">
+      <default>false</default>
+      <summary>优先保证文字清晰</summary>
+      <description>
+        在分数缩放屏幕上禁用圆角（保留阴影），避免文字模糊与性能损耗。整数缩放不受影响。
+      </description>
+    </key>
     <key name="debug" type="b">
       <default>false</default>
       <summary>调试日志</summary>

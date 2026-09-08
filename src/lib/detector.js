@@ -90,3 +90,28 @@ export const WindowType = {
     UTILITY: 7,
     SPLASHSCREEN: 8,
 };
+
+/**
+ * 判断缩放倍率是否为分数缩放（非整数）。
+ * scale 无效或 <=0 时按非分数处理（false）。
+ */
+export function isFractionalScale(scale) {
+    if (scale == null || !Number.isFinite(scale) || scale <= 0)
+        return false;
+    return Math.abs(scale - Math.round(scale)) > 0.001;
+}
+
+/**
+ * 判定窗口是否需要挂载圆角剪裁。
+ *
+ * 规则：
+ *   - 若未开启 preferCrispText（默认），恒定返回 true（全功能圆角）。
+ *   - 若开启 preferCrispText：
+ *     - 分数缩放屏幕（1.25x, 1.33x, 1.5x 等）返回 false（免除 FBO 剪裁，确保原生锐利度）。
+ *     - 整数缩放屏幕（1.0x, 2.0x 等）返回 true（整数缩放下 FBO 不模糊，保留完整圆角）。
+ */
+export function shouldClipWindow({preferCrispText = false, scale = 1}) {
+    if (!preferCrispText)
+        return true;
+    return !isFractionalScale(scale);
+}

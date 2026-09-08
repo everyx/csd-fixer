@@ -3,7 +3,7 @@
  * 运行: jasmine --module tests/ （见 package.json 的 npm test）
  */
 
-import {shouldDecorate, computeInsets, WindowType} from '../src/lib/detector.js';
+import {shouldDecorate, computeInsets, WindowType, isFractionalScale, shouldClipWindow} from '../src/lib/detector.js';
 
 describe('computeInsets', () => {
     it('buffer==frame（scale=1）→ 零边距', () => {
@@ -89,5 +89,48 @@ describe('shouldDecorate', () => {
     it('wmClass 为 null 且黑名单含 null 项？→ 白名单为空时按无 CSD 处理', () => {
         const r = shouldDecorate({...base, wmClass: null});
         expect(r.apply).toBeTrue();
+    });
+});
+
+describe('isFractionalScale', () => {
+    it('整数缩放（1, 2, 3）→ 不是分数缩放', () => {
+        expect(isFractionalScale(1.0)).toBeFalse();
+        expect(isFractionalScale(2.0)).toBeFalse();
+        expect(isFractionalScale(3.0)).toBeFalse();
+    });
+
+    it('常见分数缩放（1.25, 1.333333, 1.5, 1.75）→ 是分数缩放', () => {
+        expect(isFractionalScale(1.25)).toBeTrue();
+        expect(isFractionalScale(1.333333)).toBeTrue();
+        expect(isFractionalScale(1.5)).toBeTrue();
+        expect(isFractionalScale(1.75)).toBeTrue();
+        expect(isFractionalScale(2.25)).toBeTrue();
+    });
+
+    it('非数字或异常 scale → 保守判定非分数', () => {
+        expect(isFractionalScale(null)).toBeFalse();
+        expect(isFractionalScale(undefined)).toBeFalse();
+        expect(isFractionalScale(0)).toBeFalse();
+        expect(isFractionalScale(-1)).toBeFalse();
+        expect(isFractionalScale(NaN)).toBeFalse();
+    });
+});
+
+describe('shouldClipWindow', () => {
+    it('preferCrispText=false（默认）时始终启用圆角裁剪', () => {
+        expect(shouldClipWindow({preferCrispText: false, scale: 1.0})).toBeTrue();
+        expect(shouldClipWindow({preferCrispText: false, scale: 1.333333})).toBeTrue();
+        expect(shouldClipWindow({preferCrispText: false, scale: 2.0})).toBeTrue();
+    });
+
+    it('preferCrispText=true 时在分数缩放屏幕免除圆角剪裁，整数屏幕保留', () => {
+        // 整数缩放屏保留
+        expect(shouldClipWindow({preferCrispText: true, scale: 1.0})).toBeTrue();
+        expect(shouldClipWindow({preferCrispText: true, scale: 2.0})).toBeTrue();
+        // 分数缩放屏免除
+        expect(shouldClipWindow({preferCrispText: true, scale: 1.25})).toBeFalse();
+        expect(shouldClipWindow({preferCrispText: true, scale: 1.333333})).toBeFalse();
+        expect(shouldClipWindow({preferCrispText: true, scale: 1.5})).toBeFalse();
+        expect(shouldClipWindow({preferCrispText: true, scale: 1.75})).toBeFalse();
     });
 });
