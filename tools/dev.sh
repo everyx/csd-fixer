@@ -15,7 +15,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"   # 仓库根（脚本在 tools/ 下）
-SRC_DIR="${SRC_DIR:-$ROOT/src}"              # 扩展源码目录（POC 可覆盖: SRC_DIR=$ROOT/poc/sdf）
+SRC_DIR="${SRC_DIR:-$ROOT/src}"              # 扩展源码目录
 UUID="$(python3 -c "import json; print(json.load(open('$SRC_DIR/metadata.json'))['uuid'])")"
 EXT_DIR="$HOME/.local/share/gnome-shell/extensions/$UUID"
 WL_DISPLAY="wayland-csd-fixer"

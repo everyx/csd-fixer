@@ -1,7 +1,0 @@
-{
-    "name": "csd-fixer detect POC",
-    "description": "POC: dump buffer_rect vs frame_rect for all windows",
-    "uuid": "csd-fixer-detect-poc@local",
-    "shell-version": ["50"],
-    "version-name": "0.1"
-}

@@ -1,6 +1,0 @@
-{
-    "uuid": "csd-fixer-sdf-poc@local",
-    "name": "CSD Fixer SDF POC",
-    "description": "POC 2: SDF rounded corners + shadow shader",
-    "shell-version": ["50"]
-}
