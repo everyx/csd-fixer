@@ -16,7 +16,7 @@ import GObject from 'gi://GObject';
 import Cogl from 'gi://Cogl';
 import Shell from 'gi://Shell';
 
-import { DECLARATIONS, CODE } from './shadowShader.generated.js';
+import {DECLARATIONS, CODE} from './shadowShader.generated.js';
 
 export const SdfShadowEffect = GObject.registerClass({
     GTypeName: 'CsdFixerSdfShadowEffect',

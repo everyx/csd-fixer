@@ -82,7 +82,7 @@ function getWindowRules(settings) {
     try {
         const v = settings.get_value('window-rules');
         return v ? v.deep_unpack() : {};
-    } catch (e) {
+    } catch {
         return {};
     }
 }
@@ -198,7 +198,7 @@ function showAddRuleDialog(parentWindow, settings, installedApps, onRuleAdded) {
     formGroup.add(entryRow);
 
     // 点击列表行自动填入 wmClass
-    listBox.connect('row-activated', (_, row) => {
+    listBox.connect('row-activated', (_box, row) => {
         if (row._appData?.wmClass)
             entryRow.text = row._appData.wmClass;
     });

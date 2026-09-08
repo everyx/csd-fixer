@@ -38,6 +38,7 @@ cmd_shell() {
     [[ -d "$SRC_DIR/lib" ]] && cp -r "$SRC_DIR/lib" "$EXT_DIR/"
     [[ -d "$SRC_DIR/style" ]] && cp -r "$SRC_DIR/style" "$EXT_DIR/"
     [[ -d "$SRC_DIR/effects" ]] && cp -r "$SRC_DIR/effects" "$EXT_DIR/"
+    [[ -d "$SRC_DIR/locale" ]] && cp -r "$SRC_DIR/locale" "$EXT_DIR/"
     if [[ -d "$SRC_DIR/schemas" ]]; then
         mkdir -p "$EXT_DIR/schemas"
         cp "$SRC_DIR/schemas/"*.xml "$EXT_DIR/schemas/"

@@ -2,7 +2,7 @@
 # 嵌套会话启动脚本（由 dev.sh 调用；独立文件避免多层引号转义地狱）
 set -u
 
-# UUID 由调用方（dev.sh）通过环境变量传入（支持 POC 目录切换）
+# UUID 由调用方（dev.sh）通过环境变量传入
 UUID="${CSD_FIXER_UUID:-csd-fixer@everyx.github.io}"
 WL_DISPLAY="wayland-csd-fixer"
 STATE_DIR="/tmp/csd-fixer-dev"
@@ -20,7 +20,6 @@ sleep 4
 
 # headless 固坑修正：无 GDM 激活流程时 window_group 保持隐藏，
 # 窗口 actor 永不 mapped（视觉测试全部失真）。Eval 强制显示。
-# （POC 1 只查 API 数据没暴露；POC 2 像素验证时发现）
 for i in $(seq 1 15); do
     BUS_ADDR="$(tr '\0' '\n' < /proc/$!/environ 2>/dev/null | grep '^DBUS_SESSION_BUS_ADDRESS=' | cut -d= -f2-)"
     if [[ -n "$BUS_ADDR" ]]; then
@@ -34,11 +33,6 @@ for i in $(seq 1 15); do
     fi
     sleep 1
 done
-
-# 扩展设置（debug 日志开；POC 无 schema 时跳过）
-if [[ -d "$EXT_DIR/schemas" ]] && ls "$EXT_DIR/schemas/"*.gschema.valid &>/dev/null; then
-    gsettings --schemadir "$EXT_DIR/schemas" set org.gnome.shell.extensions.csd-fixer debug true || true
-fi
 
 # enable + 状态输出（走本会话自己的 D-Bus）
 gnome-extensions enable "$UUID" || true

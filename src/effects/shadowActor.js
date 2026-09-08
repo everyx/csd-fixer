@@ -137,12 +137,12 @@ export class ShadowActor {
         try {
             this._windowActor.disconnect(this._allocId);
             this._windowActor.disconnect(this._destroyId);
-        } catch (e) {
+        } catch {
             // actor 已销毁——信号随之释放，无需处理
         }
         try {
             this._container.remove_child(this._actor);
-        } catch (e) {
+        } catch {
             // container 可能已销毁
         }
         this._actor.destroy();

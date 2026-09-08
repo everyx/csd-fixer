@@ -82,18 +82,6 @@ describe('shouldDecorate', () => {
         expect(r.reason).toBe('has-ssd-frame');
     });
 
-    it('skipXwayland=true 显式开启时跳过 XWayland 窗口', () => {
-        const r = shouldDecorate({...base, isX11: true, skipXwayland: true});
-        expect(r.apply).toBeFalse();
-        expect(r.reason).toBe('xwayland-skipped');
-    });
-
-    it('skipXwayland=false（默认）时 XWayland 窗口按同一 Mutter 阴影规则智能处理', () => {
-        const r = shouldDecorate({...base, isX11: true, skipXwayland: false});
-        expect(r.apply).toBeTrue();
-        expect(r.reason).toContain('no-csd');
-    });
-
     it('最大化/全屏 → 跳过', () => {
         expect(shouldDecorate({...base, isMaximized: true}).apply).toBeFalse();
         expect(shouldDecorate({...base, isFullscreen: true}).apply).toBeFalse();
@@ -101,23 +89,6 @@ describe('shouldDecorate', () => {
 
     it('非普通窗口类型 → 跳过', () => {
         expect(shouldDecorate({...base, windowType: WindowType.DOCK}).apply).toBeFalse();
-    });
-
-    it('黑名单命中 → 跳过', () => {
-        const r = shouldDecorate({...base, blacklist: ['test-app']});
-        expect(r.apply).toBeFalse();
-        expect(r.reason).toContain('blacklisted');
-    });
-
-    it('白名单非空且不含该窗口 → 跳过；命中 → 处理', () => {
-        const whitelist = ['only-this'];
-        expect(shouldDecorate({...base, whitelist}).apply).toBeFalse();
-        expect(shouldDecorate({...base, whitelist, wmClass: 'only-this'}).apply).toBeTrue();
-    });
-
-    it('wmClass 为 null 且白名单为空时按无 CSD 正常处理', () => {
-        const r = shouldDecorate({...base, wmClass: null});
-        expect(r.apply).toBeTrue();
     });
 });
 

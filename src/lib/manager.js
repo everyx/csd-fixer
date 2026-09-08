@@ -3,11 +3,11 @@
  *
  * 职责：
  *   - 监听窗口创建/销毁/状态变化（幂等：每事件重新求值 → 对比 → 增删效果）
- *   - 读 GSettings（黑白名单、XWayland 跳过、debug）
+ *   - 读 GSettings（圆角半径、文本锐利度优先、窗口排除规则）
  *   - 对每个判定命中的窗口挂载装饰效果（effects/shadow 模块）
  *
  * 设计约束：
- *   - 所有窗口状态读取都走 detector.shouldDecorate（纯函数，可单测）
+ *   - 所有窗口状态读取都走 detector.evaluateWindowActions（纯函数，可单测）
  *   - enable/disable 幂等，disable 后零残留（无信号泄漏、无孤儿 actor）
  */
 
@@ -15,7 +15,7 @@ import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import St from 'gi://St';
 
-import {evaluateWindowActions, RuleMode} from './detector.js';
+import {evaluateWindowActions} from './detector.js';
 import {styleForWindow} from './style.js';
 import {RoundedClipEffect} from '../effects/clipEffect.js';
 import {SdfShadowEffect} from '../effects/shadowEffect.js';
@@ -94,7 +94,7 @@ export class Manager {
         for (const sig of windowSignals) {
             try {
                 this._windows.get(win).signals.push([win, win.connect(sig, () => this._reconcileDebounced())]);
-            } catch (e) {
+            } catch {
                 // 部分 Mutter 版本可能缺少某些信号，静默忽略
             }
         }
@@ -142,7 +142,7 @@ export class Manager {
         try {
             const v = this._settings.get_value('window-rules');
             return v ? v.deep_unpack() : {};
-        } catch (e) {
+        } catch {
             return {};
         }
     }

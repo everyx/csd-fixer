@@ -12,6 +12,7 @@
   "scripts": {
     "pretest": "npm run compile-locales",
     "test": "jasmine --module tests/",
+    "lint": "eslint src/",
     "shell": "tools/dev.sh shell",
     "log": "tools/dev.sh log",
     "app": "tools/dev.sh app",
@@ -27,6 +28,6 @@
   },
   "devDependencies": {
     "eslint": "^9.0.0",
-    "eslint-config-gnome": "^1.0.1"
+    "eslint-config-gnome": "git+https://gitlab.gnome.org/World/javascript/eslint-config-gnome.git"
   }
 }
