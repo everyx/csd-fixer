@@ -135,3 +135,101 @@ export function shouldClipWindow({preferCrispText = false, scale = 1}) {
         return true;
     return !isFractionalScale(scale);
 }
+
+/**
+ * 窗口排除规则模式枚举。
+ */
+export const RuleMode = {
+    DISABLE_ALL: 'disable-all',      // 全部禁用（不补阴影，不裁圆角）
+    DISABLE_CLIP: 'disable-clip',    // 禁用圆角裁切（保留阴影）
+    DISABLE_SHADOW: 'disable-shadow', // 禁用阴影（保留圆角裁切）
+};
+
+/**
+ * 匹配窗口针对的规则模式。
+ *
+ * 匹配顺序：
+ * 1. windowRules 精确匹配 wmClass
+ * 2. windowRules 大小写不敏感匹配
+ * 3. 兼容旧 blacklist（匹配则视为 DISABLE_ALL）
+ * 4. 无规则匹配返回 null
+ */
+export function resolveRule(wmClass, windowRules = {}) {
+    if (!wmClass)
+        return null;
+
+    if (Object.prototype.hasOwnProperty.call(windowRules, wmClass))
+        return windowRules[wmClass];
+
+    const lowerTarget = wmClass.toLowerCase();
+    for (const [key, val] of Object.entries(windowRules)) {
+        if (key.toLowerCase() === lowerTarget)
+            return val;
+    }
+
+    return null;
+}
+
+/**
+ * 综合窗口几何判据与排除规则，求值阴影与圆角的具体执行动作。
+ *
+ * 参数：
+ *   geometryScale: 窗口 buffer 几何缩放（actor.get_geometry_scale，默认 1）
+ *   monitorScale: 显示器物理缩放比例（global.display.get_monitor_scale，如 1.25, 1.333）
+ * 返回：{ applyShadow: boolean, applyClip: boolean, reason: string }
+ */
+export function evaluateWindowActions({
+    bufferWidth, bufferHeight, frameWidth, frameHeight,
+    scale = 1,
+    geometryScale = scale,
+    monitorScale = scale,
+    isX11 = false,
+    isMaximized = false, isFullscreen = false,
+    hasSsd = false,
+    windowType = WindowType.NORMAL,
+    wmClass,
+    windowRules = {},
+    preferCrispText = false,
+    insetThreshold = MUTTER_CSD_MIN_INSET_THRESHOLD,
+}) {
+    // 1. 基础几何判据（是否属于无 CSD 窗口）
+    const base = shouldDecorate({
+        bufferWidth, bufferHeight, frameWidth, frameHeight,
+        scale: geometryScale,
+        isX11,
+        isMaximized, isFullscreen,
+        hasSsd, windowType, wmClass,
+        insetThreshold,
+    });
+
+    if (!base.apply) {
+        return {
+            applyShadow: false,
+            applyClip: false,
+            reason: base.reason,
+        };
+    }
+
+    // 2. 规则解析
+    const rule = resolveRule(wmClass, windowRules);
+
+    if (rule === RuleMode.DISABLE_ALL) {
+        return {
+            applyShadow: false,
+            applyClip: false,
+            reason: `disabled-by-rule(${wmClass}:disable-all)`,
+        };
+    }
+
+    const applyShadow = rule !== RuleMode.DISABLE_SHADOW;
+    const applyClip = rule === RuleMode.DISABLE_CLIP
+        ? false
+        : shouldClipWindow({preferCrispText, scale: monitorScale});
+
+    return {
+        applyShadow,
+        applyClip,
+        reason: rule ? `rule-applied(${wmClass}:${rule})` : base.reason,
+    };
+}
+

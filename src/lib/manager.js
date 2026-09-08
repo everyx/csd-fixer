@@ -15,13 +15,11 @@ import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import St from 'gi://St';
 
-import {shouldDecorate, shouldClipWindow} from './detector.js';
+import {evaluateWindowActions, RuleMode} from './detector.js';
 import {styleForWindow} from './style.js';
 import {RoundedClipEffect} from '../effects/clipEffect.js';
 import {SdfShadowEffect} from '../effects/shadowEffect.js';
 import {ShadowActor, SHADOW_PAD} from '../effects/shadowActor.js';
-
-const DEBUG_KEY = 'debug';
 
 export class Manager {
     /** @param {import('../extension.js').default} ext */
@@ -49,9 +47,9 @@ export class Manager {
         if (monitorManager)
             this._connect(monitorManager, 'monitors-changed', () => this._reconcile());
 
-        // GSettings 变化 → 全量重判（所有键）
+        // GSettings 变化 → 全量重判（仅相关核心键）
         this._settingsHandlerIds = [];
-        for (const key of ['blacklist', 'whitelist', 'skip-xwayland', 'prefer-crisp-text', DEBUG_KEY]) {
+        for (const key of ['window-rules', 'prefer-crisp-text']) {
             const id = this._settings.connect(`changed::${key}`, () => this._reconcile());
             this._settingsHandlerIds.push(id);
         }
@@ -86,7 +84,7 @@ export class Manager {
     _trackWindow(win) {
         if (this._windows.has(win))
             return;
-        this._windows.set(win, {decorated: null, signals: []});
+        this._windows.set(win, {clip: null, shadow: null, shadowFx: null, signals: []});
         // 窗口级信号（位置/尺寸/焦点/显示器变化 → 幂等重判）
         const windowSignals = [
             'position-changed', 'size-changed', 'notify::appears-focused',
@@ -103,9 +101,10 @@ export class Manager {
         this._connect(win, 'unmanaging', () => this._forgetWindow(win));
         // actor allocation 变化（首帧尺寸 0 → 就绪重判 + 尺寸跟随）
         const actor = win.get_compositor_private();
-        if (actor)
+        if (actor) {
             this._windows.get(win).signals.push([actor, actor.connect('notify::allocation',
                 () => this._reconcileDebounced())]);
+        }
         this._reconcileDebounced();
     }
 
@@ -114,12 +113,7 @@ export class Manager {
         if (state) {
             for (const [obj, id] of state.signals)
                 obj.disconnect(id);
-            // 关键：不要在 unmanaging 阶段同步调用 _undecorate(win)！
-            // 此时窗口即将播放关闭动画并销毁；若在此刻提前拔掉 clipEffect，关闭动画期间
-            // 窗口会瞬间退化为直角，导致原本被圆角裁切的关闭按钮和直角边缘闪现。
-            // 保持 clipEffect 与 shadowActor，让它们随 windowActor 的 destroy 信号自然谢幕。
-            if (this._settings.get_boolean(DEBUG_KEY))
-                console.debug(`[csd-fixer] forget window (closing): ${win.get_wm_class()}`);
+            // 保持 clipEffect 与 shadowActor，让它们随 windowActor 自然谢幕，防止关闭动画瞬间变直角
         }
         this._windows.delete(win);
     }
@@ -135,7 +129,16 @@ export class Manager {
             });
     }
 
-    /** 获取窗口所在显示器的物理/逻辑缩放比例 */
+    _getWindowRules() {
+        try {
+            const v = this._settings.get_value('window-rules');
+            return v ? v.deep_unpack() : {};
+        } catch (e) {
+            return {};
+        }
+    }
+
+    /** 获取窗口所在显示器的物理/逻辑缩放比例（支持分数缩放 1.25, 1.333, 1.5 等） */
     _getMonitorScale(win) {
         const monitor = win.get_monitor();
         if (monitor < 0)
@@ -145,15 +148,8 @@ export class Manager {
         return 1;
     }
 
-    /** 是否应为该窗口启用离线圆角剪裁 */
-    _shouldClipWindow(win) {
-        const preferCrisp = this._settings.get_boolean('prefer-crisp-text');
-        const scale = this._getMonitorScale(win);
-        return shouldClipWindow({preferCrispText: preferCrisp, scale});
-    }
-
-    /** 动态同步已装饰窗口的 clipEffect（用于跨屏拖拽或设置实时切换） */
-    _syncClip(win) {
+    /** 动态同步窗口 clipEffect */
+    _syncClip(win, wantClip) {
         const state = this._windows.get(win);
         if (!state)
             return;
@@ -161,7 +157,6 @@ export class Manager {
         if (!actor)
             return;
 
-        const wantClip = this._shouldClipWindow(win);
         const hasClip = Boolean(state.clip);
         if (wantClip !== hasClip) {
             if (wantClip) {
@@ -174,34 +169,54 @@ export class Manager {
         }
     }
 
-    /** 全量幂等重判：对每个已跟踪窗口求值 → 与当前状态对比 → 增删 */
+    /** 动态同步窗口 shadowActor */
+    _syncShadow(win, wantShadow) {
+        const state = this._windows.get(win);
+        if (!state)
+            return;
+        const actor = win.get_compositor_private();
+        if (!actor)
+            return;
+
+        const hasShadow = Boolean(state.shadow);
+        if (wantShadow !== hasShadow) {
+            if (wantShadow) {
+                state.shadowFx = new SdfShadowEffect();
+                state.shadow = new ShadowActor(actor, global.windowGroup);
+                state.shadow.actor.add_effect(state.shadowFx);
+                state.shadow.onRelayout((w, h) => {
+                    const style = this._styleOf(win);
+                    this._applyStyle(win, style, w, h);
+                });
+                state.shadow.relayout();
+            } else {
+                state.shadow.destroy();
+                state.shadow = null;
+                state.shadowFx = null;
+            }
+        }
+    }
+
+    /** 全量幂等重判：对每个已跟踪窗口分别同步 clip 与 shadow */
     _reconcile() {
         for (const [win, state] of this._windows) {
-            // 窗口 actor 尚未就绪（首帧尺寸 0）→ 等 allocation 信号重判
             const actor = win.get_compositor_private();
             if (!actor || actor.width === 0 || actor.height === 0)
                 continue;
 
-            const want = this._evaluate(win);
-            if (want !== state.decorated) {
-                if (want)
-                    this._decorate(win);
-                else
-                    this._undecorate(win);
-                state.decorated = want;
-            } else if (want) {
-                this._syncClip(win);
-            }
-            // 已装饰的窗口：样式状态可能变（focus/tiled/maximized）→ 更新参数
-            if (want)
+            const actions = this._evaluateActions(win);
+            this._syncClip(win, actions.applyClip);
+            this._syncShadow(win, actions.applyShadow);
+
+            if (state.clip || state.shadow)
                 this._updateStyle(win);
         }
     }
 
-    /** restack 后重排所有阴影 actor 到对应窗口下方（rwc onRestacked 同款） */
+    /** restack 后重排所有阴影 actor 到对应窗口下方 */
     _restackShadows() {
         for (const [win, state] of this._windows) {
-            if (!state.decorated || !state.shadow)
+            if (!state.shadow)
                 continue;
             const actor = win.get_compositor_private();
             if (!actor)
@@ -210,78 +225,39 @@ export class Manager {
         }
     }
 
-    /** 读取窗口全部状态 → detector 判定 */
-    _evaluate(win) {
+    /** 读取窗口全部状态 → detector evaluateWindowActions 判定 */
+    _evaluateActions(win) {
         const actor = win.get_compositor_private();
         if (!actor)
-            return false;
+            return {applyShadow: false, applyClip: false};
+
         const b = win.get_buffer_rect();
         const f = win.get_frame_rect();
         const hasSsd = Boolean(win.decorated && !win.is_client_decorated());
-        const res = shouldDecorate({
+        const wmClass = win.get_wm_class();
+        const isX11 = win.get_client_type() === Meta.WindowClientType.X11;
+        const geometryScale = actor.get_geometry_scale?.() ?? 1;
+        const monitorScale = this._getMonitorScale(win);
+
+        return evaluateWindowActions({
             bufferWidth: b.width, bufferHeight: b.height,
             frameWidth: f.width, frameHeight: f.height,
-            scale: actor.get_geometry_scale?.() ?? 1,
-            isX11: win.get_client_type() === Meta.WindowClientType.X11,
-            skipXwayland: this._settings.get_boolean('skip-xwayland'),
+            geometryScale,
+            monitorScale,
+            isX11,
             isMaximized: win.maximized_horizontally && win.maximized_vertically,
             isFullscreen: win.is_fullscreen(),
             hasSsd,
             windowType: win.get_window_type(),
-            wmClass: win.get_wm_class(),
-            blacklist: this._settings.get_strv('blacklist'),
-            whitelist: this._settings.get_strv('whitelist'),
+            wmClass,
+            windowRules: this._getWindowRules(),
+            preferCrispText: this._settings.get_boolean('prefer-crisp-text'),
         });
-        if (this._settings.get_boolean(DEBUG_KEY)) {
-            console.debug(`[csd-fixer] evaluate: "${win.get_title() ?? ''}" wmClass=${win.get_wm_class()} type=${win.get_window_type()} apply=${res.apply} reason=${res.reason} buf=${b.width}x${b.height} frame=${f.width}x${f.height}`);
-        }
-        return res.apply;
-    }
-
-    _decorate(win) {
-        const actor = win.get_compositor_private();
-        const state = this._windows.get(win);
-
-        // 1) 圆角裁剪 + 内亮边：按需挂窗口 actor 本体
-        if (this._shouldClipWindow(win)) {
-            state.clip = new RoundedClipEffect();
-            actor.add_effect(state.clip);
-        } else {
-            state.clip = null;
-        }
-
-        // 2) SDF 阴影：独立 actor 垫窗口下（尺寸含 PAD 余量）
-        state.shadowFx = new SdfShadowEffect();
-        state.shadow = new ShadowActor(actor, global.windowGroup);
-        state.shadow.actor.add_effect(state.shadowFx);
-        state.shadow.onRelayout((w, h) => {
-            // 窗口尺寸变化：uniform 重设（样式不变时也需更新尺寸）
-            const style = this._styleOf(win);
-            this._applyStyle(win, style, w, h);
-        });
-        state.shadow.relayout();
-
-        this._applyStyle(win, this._styleOf(win));
-        if (this._settings.get_boolean(DEBUG_KEY))
-            console.debug(`[csd-fixer] decorate: ${win.get_wm_class()} "${win.get_title() ?? ''}" ${actor.width}x${actor.height} (clip=${Boolean(state.clip)})`);
     }
 
     _undecorate(win) {
-        const state = this._windows.get(win);
-        if (!state)
-            return;
-        const actor = win.get_compositor_private();
-        if (state.clip && actor) {
-            actor.remove_effect(state.clip);
-            state.clip = null;
-        }
-        if (state.shadow) {
-            state.shadow.destroy();
-            state.shadow = null;
-            state.shadowFx = null;
-        }
-        if (this._settings.get_boolean(DEBUG_KEY))
-            console.debug(`[csd-fixer] undecorate: ${win.get_wm_class()}`);
+        this._syncClip(win, false);
+        this._syncShadow(win, false);
     }
 
     /** 读窗口状态 → styleForWindow（公开给单测伪注入） */

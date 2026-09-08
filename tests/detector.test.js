@@ -3,7 +3,10 @@
  * 运行: jasmine --module tests/ （见 package.json 的 npm test）
  */
 
-import {shouldDecorate, computeInsets, WindowType, isFractionalScale, shouldClipWindow} from '../src/lib/detector.js';
+import {
+    shouldDecorate, computeInsets, WindowType, isFractionalScale,
+    shouldClipWindow, RuleMode, resolveRule, evaluateWindowActions,
+} from '../src/lib/detector.js';
 
 describe('computeInsets', () => {
     it('buffer==frame（scale=1）→ 零边距', () => {
@@ -160,3 +163,136 @@ describe('shouldClipWindow', () => {
         expect(shouldClipWindow({preferCrispText: true, scale: 1.75})).toBeFalse();
     });
 });
+
+describe('resolveRule', () => {
+    const rules = {
+        'wechat': RuleMode.DISABLE_CLIP,
+        'steam': RuleMode.DISABLE_ALL,
+        'my-game': RuleMode.DISABLE_SHADOW,
+    };
+
+    it('精确匹配 windowRules', () => {
+        expect(resolveRule('wechat', rules)).toBe(RuleMode.DISABLE_CLIP);
+        expect(resolveRule('steam', rules)).toBe(RuleMode.DISABLE_ALL);
+        expect(resolveRule('my-game', rules)).toBe(RuleMode.DISABLE_SHADOW);
+    });
+
+    it('大小写不敏感匹配 windowRules', () => {
+        expect(resolveRule('WeChat', rules)).toBe(RuleMode.DISABLE_CLIP);
+        expect(resolveRule('STEAM', rules)).toBe(RuleMode.DISABLE_ALL);
+    });
+
+    it('无匹配返回 null', () => {
+        expect(resolveRule('unknown-app', rules)).toBeNull();
+        expect(resolveRule(null, rules)).toBeNull();
+        expect(resolveRule('', rules)).toBeNull();
+    });
+});
+
+describe('evaluateWindowActions', () => {
+    const baseWin = {
+        bufferWidth: 400, bufferHeight: 300,
+        frameWidth: 400, frameHeight: 300,
+        geometryScale: 1,
+        monitorScale: 1,
+        isX11: false,
+        windowType: WindowType.NORMAL,
+        wmClass: 'test-app',
+    };
+
+    it('默认普通无 CSD 窗口：阴影和圆角均启用', () => {
+        const res = evaluateWindowActions(baseWin);
+        expect(res.applyShadow).toBeTrue();
+        expect(res.applyClip).toBeTrue();
+        expect(res.reason).toContain('no-csd');
+    });
+
+    it('disable-all 规则：阴影和圆角均禁用', () => {
+        const res = evaluateWindowActions({
+            ...baseWin,
+            wmClass: 'overlay-app',
+            windowRules: {'overlay-app': RuleMode.DISABLE_ALL},
+        });
+        expect(res.applyShadow).toBeFalse();
+        expect(res.applyClip).toBeFalse();
+        expect(res.reason).toContain('disabled-by-rule');
+    });
+
+    it('disable-clip 规则：保留阴影，禁用圆角', () => {
+        const res = evaluateWindowActions({
+            ...baseWin,
+            wmClass: 'wechat',
+            windowRules: {'wechat': RuleMode.DISABLE_CLIP},
+        });
+        expect(res.applyShadow).toBeTrue();
+        expect(res.applyClip).toBeFalse();
+        expect(res.reason).toContain('rule-applied');
+    });
+
+    it('disable-shadow 规则：禁用阴影，保留圆角', () => {
+        const res = evaluateWindowActions({
+            ...baseWin,
+            wmClass: 'custom-tool',
+            windowRules: {'custom-tool': RuleMode.DISABLE_SHADOW},
+        });
+        expect(res.applyShadow).toBeFalse();
+        expect(res.applyClip).toBeTrue();
+        expect(res.reason).toContain('rule-applied');
+    });
+
+    it('已有 CSD 窗口（GTK4）：不管有无规则均不施加任何效果', () => {
+        const csdWin = {
+            ...baseWin,
+            bufferWidth: 460, bufferHeight: 360, // 单边 30px >= 8px
+            wmClass: 'gtk4-app',
+            windowRules: {'gtk4-app': RuleMode.DISABLE_CLIP},
+        };
+        const res = evaluateWindowActions(csdWin);
+        expect(res.applyShadow).toBeFalse();
+        expect(res.applyClip).toBeFalse();
+        expect(res.reason).toContain('has-csd');
+    });
+
+    it('preferCrispText 在整数缩放屏幕（1.0x, 2.0x）上保留圆角', () => {
+        const res1 = evaluateWindowActions({
+            ...baseWin,
+            monitorScale: 1.0,
+            preferCrispText: true,
+        });
+        expect(res1.applyShadow).toBeTrue();
+        expect(res1.applyClip).toBeTrue();
+
+        const res2 = evaluateWindowActions({
+            ...baseWin,
+            monitorScale: 2.0,
+            preferCrispText: true,
+        });
+        expect(res2.applyShadow).toBeTrue();
+        expect(res2.applyClip).toBeTrue();
+    });
+
+    it('preferCrispText 在分数缩放屏幕（1.25x, 1.333x, 1.5x）上免除圆角剪裁并保留阴影', () => {
+        for (const fracScale of [1.25, 1.333333, 1.5, 1.75]) {
+            const res = evaluateWindowActions({
+                ...baseWin,
+                geometryScale: 1, // actor geometry scale 通常为 1
+                monitorScale: fracScale, // 显示器物理真实缩放
+                preferCrispText: true,
+            });
+            expect(res.applyShadow).toBeTrue();
+            expect(res.applyClip).toBeFalse();
+        }
+    });
+
+    it('preferCrispText 未开启时在分数缩放屏幕上仍然保留圆角', () => {
+        const res = evaluateWindowActions({
+            ...baseWin,
+            geometryScale: 1,
+            monitorScale: 1.333333,
+            preferCrispText: false,
+        });
+        expect(res.applyShadow).toBeTrue();
+        expect(res.applyClip).toBeTrue();
+    });
+});
+
