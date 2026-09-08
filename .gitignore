@@ -12,3 +12,5 @@ research/
 *.html
 scratch/
 gschemas.compiled
+dist/
+*.zip

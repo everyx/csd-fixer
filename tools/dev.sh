@@ -33,6 +33,8 @@ cmd_shell() {
     # 同步最新扩展代码 + 编译 GSettings schema（无 schemas/ 则跳过）
     mkdir -p "$EXT_DIR"
     cp -r "$SRC_DIR/metadata.json" "$SRC_DIR/extension.js" "$EXT_DIR/"
+    [[ -f "$SRC_DIR/prefs.js" ]] && cp "$SRC_DIR/prefs.js" "$EXT_DIR/"
+    [[ -f "$SRC_DIR/stylesheet.css" ]] && cp "$SRC_DIR/stylesheet.css" "$EXT_DIR/"
     [[ -d "$SRC_DIR/lib" ]] && cp -r "$SRC_DIR/lib" "$EXT_DIR/"
     [[ -d "$SRC_DIR/style" ]] && cp -r "$SRC_DIR/style" "$EXT_DIR/"
     [[ -d "$SRC_DIR/effects" ]] && cp -r "$SRC_DIR/effects" "$EXT_DIR/"

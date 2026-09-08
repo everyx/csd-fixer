@@ -4,6 +4,11 @@
   "private": true,
   "type": "module",
   "description": "GNOME Shell 扩展：给 Wayland 下无 CSD 的窗口补齐 GNOME 原生风格的圆角与阴影",
+  "license": "GPL-2.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/everyx/csd-fixer.git"
+  },
   "scripts": {
     "test": "jasmine --module tests/",
     "shell": "tools/dev.sh shell",
@@ -13,6 +18,12 @@
     "devkit": "tools/devkit.sh",
     "gen-mutter": "node tools/gen-mutter.mjs",
     "gen-style": "node tools/gen-style.mjs && node tools/gen-shader.mjs && node tools/gen-mutter.mjs",
-    "check-style": "node tools/gen-style.mjs --check && node tools/gen-shader.mjs --check && node tools/gen-mutter.mjs --check"
+    "check-style": "node tools/gen-style.mjs --check && node tools/gen-shader.mjs --check && node tools/gen-mutter.mjs --check",
+    "ego-lint": "bash ~/.local/share/gnome-extension-reviewer/ego-lint src/",
+    "pack": "mkdir -p dist && gnome-extensions pack src --force --extra-source=lib --extra-source=style --extra-source=effects --extra-source=stylesheet.css --out-dir=dist"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "eslint-config-gnome": "^1.0.1"
   }
 }
