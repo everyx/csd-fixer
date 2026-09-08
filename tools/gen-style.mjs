@@ -37,6 +37,14 @@ function parseVar(scss, name) {
     return m[1].trim();
 }
 
+/** 求值百分比字面量：`15%` */
+function parsePercent(expr) {
+    const m = expr.match(/^(\d+(?:\.\d+)?)%$/);
+    if (!m)
+        throw new Error(`[gen-style] 断言失败: 无法求值百分比 "${expr}"`);
+    return +m[1] / 100;
+}
+
 /** 求值 px 表达式：`9px`、`9px + 6`、`$button_radius + 6` */
 function evalPx(expr, vars = {}) {
     const resolved = expr.replace(/\$([a-z0-9_]+)/g, (_, n) => vars[n] ?? '');
@@ -102,6 +110,7 @@ function propIn(block, prop) {
 // ---------- 主流程 ----------
 
 const common = read('_common.scss');
+const colorsScss = read('_colors.scss');
 const windowScss = read('_window.scss');
 
 // 1. 圆角：--window-radius = $button_radius + 6
@@ -125,12 +134,24 @@ const tiledShadows = parseBoxShadow(propIn(tiledBlock, 'box-shadow'))
     // 过滤 libadwaita 的 transparent control workaround 层（-- #3670，shader 无意义）
     .filter(s => !(s.blur === 0 && s.spread >= 10 && (s.alpha === 0 || s.colorVar)));
 
-// 5. 高对比：第三层 outline 加深到 80%（HC box-shadow 的第三层）
+// 5. 高对比：阴影集整体替换（outline 加深到 80%），backdrop 同样有 HC 变体
 const hcBlock = extractBlock(csdBlock, '@media (prefers-contrast: more)');
 const hcShadows = parseBoxShadow(propIn(hcBlock, 'box-shadow'));
-const hcOutlineAlpha = hcShadows.find(s => s.spread === 1)?.alpha;
-if (hcOutlineAlpha == null)
-    throw new Error('[gen-style] 断言失败: HC 块无 outline 层');
+const hcBackdropBlock = extractBlock(backdropBlock, '@media (prefers-contrast: more)');
+const hcBackdropShadows = parseBoxShadow(propIn(hcBackdropBlock, 'box-shadow'));
+
+// 6. 边线透明度（tiled 的 $border_color 动态色静态化：色值固定黑，透明度取上游）
+const borderOpacity = parsePercent(parseVar(colorsScss, 'border_opacity'));
+
+// 7. 窗口 outline 色（libadwaita 在窗口外围画 1px 亮边；HC 加深到 30%）
+function parseStaticColor(decl) {
+    const m = decl.match(/RGB\(\s*(\d+)\s+(\d+)\s+(\d+)\s*\/\s*(\d+)%\s*\)/);
+    if (!m)
+        throw new Error(`[gen-style] 断言失败: 无法解析静态色 "${decl}"`);
+    return {color: [+m[1], +m[2], +m[3]], alpha: +m[4] / 100};
+}
+const outlineColor = parseStaticColor(parseVar(colorsScss, 'window_outline_color'));
+const outlineColorHc = parseStaticColor(parseVar(colorsScss, 'window_outline_color_hc'));
 
 // ---------- 断言（防坏数据） ----------
 
@@ -143,8 +164,10 @@ if (backdropShadows[0].alpha > 0.05)
 if (tiledShadows[0].blur !== 0 || tiledShadows[0].spread !== 1)
     throw new Error('[gen-style] 断言失败: tiled 应为 1px 描边');
 
-if (hcOutlineAlpha < 0.5)
-    throw new Error(`[gen-style] 断言失败: HC outline 应 ≥80%，实际 ${hcOutlineAlpha}`);
+if (hcShadows.find(s => s.spread === 1)?.alpha == null)
+    throw new Error('[gen-style] 断言失败: HC 块无 outline 层');
+if (hcShadows.find(s => s.spread === 1)?.alpha < 0.5)
+    throw new Error('[gen-style] 断言失败: HC outline 应 ≥80%，实际 ' + hcShadows.find(s => s.spread === 1)?.alpha);
 
 // ---------- 序列化 ----------
 
@@ -158,6 +181,10 @@ function fmtShadows(list) {
         }
         return `{${parts.join(', ')}}`;
     }).join(', ');
+}
+
+function fmtColor(c) {
+    return `{color: [${c.color.join(', ')}], alpha: ${c.alpha}}`;
 }
 
 const commit = read('COMMIT').trim();
@@ -178,14 +205,19 @@ export const STYLE = {
             radius: ${radius},
             shadows: [${fmtShadows(backdropShadows)}],
         },
+        highContrast: {
+            shadows: [${fmtShadows(hcShadows)}],
+            backdropShadows: [${fmtShadows(hcBackdropShadows)}],
+        },
         tiled: {
             radius: 0,
-            shadows: [${fmtShadows(tiledShadows)}],
+            shadows: [{blur: 0, spread: 1, alpha: ${borderOpacity}}],
         },
         maximized: {radius: 0, shadows: []},
         fullscreen: {radius: 0, shadows: []},
-        highContrast: {
-            outlineAlpha: ${hcOutlineAlpha},
+        outline: {
+            normal: ${fmtColor(outlineColor)},
+            highContrast: ${fmtColor(outlineColorHc)},
         },
     },
 };

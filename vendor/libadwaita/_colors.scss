@@ -1,0 +1,11 @@
+// 窄切片：libadwaita stylesheet/_colors.scss 中 window 装饰相关的变量定义。
+// 仅含 gen-style.mjs 解析所需的行；完整文件见 research/libadwaita。
+// 颜色语义说明：
+//   $border_color 是动态色（color-mix currentColor），窗口边线在浅色主题下
+//   近似黑 15% —— 这里静态化为基础变量 $border_opacity，shader 侧固定黑。
+//   $window_outline_* 是静态色，可直接用。
+
+$border_opacity: 15%;
+
+$window_outline_color: RGB(255 255 255 / 7%);
+$window_outline_color_hc: RGB(255 255 255 / 30%);

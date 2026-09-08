@@ -44,15 +44,36 @@ describe('styleForWindow', () => {
         expect(fs.shadows.length).toBe(0);
     });
 
-    it('高对比模式 → outlineAlpha 用高对比值', () => {
+    it('高对比模式 → outline 加深 + outline 色替换', () => {
         const normal = styleForWindow(base);
         const hc = styleForWindow({...base, highContrast: true});
-        expect(normal.outlineAlpha).toBeUndefined();
-        expect(hc.outlineAlpha).toBe(STYLE.window.highContrast.outlineAlpha);
+        // 阴影集整体替换：outline 层 5% → 80%
+        expect(hc.shadows[2].alpha).toBe(0.8);
+        expect(hc.shadows[2].blur).toBe(normal.shadows[2].blur);
+        // outline 色加深：白 7% → 白 30%
+        expect(normal.outline.alpha).toBe(0.07);
+        expect(hc.outline.alpha).toBe(0.3);
+        expect(hc.outline.color).toEqual([255, 255, 255]);
+    });
+
+    it('高对比失焦 → HC backdrop 阴影集', () => {
+        const s = styleForWindow({...base, highContrast: true, focused: false});
+        // backdrop 首层透明防跳动不变
+        expect(s.shadows[0].alpha).toBe(0);
+        expect(s.shadows[2].alpha).toBe(0.8);
+    });
+
+    it('最大化/tiled/全屏 → 无 outline（上游 outline: none）', () => {
+        for (const st of [true, false]) {
+            expect(styleForWindow({...base, maximized: true, highContrast: st}).outline).toBeNull();
+            expect(styleForWindow({...base, fullscreen: true, highContrast: st}).outline).toBeNull();
+            expect(styleForWindow({...base, tiled: true, highContrast: st}).outline).toBeNull();
+        }
     });
 
     it('最大化优先于贴边（与 libadwaita 选择器优先级一致）', () => {
         const s = styleForWindow({...base, maximized: true, tiled: true});
         expect(s.shadows.length).toBe(0);
+        expect(s.outline).toBeNull();
     });
 });

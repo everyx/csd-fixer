@@ -15,14 +15,19 @@ export const STYLE = {
             radius: 15,
             shadows: [{blur: 14, spread: 5, alpha: 0}, {blur: 10, spread: 5, alpha: 0.08}, {blur: 0, spread: 1, alpha: 0.05}],
         },
+        highContrast: {
+            shadows: [{blur: 14, spread: 5, alpha: 0.15}, {blur: 5, spread: 2, alpha: 0.1}, {blur: 0, spread: 1, alpha: 0.8}],
+            backdropShadows: [{blur: 14, spread: 5, alpha: 0}, {blur: 10, spread: 5, alpha: 0.08}, {blur: 0, spread: 1, alpha: 0.8}],
+        },
         tiled: {
             radius: 0,
-            shadows: [{blur: 0, spread: 1, colorVar: 'border_color'}],
+            shadows: [{blur: 0, spread: 1, alpha: 0.15}],
         },
         maximized: {radius: 0, shadows: []},
         fullscreen: {radius: 0, shadows: []},
-        highContrast: {
-            outlineAlpha: 0.8,
+        outline: {
+            normal: {color: [255, 255, 255], alpha: 0.07},
+            highContrast: {color: [255, 255, 255], alpha: 0.3},
         },
     },
 };

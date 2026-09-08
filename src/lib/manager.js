@@ -13,10 +13,13 @@
 
 import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
-import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import St from 'gi://St';
 
 import {shouldDecorate} from './detector.js';
 import {styleForWindow} from './style.js';
+import {RoundedClipEffect} from '../effects/clipEffect.js';
+import {SdfShadowEffect} from '../effects/shadowEffect.js';
+import {ShadowActor, SHADOW_PAD} from '../effects/shadowActor.js';
 
 const DEBUG_KEY = 'debug';
 
@@ -80,6 +83,11 @@ export class Manager {
                            'notify::fullscreen'])
             this._windows.get(win).signals.push([win, win.connect(sig, () => this._reconcileDebounced())]);
         this._connect(win, 'unmanaging', () => this._forgetWindow(win));
+        // actor allocation 变化（首帧尺寸 0 → 就绪重判 + 尺寸跟随）
+        const actor = win.get_compositor_private();
+        if (actor)
+            this._windows.get(win).signals.push([actor, actor.connect('notify::allocation',
+                () => this._reconcileDebounced())]);
         this._reconcileDebounced();
     }
 
@@ -107,6 +115,11 @@ export class Manager {
     /** 全量幂等重判：对每个已跟踪窗口求值 → 与当前状态对比 → 增删 */
     _reconcile() {
         for (const [win, state] of this._windows) {
+            // 窗口 actor 尚未就绪（首帧尺寸 0）→ 等 allocation 信号重判
+            const actor = win.get_compositor_private();
+            if (!actor || actor.width === 0 || actor.height === 0)
+                continue;
+
             const want = this._evaluate(win);
             if (want !== state.decorated) {
                 if (want)
@@ -116,9 +129,8 @@ export class Manager {
                 state.decorated = want;
             }
             // 已装饰的窗口：样式状态可能变（focus/tiled/maximized）→ 更新参数
-            else if (want) {
+            if (want)
                 this._updateStyle(win);
-            }
         }
     }
 
@@ -145,30 +157,74 @@ export class Manager {
     }
 
     _decorate(win) {
-        // TODO(effects): 挂 GLSL 圆角裁剪 + 阴影 actor（POC 2 验证后实现）
-        this._updateStyle(win);
+        const actor = win.get_compositor_private();
+        const state = this._windows.get(win);
+
+        // 1) 圆角裁剪 + 内亮边：挂窗口 actor 本体
+        state.clip = new RoundedClipEffect();
+        actor.add_effect(state.clip);
+
+        // 2) SDF 阴影：独立 actor 垫窗口下（尺寸含 PAD 余量）
+        state.shadowFx = new SdfShadowEffect();
+        state.shadow = new ShadowActor(actor, global.windowGroup);
+        state.shadow.actor.add_effect(state.shadowFx);
+        state.shadow.onRelayout((w, h) => {
+            // 窗口尺寸变化：uniform 重设（样式不变时也需更新尺寸）
+            const style = this._styleOf(win);
+            this._applyStyle(win, style, w, h);
+        });
+        state.shadow.relayout();
+
+        this._applyStyle(win, this._styleOf(win));
         if (this._settings.get_boolean(DEBUG_KEY))
-            console.debug(`[csd-fixer] decorate: ${win.get_wm_class()} "${win.get_title() ?? ''}"`);
+            console.debug(`[csd-fixer] decorate: ${win.get_wm_class()} "${win.get_title() ?? ''}" ${actor.width}x${actor.height}`);
     }
 
     _undecorate(win) {
-        // TODO(effects): 移除效果 actor
+        const state = this._windows.get(win);
+        if (!state)
+            return;
+        const actor = win.get_compositor_private();
+        if (state.clip && actor) {
+            actor.remove_effect(state.clip);
+            state.clip = null;
+        }
+        if (state.shadow) {
+            state.shadow.destroy();
+            state.shadow = null;
+            state.shadowFx = null;
+        }
         if (this._settings.get_boolean(DEBUG_KEY))
             console.debug(`[csd-fixer] undecorate: ${win.get_wm_class()}`);
     }
 
-    _updateStyle(win) {
+    /** 读窗口状态 → styleForWindow（公开给单测伪注入） */
+    _styleOf(win) {
         const hMax = win.maximized_horizontally;
         const vMax = win.maximized_vertically;
-        const tiled = hMax !== vMax;  // 半边 tile = 单轴最大化（mutter tiling 实现）
-        const style = styleForWindow({
+        return styleForWindow({
             focused: win.appears_focused,
             maximized: hMax && vMax,
             fullscreen: win.is_fullscreen(),
-            tiled,
-            highContrast: Main.getThemeStylesheet()?.includes('HighContrast') ?? false,
+            tiled: hMax !== vMax,  // 半边 tile = 单轴最大化（mutter tiling）
+            highContrast: St.Settings.get().high_contrast,
         });
-        // TODO(effects): style → shader uniforms
-        return style;
+    }
+
+    /** style → shader uniforms；尺寸变化时可选传入新 w/h */
+    _applyStyle(win, style, wOverride, hOverride) {
+        const state = this._windows.get(win);
+        const actor = win.get_compositor_private();
+        if (!state?.clip || !actor)
+            return;
+
+        const w = wOverride ?? actor.width;
+        const h = hOverride ?? actor.height;
+        state.clip.setParams(w, h, style.radius, style.outline);
+        state.shadowFx.setParams(w, h, style.radius, SHADOW_PAD, style.shadows);
+    }
+
+    _updateStyle(win) {
+        this._applyStyle(win, this._styleOf(win));
     }
 }
