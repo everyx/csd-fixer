@@ -10,18 +10,18 @@ function getRuleModes() {
     return [
         {
             id: RuleMode.DISABLE_ALL,
-            label: _('全部禁用（不加阴影，不裁圆角）'),
-            shortLabel: _('全部禁用'),
+            label: _('Disable all (no shadow, no rounded corners)'),
+            shortLabel: _('Disable all'),
         },
         {
             id: RuleMode.DISABLE_CLIP,
-            label: _('仅阴影（禁用圆角裁切）'),
-            shortLabel: _('仅阴影'),
+            label: _('Shadow only (disable rounded corners)'),
+            shortLabel: _('Shadow only'),
         },
         {
             id: RuleMode.DISABLE_SHADOW,
-            label: _('仅圆角（禁用阴影添加）'),
-            shortLabel: _('仅圆角'),
+            label: _('Rounded corners only (disable shadow)'),
+            shortLabel: _('Corners only'),
         },
     ];
 }
@@ -100,7 +100,7 @@ function setWindowRules(settings, rules) {
  */
 function showAddRuleDialog(parentWindow, settings, installedApps, onRuleAdded) {
     const dialog = new Adw.Window({
-        title: _('添加应用排除规则'),
+        title: _('Add Application Exclusion Rule'),
         modal: true,
         transient_for: parentWindow,
         default_width: 460,
@@ -127,7 +127,7 @@ function showAddRuleDialog(parentWindow, settings, installedApps, onRuleAdded) {
 
     // 1. 搜索框
     const searchEntry = new Gtk.SearchEntry({
-        placeholder_text: _('搜索已安装应用...'),
+        placeholder_text: _('Search installed applications…'),
     });
     mainBox.append(searchEntry);
 
@@ -187,12 +187,12 @@ function showAddRuleDialog(parentWindow, settings, installedApps, onRuleAdded) {
 
     // 3. 配置项表单
     const formGroup = new Adw.PreferencesGroup({
-        title: _('规则参数'),
+        title: _('Rule Parameters'),
     });
     mainBox.append(formGroup);
 
     const entryRow = new Adw.EntryRow({
-        title: _('窗口识别码 (wm_class)'),
+        title: _('Window Identifier (wm_class)'),
         show_apply_button: false,
     });
     formGroup.add(entryRow);
@@ -206,7 +206,7 @@ function showAddRuleDialog(parentWindow, settings, installedApps, onRuleAdded) {
     const ruleModes = getRuleModes();
     const modeList = Gtk.StringList.new(ruleModes.map(m => m.label));
     const modeRow = new Adw.ComboRow({
-        title: _('排除行为'),
+        title: _('Exclusion Behavior'),
         model: modeList,
         selected: 0,
     });
@@ -214,7 +214,7 @@ function showAddRuleDialog(parentWindow, settings, installedApps, onRuleAdded) {
 
     // 4. 添加按钮
     const addButton = new Gtk.Button({
-        label: _('添加规则'),
+        label: _('Add Rule'),
         css_classes: ['suggested-action', 'pill'],
         margin_top: 6,
     });
@@ -244,35 +244,35 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
         const installedApps = getInstalledApps();
 
         const page = new Adw.PreferencesPage({
-            title: _('常规'),
+            title: _('General'),
             icon_name: 'preferences-system-symbolic',
         });
         window.add(page);
 
         // 分组 1：显示与渲染
         const renderGroup = new Adw.PreferencesGroup({
-            title: _('显示与渲染'),
-            description: _('控制窗口装饰在不同屏幕缩放下的渲染行为'),
+            title: _('Display & Rendering'),
+            description: _('Control window decoration behavior across screen scales'),
         });
         page.add(renderGroup);
 
         const crispRow = new Adw.SwitchRow({
-            title: _('优先保证文字清晰'),
-            subtitle: _('在分数缩放屏幕上免除圆角（保留阴影），消除重采样带来的字体模糊与性能损耗'),
+            title: _('Prioritize Crisp Text'),
+            subtitle: _('Skip rounded corners on fractional scale monitors (retaining shadow) to avoid text blur and resampling overhead'),
         });
         settings.bind('prefer-crisp-text', crispRow, 'active', Gio.SettingsBindFlags.DEFAULT);
         renderGroup.add(crispRow);
 
         // 分组 2：应用排除规则（黑名单与细粒度控制）
         const addRuleButton = new Gtk.Button({
-            label: _('添加规则...'),
+            label: _('Add Rule…'),
             icon_name: 'list-add-symbolic',
             css_classes: ['flat'],
         });
 
         const rulesGroup = new Adw.PreferencesGroup({
-            title: _('应用排除规则'),
-            description: _('为特定窗口单独配置禁用项（禁用全部、禁用圆角或禁用阴影）'),
+            title: _('Application Exclusion Rules'),
+            description: _('Configure individual exclusions for specific windows (disable all, skip corners, or skip shadow)'),
             header_suffix: addRuleButton,
         });
         page.add(rulesGroup);
@@ -290,8 +290,8 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
 
             if (entries.length === 0) {
                 const emptyRow = new Adw.ActionRow({
-                    title: _('暂无特殊规则'),
-                    subtitle: _('所有未包含服务端边框的普通窗口将默认添加原生阴影与圆角剪裁'),
+                    title: _('No Special Rules'),
+                    subtitle: _('All normal windows without server-side decorations will have native shadow and rounded corners applied by default'),
                     sensitive: false,
                 });
                 rulesGroup.add(emptyRow);
@@ -302,7 +302,7 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
             for (const [wmClass, mode] of entries) {
                 const appInfo = findAppInfoByWmClass(wmClass, installedApps);
                 const title = appInfo ? appInfo.name : wmClass;
-                const subtitle = appInfo ? `${wmClass}` : _('自定义识别码');
+                const subtitle = appInfo ? `${wmClass}` : _('Custom Identifier');
 
                 const row = new Adw.ActionRow({
                     title,
@@ -348,7 +348,7 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
                     icon_name: 'user-trash-symbolic',
                     css_classes: ['flat', 'destructive-action'],
                     valign: Gtk.Align.CENTER,
-                    tooltip_text: _('删除规则'),
+                    tooltip_text: _('Remove Rule'),
                 });
                 deleteButton.connect('clicked', () => {
                     const updated = getWindowRules(settings);

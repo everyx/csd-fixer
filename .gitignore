@@ -12,5 +12,6 @@ research/
 *.html
 scratch/
 gschemas.compiled
+src/locale/
 dist/
 *.zip
