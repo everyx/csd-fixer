@@ -1,6 +1,5 @@
 # node
 node_modules/
-package-lock.json
 
 # 嵌套会话运行时
 /tmp/csd-fixer-dev/

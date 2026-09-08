@@ -5,5 +5,6 @@
     "url": "https://github.com/everyx/csd-fixer",
     "shell-version": ["50"],
     "settings-schema": "org.gnome.shell.extensions.csd-fixer",
-    "gettext-domain": "csd-fixer"
+    "gettext-domain": "csd-fixer",
+    "version-name": "0.1.0"
 }
