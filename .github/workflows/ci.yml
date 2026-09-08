@@ -21,8 +21,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gettext
 
       - name: Install Node dependencies
         run: npm ci
@@ -52,7 +57,7 @@ jobs:
           sudo apt-get install -y libglib2.0-dev-bin
 
       - name: Run ego-lint compliance checks
-        run: bash .ego-lint/ego-lint src/ --report --show all
+        run: bash .ego-lint/ego-lint --show all src/
 
   test:
     name: Unit Tests (GJS + Jasmine)
@@ -64,7 +69,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
       - name: Install system test dependencies
@@ -94,7 +99,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
       - name: Install packaging tools
