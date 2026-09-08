@@ -11,7 +11,8 @@
     "app": "tools/dev.sh app",
     "stop": "tools/dev.sh stop",
     "devkit": "tools/devkit.sh",
-    "gen-style": "node tools/gen-style.mjs && node tools/gen-shader.mjs",
-    "check-style": "node tools/gen-style.mjs --check && node tools/gen-shader.mjs --check"
+    "gen-mutter": "node tools/gen-mutter.mjs",
+    "gen-style": "node tools/gen-style.mjs && node tools/gen-shader.mjs && node tools/gen-mutter.mjs",
+    "check-style": "node tools/gen-style.mjs --check && node tools/gen-shader.mjs --check && node tools/gen-mutter.mjs --check"
   }
 }

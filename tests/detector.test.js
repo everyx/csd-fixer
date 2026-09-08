@@ -34,8 +34,9 @@ describe('shouldDecorate', () => {
         bufferWidth: 400, bufferHeight: 300,
         frameWidth: 400, frameHeight: 300,
         scale: 1,
-        isX11: false, skipXwayland: true,
+        isX11: false, skipXwayland: false,
         isMaximized: false, isFullscreen: false,
+        hasSsd: false,
         windowType: WindowType.NORMAL,
         wmClass: 'test-app',
     };
@@ -46,23 +47,48 @@ describe('shouldDecorate', () => {
         expect(r.reason).toContain('no-csd');
     });
 
-    it('有 CSD（buffer>frame）→ 跳过', () => {
-        const r = shouldDecorate({...base,
-            bufferWidth: 440, bufferHeight: 340,
-            frameWidth: 400, frameHeight: 300});
-        expect(r.apply).toBeFalse();
-        expect(r.reason).toContain('has-csd');
+    it('微信文章窗口（XWayland，Chromium 4px 抓取边缘）单边 < 8px → 识别为无自绘大阴影，补装饰', () => {
+        // 抓包真实数据：buf=[1156, 852], frame=[1148, 844]，各边 4px
+        const r = shouldDecorate({
+            ...base,
+            isX11: true,
+            wmClass: null,
+            bufferWidth: 1156, bufferHeight: 852,
+            frameWidth: 1148, frameHeight: 844,
+        });
+        expect(r.apply).toBeTrue();
+        expect(r.reason).toContain('no-csd');
+        expect(r.reason).toContain('4.0x4.0 < 8');
     });
 
-    it('XWayland 窗口默认跳过', () => {
-        const r = shouldDecorate({...base, isX11: true});
+    it('真正自绘 CSD 阴影（如 GTK4/Adwaita，单边 20px+ >= 8px）→ 跳过', () => {
+        // 边距：左右各 20px (bufferWidth=440, frameWidth=400), 上下各 20px
+        const r = shouldDecorate({
+            ...base,
+            bufferWidth: 440, bufferHeight: 340,
+            frameWidth: 400, frameHeight: 300,
+        });
+        expect(r.apply).toBeFalse();
+        expect(r.reason).toContain('has-csd');
+        expect(r.reason).toContain('20.0x20.0 >= 8');
+    });
+
+    it('服务端边框/标题栏（SSD，如带系统标题栏的传统 X11 应用）→ 跳过', () => {
+        const r = shouldDecorate({...base, hasSsd: true});
+        expect(r.apply).toBeFalse();
+        expect(r.reason).toBe('has-ssd-frame');
+    });
+
+    it('skipXwayland=true 显式开启时跳过 XWayland 窗口', () => {
+        const r = shouldDecorate({...base, isX11: true, skipXwayland: true});
         expect(r.apply).toBeFalse();
         expect(r.reason).toBe('xwayland-skipped');
     });
 
-    it('skip-xwayland=false 时 XWayland 无 CSD 窗口处理', () => {
+    it('skipXwayland=false（默认）时 XWayland 窗口按同一 Mutter 阴影规则智能处理', () => {
         const r = shouldDecorate({...base, isX11: true, skipXwayland: false});
         expect(r.apply).toBeTrue();
+        expect(r.reason).toContain('no-csd');
     });
 
     it('最大化/全屏 → 跳过', () => {
@@ -86,7 +112,7 @@ describe('shouldDecorate', () => {
         expect(shouldDecorate({...base, whitelist, wmClass: 'only-this'}).apply).toBeTrue();
     });
 
-    it('wmClass 为 null 且黑名单含 null 项？→ 白名单为空时按无 CSD 处理', () => {
+    it('wmClass 为 null 且白名单为空时按无 CSD 正常处理', () => {
         const r = shouldDecorate({...base, wmClass: null});
         expect(r.apply).toBeTrue();
     });

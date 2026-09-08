@@ -20,11 +20,10 @@
       </description>
     </key>
     <key name="skip-xwayland" type="b">
-      <default>true</default>
+      <default>false</default>
       <summary>跳过 XWayland 窗口</summary>
       <description>
-        XWayland 窗口已由 Mutter 提供阴影（GNOME 47+ 还有 SSD 标题栏），
-        默认跳过避免双重阴影。仅当发现异常时关闭。
+        强制跳过所有 X11/XWayland 窗口。默认关闭（由扩展基于窗口阴影状态统一智能判定）。
       </description>
     </key>
     <key name="prefer-crisp-text" type="b">

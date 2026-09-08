@@ -217,6 +217,7 @@ export class Manager {
             return false;
         const b = win.get_buffer_rect();
         const f = win.get_frame_rect();
+        const hasSsd = Boolean(win.decorated && !win.is_client_decorated());
         const res = shouldDecorate({
             bufferWidth: b.width, bufferHeight: b.height,
             frameWidth: f.width, frameHeight: f.height,
@@ -225,6 +226,7 @@ export class Manager {
             skipXwayland: this._settings.get_boolean('skip-xwayland'),
             isMaximized: win.maximized_horizontally && win.maximized_vertically,
             isFullscreen: win.is_fullscreen(),
+            hasSsd,
             windowType: win.get_window_type(),
             wmClass: win.get_wm_class(),
             blacklist: this._settings.get_strv('blacklist'),
