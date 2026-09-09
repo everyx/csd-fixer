@@ -42,10 +42,6 @@ cmd_shell() {
         mkdir -p "$EXT_DIR/schemas"
         cp "$SRC_DIR/schemas/"*.xml "$EXT_DIR/schemas/"
         glib-compile-schemas "$EXT_DIR/schemas"
-        # Register to user-level glib-2.0 schemas so gsettings runs directly in terminal without extra env vars
-        mkdir -p "$HOME/.local/share/glib-2.0/schemas"
-        ln -sf "$EXT_DIR/schemas/"*.xml "$HOME/.local/share/glib-2.0/schemas/"
-        glib-compile-schemas "$HOME/.local/share/glib-2.0/schemas"
     fi
     rm -f "$PIDFILE" "$LOG"   # Clear old logs to avoid mixing session outputs
 
