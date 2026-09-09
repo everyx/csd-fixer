@@ -25,7 +25,8 @@
     "precheck-style": "npm run compile-locales",
     "check-style": "node tools/gen-style.mjs --check && node tools/gen-shader.mjs --check && node tools/gen-mutter.mjs --check && node tools/gen-locale.mjs --check",
     "ego-lint": "bash ~/.local/share/gnome-extension-reviewer/ego-lint src/",
-    "pack": "npm run compile-locales && mkdir -p dist && gnome-extensions pack src --force --extra-source=lib --extra-source=effects --extra-source=stylesheet.css --extra-source=locale --out-dir=dist"
+    "pack": "npm run compile-locales && mkdir -p dist && gnome-extensions pack src --force --extra-source=lib --extra-source=effects --extra-source=stylesheet.css --extra-source=locale --out-dir=dist",
+    "install-ext": "npm run pack && gnome-extensions install --force dist/csd-fixer@everyx.github.io.shell-extension.zip"
   },
   "devDependencies": {
     "eslint": "^9.0.0",

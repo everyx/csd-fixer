@@ -25,8 +25,7 @@
 ```sh
 git clone https://github.com/everyx/csd-fixer.git
 cd csd-fixer
-npm run pack
-gnome-extensions install --force dist/csd-fixer@everyx.github.io.shell-extension.zip
+npm run install-ext
 ```
 
 ---
