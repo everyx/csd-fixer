@@ -1,15 +1,15 @@
 /**
- * 阴影效果：挂 shadow actor（纯 GPU 解析高斯积分输出，零离线贴图）。
+ * Shadow effect: attached to shadow actor (pure GPU analytical Gaussian integration, zero textures).
  *
- * 渲染内核（由 tools/gen-shader.mjs 从 GTK4 GSK 原生 gskgpuboxshadow.glsl 自动转译）：
- *   - 二维解析高斯积分（erf 误差函数双重乘积）+ 4 角落 8 步缺角数值积分扣减；
- *   - CSS 标准参数换算（σ = blur / 2）；
- *   - 互补镂空遮罩（clipAlpha = clamp(d + 0.5, 0.0, 1.0)）：
- *     与窗口 RoundedClipEffect 严格互补（和恒为 1.000000），既物理杜绝任何漏光亮缝，
- *     又彻底消除了底层阴影透出导致浅色边缘发黑的暗圈；
- *   - blur=0 层：1px 抗锯齿轮廓线。
+ * Rendering kernel (transpiled by tools/gen-shader.mjs from GTK4 GSK gskgpuboxshadow.glsl):
+ *   - 2D analytical Gaussian integral (double product of error function erf) + 8-step corner numerical integral subtraction;
+ *   - Standard CSS parameter conversion (sigma = blur / 2);
+ *   - Complementary hollow mask (clipAlpha = clamp(d + 0.5, 0.0, 1.0)):
+ *     Strictly complementary to window RoundedClipEffect (summing identically to 1.000000), preventing
+ *     seam light-leak while eliminating dark fringe bleeding from underlying shadow;
+ *   - blur=0 layer: 1px anti-aliased border outline.
  *
- * 输出预乘格式（rgb = 0 ≤ a 恒成立）。
+ * Premultiplied output format (rgb = 0 <= a).
  */
 
 import GObject from 'gi://GObject';
@@ -35,7 +35,7 @@ export const SdfShadowEffect = GObject.registerClass({
     }
 
     /**
-     * 更新阴影参数（窗口尺寸/半径/padding/阴影层，≤3 层，不足补零层）。
+     * Update shadow parameters (window size / radius / padding / shadow layers, <= 3 layers).
      */
     setParams(winW, winH, radius, pad, shadows) {
         this.set_uniform_float(this._uWinSize, 2, [winW, winH]);

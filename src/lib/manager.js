@@ -1,14 +1,14 @@
 /**
- * Manager — 扩展核心状态机。
+ * Manager - core extension state machine.
  *
- * 职责：
- *   - 监听窗口创建/销毁/状态变化（幂等：每事件重新求值 → 对比 → 增删效果）
- *   - 读 GSettings（圆角半径、文本锐利度优先、窗口排除规则）
- *   - 对每个判定命中的窗口挂载装饰效果（effects/shadow 模块）
+ * Responsibilities:
+ *   - Monitors window creation/destruction/state changes (idempotent: re-evaluates -> compares -> adds/removes effects)
+ *   - Reads GSettings (corner radius, text clarity prioritization, window exclusion rules)
+ *   - Attaches decoration effects to matching windows (effects/shadow modules)
  *
- * 设计约束：
- *   - 所有窗口状态读取都走 detector.evaluateWindowActions（纯函数，可单测）
- *   - enable/disable 幂等，disable 后零残留（无信号泄漏、无孤儿 actor）
+ * Design constraints:
+ *   - All window state evaluation delegates to detector.evaluateWindowActions (pure function, unit-testable)
+ *   - enable/disable are idempotent; zero leftovers after disable (no signal leaks, no orphaned actors)
  */
 
 import GLib from 'gi://GLib';
@@ -26,35 +26,34 @@ export class Manager {
     constructor(ext) {
         this._ext = ext;
         this._settings = ext.getSettings();
-        this._windows = new Map();  // Meta.Window → decorations state
+        this._windows = new Map();  // Meta.Window -> decorations state
         this._signals = [];
     }
 
     enable() {
-        // display 级事件（全局）
+        // Display-level events (global)
         const wm = global.windowManager;
         this._connect(wm, 'switch-workspace', () => this._reconcile());
         this._connect(global.display, 'window-created', (_, win) => this._trackWindow(win));
         this._connect(global.display, 'grab-op-end', () => this._reconcile());
-        // 窗口 restack（focus/raise/lower）→ 阴影 actor 必须跟着窗口重新垫底
-        // （rwc 同款：insert_child_below 只在插入时有效，restack 后需重新 set）
+        // Window restacking (focus/raise/lower) -> shadow actor must be placed below window
         this._connect(global.display, 'restacked', () => this._restackShadows());
-        // 焦点切换（active ↔ backdrop 阴影深度切换）
+        // Focus change (active <-> backdrop shadow depth transition)
         this._connect(global.display, 'notify::focus-window', () => this._reconcileDebounced());
 
-        // 监听显示器变化（缩放改变、外接屏插拔等）
+        // Monitor changes (scale changes, plugging/unplugging displays, etc.)
         const monitorManager = global.backend?.get_monitor_manager?.();
         if (monitorManager)
             this._connect(monitorManager, 'monitors-changed', () => this._reconcile());
 
-        // GSettings 变化 → 全量重判（仅相关核心键）
+        // GSettings changes -> full re-evaluation (only relevant core keys)
         this._settingsHandlerIds = [];
         for (const key of ['window-rules', 'prefer-crisp-text']) {
             const id = this._settings.connect(`changed::${key}`, () => this._reconcile());
             this._settingsHandlerIds.push(id);
         }
 
-        // 已存在的窗口（扩展中途启用）
+        // Pre-existing windows (extension enabled mid-session)
         for (const win of global.display.get_tab_list(Meta.TabList.NORMAL_ALL, null))
             this._trackWindow(win);
         this._reconcile();
@@ -75,7 +74,7 @@ export class Manager {
         this._settingsHandlerIds = [];
     }
 
-    // ---------- 内部 ----------
+    // ---------- Internal ----------
 
     _connect(obj, signal, handler) {
         this._signals.push([obj, obj.connect(signal, handler)]);
@@ -85,7 +84,7 @@ export class Manager {
         if (this._windows.has(win))
             return;
         this._windows.set(win, {clip: null, shadow: null, shadowFx: null, signals: []});
-        // 窗口级信号（位置/尺寸/焦点/显示器变化 → 幂等重判）
+        // Window-level signals (position/size/focus/monitor changes -> idempotent re-evaluation)
         const windowSignals = [
             'position-changed', 'size-changed', 'notify::appears-focused',
             'notify::maximized-horizontally', 'notify::maximized-vertically',
@@ -95,16 +94,16 @@ export class Manager {
             try {
                 this._windows.get(win).signals.push([win, win.connect(sig, () => this._reconcileDebounced())]);
             } catch {
-                // 部分 Mutter 版本可能缺少某些信号，静默忽略
+                // Silently ignore if Mutter version lacks certain signals
             }
         }
         this._connect(win, 'unmanaging', () => this._forgetWindow(win));
-        // actor allocation 变化（首帧尺寸 0 → 就绪重判 + 尺寸跟随）
+        // Actor allocation changes (initial frame size 0 -> ready re-evaluation + size tracking)
         const actor = win.get_compositor_private();
         if (actor) {
             this._windows.get(win).signals.push([actor, actor.connect('notify::allocation', () => {
                 const state = this._windows.get(win);
-                // 首帧就绪（尚未装饰但已取得尺寸）：立刻同步，杜绝 50ms 延迟导致打开动效丢失阴影淡入
+                // First frame ready: synchronize immediately to avoid 50ms delay dropping initial fade-in
                 if (state && (!state.clip && !state.shadow) && actor.width > 0 && actor.height > 0)
                     this._reconcileWindow(win);
                 else
@@ -122,7 +121,7 @@ export class Manager {
         if (state) {
             for (const [obj, id] of state.signals)
                 obj.disconnect(id);
-            // 保持 clipEffect 与 shadowActor，让它们随 windowActor 自然谢幕，防止关闭动画瞬间变直角
+            // Retain clipEffect and shadowActor to fade naturally with windowActor on close
         }
         this._windows.delete(win);
     }
@@ -147,7 +146,7 @@ export class Manager {
         }
     }
 
-    /** 获取窗口所在显示器的物理/逻辑缩放比例（支持分数缩放 1.25, 1.333, 1.5 等） */
+    /** Gets physical/logical scale factor for window's monitor (supports fractional scale 1.25, 1.333, etc.) */
     _getMonitorScale(win) {
         const monitor = win.get_monitor();
         if (monitor < 0)
@@ -157,7 +156,7 @@ export class Manager {
         return 1;
     }
 
-    /** 动态同步窗口 clipEffect */
+    /** Dynamically synchronize window clipEffect */
     _syncClip(win, wantClip) {
         const state = this._windows.get(win);
         if (!state)
@@ -178,7 +177,7 @@ export class Manager {
         }
     }
 
-    /** 动态同步窗口 shadowActor */
+    /** Dynamically synchronize window shadowActor */
     _syncShadow(win, wantShadow) {
         const state = this._windows.get(win);
         if (!state)
@@ -206,7 +205,7 @@ export class Manager {
         }
     }
 
-    /** 对单个窗口执行幂等重判与装饰同步 */
+    /** Idempotent re-evaluation and decoration sync for a single window */
     _reconcileWindow(win) {
         const state = this._windows.get(win);
         if (!state)
@@ -223,13 +222,13 @@ export class Manager {
             this._updateStyle(win);
     }
 
-    /** 全量幂等重判：对每个已跟踪窗口分别同步 clip 与 shadow */
+    /** Full idempotent re-evaluation: synchronizes clip and shadow for each tracked window */
     _reconcile() {
         for (const [win] of this._windows)
             this._reconcileWindow(win);
     }
 
-    /** restack 后重排所有阴影 actor 到对应窗口下方 */
+    /** Re-orders all shadow actors below corresponding windows after restack */
     _restackShadows() {
         for (const [win, state] of this._windows) {
             if (!state.shadow)
@@ -241,7 +240,7 @@ export class Manager {
         }
     }
 
-    /** 读取窗口全部状态 → detector evaluateWindowActions 判定 */
+    /** Reads full window state -> passes to detector.evaluateWindowActions */
     _evaluateActions(win) {
         const actor = win.get_compositor_private();
         if (!actor)
@@ -276,7 +275,7 @@ export class Manager {
         this._syncShadow(win, false);
     }
 
-    /** 读窗口状态 → styleForWindow（公开给单测伪注入） */
+    /** Reads window state -> styleForWindow */
     _styleOf(win) {
         const hMax = win.maximized_horizontally;
         const vMax = win.maximized_vertically;
@@ -284,12 +283,12 @@ export class Manager {
             focused: win.appears_focused,
             maximized: hMax && vMax,
             fullscreen: win.is_fullscreen(),
-            tiled: hMax !== vMax,  // 半边 tile = 单轴最大化（mutter tiling）
+            tiled: hMax !== vMax,  // Half-tile = single-axis maximized (mutter tiling)
             highContrast: St.Settings.get().high_contrast,
         });
     }
 
-    /** style → shader uniforms；尺寸变化时可选传入新 w/h */
+    /** Applies style -> shader uniforms; optionally accepts new w/h on size change */
     _applyStyle(win, style, wOverride, hOverride) {
         const state = this._windows.get(win);
         const actor = win.get_compositor_private();
@@ -301,7 +300,7 @@ export class Manager {
         if (state.clip)
             state.clip.setParams(w, h, style.radius, style.outline);
         if (state.shadowFx) {
-            // 若免除了圆角裁剪（直角窗口），阴影半径同步为 0 以保证 SDF 阴影与直角外轮廓严丝合缝
+            // If corner clipping is skipped (square corners), sync shadow radius to 0 to fit square outline
             const shadowRadius = state.clip ? style.radius : 0;
             state.shadowFx.setParams(w, h, shadowRadius, SHADOW_PAD, style.shadows);
         }

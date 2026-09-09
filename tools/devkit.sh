@@ -1,16 +1,15 @@
 #!/bin/bash
-# 嵌套开发会话（GNOME 50 姿势：--devkit，mutter 50 已移除 --nested）
+# Nested development session (GNOME 50+: --devkit, mutter 50 removed --nested)
 #
-# 与 POC 2 的 headless 本质不同：devkit 有真实渲染管线（虚拟监视器 +
-# Screencast 屏流 + libei 输入注入），windowGroup 正常绘制——
-# 窗口视觉验证不再受 headless 限制。
+# Distinct from headless: devkit features a real rendering pipeline (virtual monitor +
+# Screencast stream + libei input emulation), properly rendering windowGroup.
 #
-# 用法:
-#   ./tools/devkit.sh            # 前台跑，日志过滤显示
-#   ./tools/devkit.sh bg         # 后台跑（供脚本驱动）
-#   mdk 客户端: /usr/lib/mutter-devkit（自动唤起，或另起连上看画面）
+# Usage:
+#   ./tools/devkit.sh            # Run in foreground with filtered logs
+#   ./tools/devkit.sh bg         # Run in background (for script automation)
+#   mdk client: /usr/lib/mutter-devkit (automatically spawned or run separately to view UI)
 #
-# 注意：坚决不设 --virtual-monitor（避免挤掉 MDK 客户端的主监视器地位导致丢顶栏，对齐 gradia-capture）
+# Note: Do not pass --virtual-monitor (prevents overriding the MDK client's primary monitor role)
 set -e
 cd "$(dirname "$0")/.."
 
@@ -43,16 +42,16 @@ if [ "$1" = "bg" ]; then
     echo $! > /tmp/csd-fixer-devkit.pid
     sleep 7
     if ! pgrep -f "gnome-shell --devkit" > /dev/null; then
-        echo "✗ 会话未存活，日志末尾："; tail -5 "$LOG"; exit 1
+        echo "FAILED: Session failed to start, log tail:"; tail -5 "$LOG"; exit 1
     fi
-    echo "✓ PID $(cat /tmp/csd-fixer-devkit.pid)，日志: $LOG"
+    echo "OK: PID $(cat /tmp/csd-fixer-devkit.pid), log: $LOG"
     grep -a "display name" "$LOG" | tail -1
     exit 0
 fi
 
-echo "═══ devkit 嵌套会话 ═══"
-echo "日志: $LOG（Ctrl+C 退出）"
-echo "另终端连画面: /usr/lib/mutter-devkit"
+echo "=== devkit nested session ==="
+echo "Log: $LOG (Ctrl+C to exit)"
+echo "Connect GUI client in another terminal: /usr/lib/mutter-devkit"
 echo ""
 
 dbus-run-session gnome-shell --devkit --wayland 2>&1 \

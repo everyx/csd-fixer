@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "GNOME Shell 扩展：给 Wayland 下无 CSD 的窗口补齐 GNOME 原生风格的圆角与阴影",
+  "description": "GNOME Shell extension: restores GNOME native rounded corners and shadows to non-CSD windows on Wayland",
   "license": "GPL-2.0-or-later",
   "repository": {
     "type": "git",

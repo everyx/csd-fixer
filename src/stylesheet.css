@@ -1,10 +1,10 @@
 /*
- * csd-fixer 样式表
+ * csd-fixer stylesheet
  *
- * EGO 审查规范：扩展所有 CSS 类名必须带前缀（如 .csd-fixer-*），
- * 杜绝无命名空间的选择器（如 button, label, .shadow）污染 Shell 全局 UI。
+ * EGO review guidelines: all extension CSS class names must be prefixed (e.g. .csd-fixer-*),
+ * preventing unnamespaced selectors (e.g. button, label, .shadow) from polluting global Shell UI.
  */
 
 .csd-fixer-shadow {
-    /* 预留样式钩子 */
+    /* Reserved style hook */
 }

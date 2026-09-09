@@ -1,6 +1,6 @@
 /**
- * 多语言 i18n 单元测试：
- * 验证 gettext 翻译文件（pot, po, mo）的完整性与 metadata 配置一致性。
+ * i18n multilingual unit tests:
+ * Verifies integrity of gettext translation files (pot, po, mo) and consistency with metadata.
  */
 
 import Gio from 'gi://Gio';
@@ -24,18 +24,18 @@ function getFileSize(filePath) {
     return info.get_size();
 }
 
-describe('i18n 多语言支持', () => {
+describe('i18n multilingual support', () => {
     const rootDir = GLib.get_current_dir();
     const poDir = GLib.build_filenamev([rootDir, 'po']);
     const srcLocaleDir = GLib.build_filenamev([rootDir, 'src', 'locale']);
     const metadataPath = GLib.build_filenamev([rootDir, 'src', 'metadata.json']);
 
-    it('metadata.json 声明了正确的 gettext-domain', () => {
+    it('metadata.json declares correct gettext-domain', () => {
         const metadata = JSON.parse(readFile(metadataPath));
         expect(metadata['gettext-domain']).toBe('csd-fixer');
     });
 
-    it('模板文件 csd-fixer.pot 包含核心首选项 UI 键', () => {
+    it('template file csd-fixer.pot contains core preference UI keys', () => {
         const potFile = GLib.build_filenamev([poDir, 'csd-fixer.pot']);
         expect(fileExists(potFile)).toBeTrue();
 
@@ -48,7 +48,7 @@ describe('i18n 多语言支持', () => {
         expect(potContent).toContain('Rounded corners only (disable shadow)');
     });
 
-    it('zh_CN.po 包含完整的简体中文翻译', () => {
+    it('zh_CN.po contains complete Simplified Chinese translations', () => {
         const poFile = GLib.build_filenamev([poDir, 'zh_CN.po']);
         expect(fileExists(poFile)).toBeTrue();
 
@@ -61,7 +61,7 @@ describe('i18n 多语言支持', () => {
         expect(poContent).toContain('仅圆角（禁用阴影添加）');
     });
 
-    it('zh_TW.po 包含完整的繁体中文翻译', () => {
+    it('zh_TW.po contains complete Traditional Chinese translations', () => {
         const poFile = GLib.build_filenamev([poDir, 'zh_TW.po']);
         expect(fileExists(poFile)).toBeTrue();
 
@@ -71,7 +71,7 @@ describe('i18n 多语言支持', () => {
         expect(poContent).toContain('僅圓角（停用陰影效果）');
     });
 
-    it('编译生成的 .mo 二进制语言包有效且非空', () => {
+    it('compiled .mo binary catalogs are valid and non-empty', () => {
         const zhCnMo = GLib.build_filenamev([srcLocaleDir, 'zh_CN', 'LC_MESSAGES', 'csd-fixer.mo']);
         const zhTwMo = GLib.build_filenamev([srcLocaleDir, 'zh_TW', 'LC_MESSAGES', 'csd-fixer.mo']);
 

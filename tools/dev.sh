@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
-# csd-fixer 开发辅助：在无头嵌套会话里跑 GNOME Shell + 测试应用
-# 用法（或等价的 npm run，见 package.json）：
-#   ./tools/dev.sh shell        # 后台启动无头嵌套 shell（日志: /tmp/csd-fixer-dev/shell.log）
-#   ./tools/dev.sh log          # 实时看嵌套 shell 日志（Ctrl+C 退出）
-#   ./tools/dev.sh app <cmd>    # 在嵌套会话里启动测试应用（同一 WAYLAND_DISPLAY）
-#   ./tools/dev.sh ext <subcmd> # 在嵌套会话 D-Bus 里跑 gnome-extensions 命令
-#   ./tools/dev.sh stop         # 停止嵌套 shell
+# csd-fixer development helper: runs GNOME Shell + test applications in headless nested session
+# Usage (or equivalent npm scripts, see package.json):
+#   ./tools/dev.sh shell        # Starts headless nested shell in background (log: /tmp/csd-fixer-dev/shell.log)
+#   ./tools/dev.sh log          # Streams nested shell log (Ctrl+C to exit)
+#   ./tools/dev.sh app <cmd>    # Launches test application inside nested session (same WAYLAND_DISPLAY)
+#   ./tools/dev.sh ext <subcmd> # Runs gnome-extensions command inside nested session D-Bus
+#   ./tools/dev.sh stop         # Stops nested shell
 #
-# 安全原则（教训：绝不再 kill 主会话 gnome-shell）：
-#   - 一切测试都在嵌套会话（--headless + --virtual-monitor）里做，主桌面零接触
-#   - enable 扩展必须走嵌套会话自己的 D-Bus（dev.sh 内完成），另开终端会打到主桌面
-#   - 无热重载：改代码 → ./tools/dev.sh stop && ./tools/dev.sh shell
+# Safety principles (never kill the main desktop gnome-shell):
+#   - All testing runs in a nested session (--headless + --virtual-monitor), zero contact with main desktop
+#   - Enabling extension must go through nested session's own D-Bus (handled inside dev.sh)
+#   - No hot-reload: on code change -> ./tools/dev.sh stop && ./tools/dev.sh shell
 
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"   # 仓库根（脚本在 tools/ 下）
-SRC_DIR="${SRC_DIR:-$ROOT/src}"              # 扩展源码目录
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"   # Repository root (script is under tools/)
+SRC_DIR="${SRC_DIR:-$ROOT/src}"              # Extension source directory
 UUID="$(python3 -c "import json; print(json.load(open('$SRC_DIR/metadata.json'))['uuid'])")"
 EXT_DIR="$HOME/.local/share/gnome-shell/extensions/$UUID"
 WL_DISPLAY="wayland-csd-fixer"
@@ -27,10 +27,10 @@ mkdir -p "$STATE_DIR"
 
 cmd_shell() {
     if [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
-        echo ">> 嵌套 shell 已在运行 (PID $(cat "$PIDFILE"))"
+        echo ">> Nested shell is already running (PID $(cat "$PIDFILE"))"
         return
     fi
-    # 同步最新扩展代码 + 编译 GSettings schema（无 schemas/ 则跳过）
+    # Sync latest extension code + compile GSettings schema (skip if schemas/ does not exist)
     mkdir -p "$EXT_DIR"
     cp -r "$SRC_DIR/metadata.json" "$SRC_DIR/extension.js" "$EXT_DIR/"
     [[ -f "$SRC_DIR/prefs.js" ]] && cp "$SRC_DIR/prefs.js" "$EXT_DIR/"
@@ -43,28 +43,28 @@ cmd_shell() {
         mkdir -p "$EXT_DIR/schemas"
         cp "$SRC_DIR/schemas/"*.xml "$EXT_DIR/schemas/"
         glib-compile-schemas "$EXT_DIR/schemas"
-        # 注册到用户级 glib-2.0 schemas，使终端直接运行 gsettings 无需加环境变量
+        # Register to user-level glib-2.0 schemas so gsettings runs directly in terminal without extra env vars
         mkdir -p "$HOME/.local/share/glib-2.0/schemas"
         ln -sf "$EXT_DIR/schemas/"*.xml "$HOME/.local/share/glib-2.0/schemas/"
         glib-compile-schemas "$HOME/.local/share/glib-2.0/schemas"
     fi
-    rm -f "$PIDFILE" "$LOG"   # 清旧日志，避免新旧会话输出混淆
+    rm -f "$PIDFILE" "$LOG"   # Clear old logs to avoid mixing session outputs
 
-    echo ">> 启动无头嵌套 shell（后台，日志: $LOG）"
+    echo ">> Starting headless nested shell (background, log: $LOG)"
     chmod +x "$ROOT/tools/dev-shell.sh"
     CSD_FIXER_UUID="$UUID" setsid nohup dbus-run-session -- bash "$ROOT/tools/dev-shell.sh" > "$LOG" 2>&1 < /dev/null &
     disown
-    # 等待 ready
+    # Wait until ready
     for i in $(seq 1 30); do
         if [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
-            echo ">> 嵌套 shell 就绪 (PID $(cat "$PIDFILE"))"
+            echo ">> Nested shell ready (PID $(cat "$PIDFILE"))"
             sleep 2
             tail -5 "$LOG"
             return
         fi
         sleep 1
     done
-    echo "!! 启动超时，日志尾部："
+    echo "!! Startup timed out, log tail:"
     tail -20 "$LOG"
     exit 1
 }
@@ -74,32 +74,32 @@ cmd_log() {
 }
 
 cmd_app() {
-    cmd_shell  # 确保在跑
+    cmd_shell  # Ensure running
     echo ">> [nested] WAYLAND_DISPLAY=$WL_DISPLAY: $*"
     env WAYLAND_DISPLAY="$WL_DISPLAY" "$@"
 }
 
 cmd_ext() {
     cmd_shell
-    # 在嵌套会话的 D-Bus 里跑 gnome-extensions（只能通过嵌套 shell 自己的 bus）
+    # Run gnome-extensions inside nested session D-Bus (must go through nested shell's own bus)
     echo ">> [nested-dbus] gnome-extensions $*"
     bus="$(grep -o 'DBUS_SESSION_BUS_ADDRESS=[^ ]*' "$LOG" | head -1 || true)"
     if [[ -n "$bus" ]]; then
         env "${bus/=*}"="$(echo "$bus" | cut -d= -f2-)" gnome-extensions "$@"
     else
-        echo "!! 找不到嵌套会话 bus 地址，请用 ./dev.sh shell 前台确认"; exit 1
+        echo "!! Cannot find nested session bus address, please verify with ./dev.sh shell"; exit 1
     fi
 }
 
 cmd_stop() {
     if [[ -f "$PIDFILE" ]]; then
-        echo ">> 停止嵌套 shell (PID $(cat "$PIDFILE"))"
-        # 杀整棵进程树（dbus-run-session 会连带清理）
+        echo ">> Stopping nested shell (PID $(cat "$PIDFILE"))"
+        # Kill entire process tree (dbus-run-session cleans up along with it)
         pkill -f "wayland-display=$WL_DISPLAY" 2>/dev/null || true
         kill "$(cat "$PIDFILE")" 2>/dev/null || true
         rm -f "$PIDFILE"
     fi
-    echo ">> 已清理"
+    echo ">> Cleaned up"
 }
 
 case "${1:-}" in
@@ -108,5 +108,5 @@ case "${1:-}" in
     app) shift; cmd_app "$@" ;;
     ext) shift; cmd_ext "$@" ;;
     stop) cmd_stop ;;
-    *) echo "用法: $0 {shell|log|app <cmd>|ext <subcmd>|stop}"; exit 1 ;;
+    *) echo "Usage: $0 {shell|log|app <cmd>|ext <subcmd>|stop}"; exit 1 ;;
 esac

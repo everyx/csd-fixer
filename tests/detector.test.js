@@ -1,6 +1,6 @@
 /**
- * detector 纯逻辑单测（jasmine-gjs）。
- * 运行: jasmine --module tests/ （见 package.json 的 npm test）
+ * detector unit tests (jasmine-gjs).
+ * Run: npm test
  */
 
 import {
@@ -9,24 +9,24 @@ import {
 } from '../src/lib/detector.js';
 
 describe('computeInsets', () => {
-    it('buffer==frame（scale=1）→ 零边距', () => {
+    it('buffer == frame (scale = 1) -> zero insets', () => {
         const {w, h} = computeInsets(400, 300, 400, 300, 1);
         expect(w).toBe(0);
         expect(h).toBe(0);
     });
 
-    it('buffer>frame（scale=1）→ 正边距', () => {
+    it('buffer > frame (scale = 1) -> positive insets', () => {
         const {w, h} = computeInsets(400, 300, 360, 260, 1);
         expect(w).toBe(40);
         expect(h).toBe(40);
     });
 
-    it('分数缩放：buffer 物理像素除以 scale 后再比', () => {
-        // 2x HiDPI：无 CSD 窗口 buffer=800x600，frame=400x300
+    it('fractional scaling: compares after dividing physical buffer by scale', () => {
+        // 2x HiDPI: non-CSD window buffer=800x600, frame=400x300
         const {w, h} = computeInsets(800, 600, 400, 300, 2);
         expect(w).toBe(0);
         expect(h).toBe(0);
-        // 2x + CSD 20px 边距
+        // 2x + CSD 20px insets
         const {w: w2} = computeInsets(840, 640, 400, 300, 2);
         expect(w2).toBe(20);
     });
@@ -44,14 +44,14 @@ describe('shouldDecorate', () => {
         wmClass: 'test-app',
     };
 
-    it('无 CSD 普通窗口 → 需要补装饰', () => {
+    it('non-CSD normal window -> decorate', () => {
         const r = shouldDecorate(base);
         expect(r.apply).toBeTrue();
         expect(r.reason).toContain('no-csd');
     });
 
-    it('微信文章窗口（XWayland，Chromium 4px 抓取边缘）单边 < 8px → 识别为无自绘大阴影，补装饰', () => {
-        // 抓包真实数据：buf=[1156, 852], frame=[1148, 844]，各边 4px
+    it('WeChat article window (XWayland, Chromium 4px resize grip) single side < 8px -> detected as lacking CSD, decorate', () => {
+        // Captured real-world data: buf=[1156, 852], frame=[1148, 844], 4px per edge
         const r = shouldDecorate({
             ...base,
             isX11: true,
@@ -64,8 +64,8 @@ describe('shouldDecorate', () => {
         expect(r.reason).toContain('4.0x4.0 < 8');
     });
 
-    it('真正自绘 CSD 阴影（如 GTK4/Adwaita，单边 20px+ >= 8px）→ 跳过', () => {
-        // 边距：左右各 20px (bufferWidth=440, frameWidth=400), 上下各 20px
+    it('genuine self-drawn CSD shadow (e.g. GTK4/Adwaita, single side 20px+ >= 8px) -> skip', () => {
+        // Margins: 20px left/right (bufferWidth=440, frameWidth=400), 20px top/bottom
         const r = shouldDecorate({
             ...base,
             bufferWidth: 440, bufferHeight: 340,
@@ -76,30 +76,30 @@ describe('shouldDecorate', () => {
         expect(r.reason).toContain('20.0x20.0 >= 8');
     });
 
-    it('服务端边框/标题栏（SSD，如带系统标题栏的传统 X11 应用）→ 跳过', () => {
+    it('server-side decorations (SSD, traditional X11 app with system titlebar) -> skip', () => {
         const r = shouldDecorate({...base, hasSsd: true});
         expect(r.apply).toBeFalse();
         expect(r.reason).toBe('has-ssd-frame');
     });
 
-    it('最大化/全屏 → 跳过', () => {
+    it('maximized / fullscreen -> skip', () => {
         expect(shouldDecorate({...base, isMaximized: true}).apply).toBeFalse();
         expect(shouldDecorate({...base, isFullscreen: true}).apply).toBeFalse();
     });
 
-    it('非普通窗口类型 → 跳过', () => {
+    it('non-normal window type -> skip', () => {
         expect(shouldDecorate({...base, windowType: WindowType.DOCK}).apply).toBeFalse();
     });
 });
 
 describe('isFractionalScale', () => {
-    it('整数缩放（1, 2, 3）→ 不是分数缩放', () => {
+    it('integer scales (1, 2, 3) -> not fractional', () => {
         expect(isFractionalScale(1.0)).toBeFalse();
         expect(isFractionalScale(2.0)).toBeFalse();
         expect(isFractionalScale(3.0)).toBeFalse();
     });
 
-    it('常见分数缩放（1.25, 1.333333, 1.5, 1.75）→ 是分数缩放', () => {
+    it('common fractional scales (1.25, 1.333333, 1.5, 1.75) -> fractional', () => {
         expect(isFractionalScale(1.25)).toBeTrue();
         expect(isFractionalScale(1.333333)).toBeTrue();
         expect(isFractionalScale(1.5)).toBeTrue();
@@ -107,7 +107,7 @@ describe('isFractionalScale', () => {
         expect(isFractionalScale(2.25)).toBeTrue();
     });
 
-    it('非数字或异常 scale → 保守判定非分数', () => {
+    it('non-number or abnormal scale -> conservatively not fractional', () => {
         expect(isFractionalScale(null)).toBeFalse();
         expect(isFractionalScale(undefined)).toBeFalse();
         expect(isFractionalScale(0)).toBeFalse();
@@ -117,17 +117,17 @@ describe('isFractionalScale', () => {
 });
 
 describe('shouldClipWindow', () => {
-    it('preferCrispText=false（默认）时始终启用圆角裁剪', () => {
+    it('preferCrispText=false (default) always enables rounded corner clipping', () => {
         expect(shouldClipWindow({preferCrispText: false, scale: 1.0})).toBeTrue();
         expect(shouldClipWindow({preferCrispText: false, scale: 1.333333})).toBeTrue();
         expect(shouldClipWindow({preferCrispText: false, scale: 2.0})).toBeTrue();
     });
 
-    it('preferCrispText=true 时在分数缩放屏幕免除圆角剪裁，整数屏幕保留', () => {
-        // 整数缩放屏保留
+    it('preferCrispText=true skips corner clipping on fractional scale displays, retains on integer scale displays', () => {
+        // Integer scale displays retain
         expect(shouldClipWindow({preferCrispText: true, scale: 1.0})).toBeTrue();
         expect(shouldClipWindow({preferCrispText: true, scale: 2.0})).toBeTrue();
-        // 分数缩放屏免除
+        // Fractional scale displays skip
         expect(shouldClipWindow({preferCrispText: true, scale: 1.25})).toBeFalse();
         expect(shouldClipWindow({preferCrispText: true, scale: 1.333333})).toBeFalse();
         expect(shouldClipWindow({preferCrispText: true, scale: 1.5})).toBeFalse();
@@ -142,18 +142,18 @@ describe('resolveRule', () => {
         'my-game': RuleMode.DISABLE_SHADOW,
     };
 
-    it('精确匹配 windowRules', () => {
+    it('exact match in windowRules', () => {
         expect(resolveRule('wechat', rules)).toBe(RuleMode.DISABLE_CLIP);
         expect(resolveRule('steam', rules)).toBe(RuleMode.DISABLE_ALL);
         expect(resolveRule('my-game', rules)).toBe(RuleMode.DISABLE_SHADOW);
     });
 
-    it('大小写不敏感匹配 windowRules', () => {
+    it('case-insensitive match in windowRules', () => {
         expect(resolveRule('WeChat', rules)).toBe(RuleMode.DISABLE_CLIP);
         expect(resolveRule('STEAM', rules)).toBe(RuleMode.DISABLE_ALL);
     });
 
-    it('无匹配返回 null', () => {
+    it('no match returns null', () => {
         expect(resolveRule('unknown-app', rules)).toBeNull();
         expect(resolveRule(null, rules)).toBeNull();
         expect(resolveRule('', rules)).toBeNull();
@@ -171,14 +171,14 @@ describe('evaluateWindowActions', () => {
         wmClass: 'test-app',
     };
 
-    it('默认普通无 CSD 窗口：阴影和圆角均启用', () => {
+    it('default normal non-CSD window: both shadow and clip enabled', () => {
         const res = evaluateWindowActions(baseWin);
         expect(res.applyShadow).toBeTrue();
         expect(res.applyClip).toBeTrue();
         expect(res.reason).toContain('no-csd');
     });
 
-    it('disable-all 规则：阴影和圆角均禁用', () => {
+    it('disable-all rule: both shadow and clip disabled', () => {
         const res = evaluateWindowActions({
             ...baseWin,
             wmClass: 'overlay-app',
@@ -189,7 +189,7 @@ describe('evaluateWindowActions', () => {
         expect(res.reason).toContain('disabled-by-rule');
     });
 
-    it('disable-clip 规则：保留阴影，禁用圆角', () => {
+    it('disable-clip rule: retains shadow, disables clip', () => {
         const res = evaluateWindowActions({
             ...baseWin,
             wmClass: 'wechat',
@@ -200,7 +200,7 @@ describe('evaluateWindowActions', () => {
         expect(res.reason).toContain('rule-applied');
     });
 
-    it('disable-shadow 规则：禁用阴影，保留圆角', () => {
+    it('disable-shadow rule: disables shadow, retains clip', () => {
         const res = evaluateWindowActions({
             ...baseWin,
             wmClass: 'custom-tool',
@@ -211,10 +211,10 @@ describe('evaluateWindowActions', () => {
         expect(res.reason).toContain('rule-applied');
     });
 
-    it('已有 CSD 窗口（GTK4）：不管有无规则均不施加任何效果', () => {
+    it('CSD window (GTK4): no decorations applied regardless of rules', () => {
         const csdWin = {
             ...baseWin,
-            bufferWidth: 460, bufferHeight: 360, // 单边 30px >= 8px
+            bufferWidth: 460, bufferHeight: 360, // single side 30px >= 8px
             wmClass: 'gtk4-app',
             windowRules: {'gtk4-app': RuleMode.DISABLE_CLIP},
         };
@@ -224,7 +224,7 @@ describe('evaluateWindowActions', () => {
         expect(res.reason).toContain('has-csd');
     });
 
-    it('preferCrispText 在整数缩放屏幕（1.0x, 2.0x）上保留圆角', () => {
+    it('preferCrispText retains rounded corners on integer scale displays (1.0x, 2.0x)', () => {
         const res1 = evaluateWindowActions({
             ...baseWin,
             monitorScale: 1.0,
@@ -242,12 +242,12 @@ describe('evaluateWindowActions', () => {
         expect(res2.applyClip).toBeTrue();
     });
 
-    it('preferCrispText 在分数缩放屏幕（1.25x, 1.333x, 1.5x）上免除圆角剪裁并保留阴影', () => {
+    it('preferCrispText skips corner clipping on fractional scale displays (1.25x, 1.333x, 1.5x) while retaining shadow', () => {
         for (const fracScale of [1.25, 1.333333, 1.5, 1.75]) {
             const res = evaluateWindowActions({
                 ...baseWin,
-                geometryScale: 1, // actor geometry scale 通常为 1
-                monitorScale: fracScale, // 显示器物理真实缩放
+                geometryScale: 1, // actor geometry scale is typically 1
+                monitorScale: fracScale, // monitor physical scale
                 preferCrispText: true,
             });
             expect(res.applyShadow).toBeTrue();
@@ -255,7 +255,7 @@ describe('evaluateWindowActions', () => {
         }
     });
 
-    it('preferCrispText 未开启时在分数缩放屏幕上仍然保留圆角', () => {
+    it('preferCrispText disabled retains rounded corners on fractional scale displays', () => {
         const res = evaluateWindowActions({
             ...baseWin,
             geometryScale: 1,

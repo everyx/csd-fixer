@@ -27,7 +27,7 @@ function getRuleModes() {
 }
 
 /**
- * 枚举系统已安装的桌面应用程序信息
+ * Enumerate installed desktop application metadata
  */
 function getInstalledApps() {
     const apps = Gio.AppInfo.get_all();
@@ -61,7 +61,7 @@ function getInstalledApps() {
 }
 
 /**
- * 根据 wmClass 反查已安装应用元数据
+ * Look up installed application metadata by wmClass
  */
 function findAppInfoByWmClass(wmClass, appsList) {
     if (!wmClass)
@@ -76,7 +76,7 @@ function findAppInfoByWmClass(wmClass, appsList) {
 }
 
 /**
- * 读取 GSettings 中的 window-rules 字典
+ * Read window-rules dictionary from GSettings
  */
 function getWindowRules(settings) {
     try {
@@ -88,7 +88,7 @@ function getWindowRules(settings) {
 }
 
 /**
- * 保存 window-rules 字典到 GSettings
+ * Save window-rules dictionary to GSettings
  */
 function setWindowRules(settings, rules) {
     const variant = new GLib.Variant('a{ss}', rules);
@@ -96,7 +96,7 @@ function setWindowRules(settings, rules) {
 }
 
 /**
- * 弹出添加排除规则对话框
+ * Show dialog to add application exclusion rule
  */
 function showAddRuleDialog(parentWindow, settings, installedApps, onRuleAdded) {
     const dialog = new Adw.Window({
@@ -125,13 +125,13 @@ function showAddRuleDialog(parentWindow, settings, installedApps, onRuleAdded) {
     });
     toolbarView.set_content(mainBox);
 
-    // 1. 搜索框
+    // 1. Search entry
     const searchEntry = new Gtk.SearchEntry({
         placeholder_text: _('Search installed applications…'),
     });
     mainBox.append(searchEntry);
 
-    // 2. 应用选择列表（带滚动）
+    // 2. Application selection list (scrollable)
     const scrolled = new Gtk.ScrolledWindow({
         hscrollbar_policy: Gtk.PolicyType.NEVER,
         vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
@@ -145,7 +145,7 @@ function showAddRuleDialog(parentWindow, settings, installedApps, onRuleAdded) {
     scrolled.set_child(listBox);
     mainBox.append(scrolled);
 
-    // 填充应用项
+    // Populate application items
     for (const app of installedApps) {
         const row = new Adw.ActionRow({
             title: app.name,
@@ -169,7 +169,7 @@ function showAddRuleDialog(parentWindow, settings, installedApps, onRuleAdded) {
         listBox.append(row);
     }
 
-    // 搜索过滤逻辑
+    // Search filter logic
     listBox.set_filter_func(row => {
         const query = searchEntry.text.trim().toLowerCase();
         if (!query)
@@ -185,7 +185,7 @@ function showAddRuleDialog(parentWindow, settings, installedApps, onRuleAdded) {
     });
     searchEntry.connect('search-changed', () => listBox.invalidate_filter());
 
-    // 3. 配置项表单
+    // 3. Form fields
     const formGroup = new Adw.PreferencesGroup({
         title: _('Rule Parameters'),
     });
@@ -197,7 +197,7 @@ function showAddRuleDialog(parentWindow, settings, installedApps, onRuleAdded) {
     });
     formGroup.add(entryRow);
 
-    // 点击列表行自动填入 wmClass
+    // Auto-fill wmClass on row selection
     listBox.connect('row-activated', (_box, row) => {
         if (row._appData?.wmClass)
             entryRow.text = row._appData.wmClass;
@@ -212,7 +212,7 @@ function showAddRuleDialog(parentWindow, settings, installedApps, onRuleAdded) {
     });
     formGroup.add(modeRow);
 
-    // 4. 添加按钮
+    // 4. Add button
     const addButton = new Gtk.Button({
         label: _('Add Rule'),
         css_classes: ['suggested-action', 'pill'],
@@ -249,7 +249,7 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
         });
         window.add(page);
 
-        // 分组 1：显示与渲染
+        // Group 1: Display & rendering
         const renderGroup = new Adw.PreferencesGroup({
             title: _('Display & Rendering'),
             description: _('Control window decoration behavior across screen scales'),
@@ -263,7 +263,7 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
         settings.bind('prefer-crisp-text', crispRow, 'active', Gio.SettingsBindFlags.DEFAULT);
         renderGroup.add(crispRow);
 
-        // 分组 2：应用排除规则（黑名单与细粒度控制）
+        // Group 2: Application exclusion rules
         const addRuleButton = new Gtk.Button({
             label: _('Add Rule…'),
             icon_name: 'list-add-symbolic',
@@ -278,7 +278,7 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
         page.add(rulesGroup);
 
         const refreshRulesList = () => {
-            // 清理已有的动态行（保留 group 本身）
+            // Clear existing dynamic rows (keep group itself)
             if (rulesGroup._ruleRows) {
                 for (const row of rulesGroup._ruleRows)
                     rulesGroup.remove(row);
@@ -309,7 +309,7 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
                     subtitle,
                 });
 
-                // 图标
+                // Icon
                 if (appInfo?.icon) {
                     row.add_prefix(new Gtk.Image({
                         gicon: appInfo.icon,
@@ -322,7 +322,7 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
                     }));
                 }
 
-                // 下拉选择模式
+                // Mode dropdown
                 const ruleModes = getRuleModes();
                 const shortLabels = ruleModes.map(m => m.shortLabel);
                 const modeModel = Gtk.StringList.new(shortLabels);
@@ -343,7 +343,7 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
                 });
                 row.add_suffix(dropDown);
 
-                // 删除按钮
+                // Delete button
                 const deleteButton = new Gtk.Button({
                     icon_name: 'user-trash-symbolic',
                     css_classes: ['flat', 'destructive-action'],
@@ -367,7 +367,7 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
             showAddRuleDialog(window, settings, installedApps, refreshRulesList);
         });
 
-        // 初始渲染规则列表
+        // Initial render of rule list
         refreshRulesList();
     }
 }

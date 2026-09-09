@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# 嵌套会话启动脚本（由 dev.sh 调用；独立文件避免多层引号转义地狱）
+# Nested session startup script (invoked by dev.sh; separate file to avoid shell quoting issues)
 set -u
 
-# UUID 由调用方（dev.sh）通过环境变量传入
+# UUID passed from caller (dev.sh) via environment variable
 UUID="${CSD_FIXER_UUID:-csd-fixer@everyx.github.io}"
 WL_DISPLAY="wayland-csd-fixer"
 STATE_DIR="/tmp/csd-fixer-dev"
 PIDFILE="$STATE_DIR/shell.pid"
 EXT_DIR="$HOME/.local/share/gnome-shell/extensions/$UUID"
 
-# 注意：本脚本在 dbus-run-session 的会话 bash 里运行（argv 见 dev.sh）
+# Note: this script runs inside dbus-run-session bash (see dev.sh)
 export G_MESSAGES_DEBUG='GNOME Shell'
 export CSD_FIXER_UUID="$UUID"
 
@@ -18,8 +18,8 @@ gnome-shell --headless --wayland --wayland-display="$WL_DISPLAY" \
 echo $! > "$PIDFILE"
 sleep 4
 
-# headless 固坑修正：无 GDM 激活流程时 window_group 保持隐藏，
-# 窗口 actor 永不 mapped（视觉测试全部失真）。Eval 强制显示。
+# Workaround for headless mode: without GDM activation flow, window_group remains hidden,
+# window actors are never mapped (visual testing distorts). Force show via Eval.
 for i in $(seq 1 15); do
     BUS_ADDR="$(tr '\0' '\n' < /proc/$!/environ 2>/dev/null | grep '^DBUS_SESSION_BUS_ADDRESS=' | cut -d= -f2-)"
     if [[ -n "$BUS_ADDR" ]]; then
@@ -34,7 +34,7 @@ for i in $(seq 1 15); do
     sleep 1
 done
 
-# enable + 状态输出（走本会话自己的 D-Bus）
+# Enable extension and print status (via nested session's own D-Bus)
 gnome-extensions enable "$UUID" || true
 gnome-extensions info "$UUID" || true
 

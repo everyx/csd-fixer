@@ -1,34 +1,35 @@
 /**
- * ShadowActor：垫在窗口 actor 下方的阴影载体。
+ * ShadowActor: shadow container underneath the window actor.
  *
- * 为什么必须是独立 actor：GLSL fragment 只在 actor 自身矩形内执行，
- * 画不出 actor 边界外——阴影可绘制区必须由本 actor 的尺寸预留
- * （窗口尺寸 + PAD×2）。
+ * Why a separate actor is needed: GLSL fragment shaders only execute within the actor's
+ * own bounding box and cannot render outside its borders. The drawable shadow margin
+ * must be allocated by this actor's size (window size + SHADOW_PAD * 2).
  *
- * 跟随机制：
- *   - 几何跟随（位置与尺寸）：X/Y/WIDTH/HEIGHT 4 维全部由 Clutter.BindConstraint
- *     在合成器 C 核心内原子完成同步，零 JS 帧开销，绝不触发 needs_allocation 警告。
- *   - 动效跟随（打开/关闭/最小化动画）：通过 GObject.bind_property 绑定
- *     scale-x/y、pivot-point、translation-x/y、opacity、visible，
- *     确保阴影严丝合缝地跟随窗口弹出、收缩与淡入淡出动效。
- *   - z 序（restack）：由 manager 的 display 'restacked' 信号统一维护
- *     （set_child_below_sibling），本类只管创建与自毁。
+ * Tracking mechanisms:
+ *   - Geometry tracking (position and size): X/Y/WIDTH/HEIGHT dimensions are synchronized
+ *     atomically by Clutter.BindConstraint inside the compositor core with zero JS frame overhead,
+ *     avoiding needs_allocation warnings.
+ *   - Animation tracking (open, close, minimize): bound via GObject.bind_property
+ *     (scale-x/y, pivot-point, translation-x/y, opacity, visible), ensuring shadow follows
+ *     window animations seamlessly.
+ *   - Z-order (restacking): maintained via display 'restacked' signal in manager
+ *     (set_child_below_sibling).
  *
- * 本类自管信号与生命周期：随 windowActor 的 destroy 信号自然自毁，零内存泄漏。
+ * Lifecycle: destroys cleanly upon windowActor 'destroy' signal with zero memory leaks.
  */
 
 import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 
-/** 阴影可绘制余量：最大 blur 14 (σ=7) + spread 5 = 26px (3σ)，+2 安全余量 */
+/** Shadow padding: max blur 14 (sigma=7) + spread 5 = 26px (3*sigma), +2 safety margin */
 export const SHADOW_PAD = 28;
 
 export class ShadowActor {
     /**
-     * @param {Clutter.Actor} windowActor 被装饰窗口的 actor
-     * @param {Clutter.Actor} container   挂载容器（windowGroup），
-     *                                    阴影插入在 windowActor 之下
+     * @param {Clutter.Actor} windowActor Actor of the window being decorated
+     * @param {Clutter.Actor} container   Container actor (windowGroup),
+     *                                    shadow is inserted below windowActor
      */
     constructor(windowActor, container) {
         this._windowActor = windowActor;
@@ -42,9 +43,9 @@ export class ShadowActor {
             style: 'background-color: transparent;',
         });
 
-        // 位置与尺寸跟随：X/Y/WIDTH/HEIGHT 4 维约束全部由 Clutter 内部 C 语言原生同步
-        // 彻底杜绝在 notify::allocation 回调中调用 set_size 破坏 layout 顺序抛出
-        // "Can't update stage views actor unnamed [StBin] is on because it needs an allocation" 警告。
+        // Position and size tracking: X/Y/WIDTH/HEIGHT 4D constraints synchronized natively by Clutter C core
+        // Avoids calling set_size in notify::allocation callback which breaks layout order and triggers
+        // "Can't update stage views actor unnamed [StBin] is on because it needs an allocation" warnings.
         this._actor.add_constraint(new Clutter.BindConstraint({
             source: windowActor,
             coordinate: Clutter.BindCoordinate.X,
@@ -66,8 +67,8 @@ export class ShadowActor {
             offset: SHADOW_PAD * 2,
         }));
 
-        // 属性与动画跟随：透明度/可见性/缩放/支点/平移全部与窗口同步
-        // 确保窗口在打开（map）、关闭（destroy）、最小化等动画期间，阴影严丝合缝地跟随窗口缩放动画
+        // Property and animation tracking: sync opacity, visibility, scale, pivot, translation with window
+        // Ensures shadow smoothly tracks window scaling and fade during map, destroy, and minimize animations
         const syncProps = [
             'opacity',
             'visible',
@@ -83,12 +84,12 @@ export class ShadowActor {
                 prop, this._actor, prop, GObject.BindingFlags.SYNC_CREATE));
         }
 
-        // 尺寸跟随：仅负责在 allocation 就绪后驱动着色器 uniform 更新，不干扰 actor 自身尺寸
+        // Size tracking: drives shader uniform updates once allocation is ready without interfering with actor size
         this._lastW = 0;
         this._lastH = 0;
         this._allocId = windowActor.connect('notify::allocation',
             () => this._notifySizeChange());
-        // 窗口 actor 销毁 → 兜底自杀（manager 正常路径也会先调 destroy）
+        // Window actor destruction: fallback cleanup (manager normal path calls destroy first)
         this._destroyId = windowActor.connect('destroy', () => this.destroy());
 
         container.insert_child_below(this._actor, windowActor);
@@ -100,12 +101,12 @@ export class ShadowActor {
         return this._actor;
     }
 
-    /** 尺寸变化回调（manager 注册：驱动 effect uniform 更新） */
+    /** Size change callback (registered by manager to drive effect uniform updates) */
     onRelayout(cb) {
         this._relayoutCallbacks.push(cb);
     }
 
-    /** 按窗口 actor 当前尺寸刷新 uniform（manager 在 decorate 后调用一次） */
+    /** Refresh uniforms with current window actor dimensions */
     relayout() {
         this._notifySizeChange(true);
     }
@@ -116,7 +117,7 @@ export class ShadowActor {
         const w = this._windowActor.width;
         const h = this._windowActor.height;
         if (w === 0 || h === 0)
-            return;  // 尚未映射，等 allocation 信号
+            return;  // Not yet mapped, waiting for allocation signal
         if (!force && w === this._lastW && h === this._lastH)
             return;
         this._lastW = w;
@@ -133,17 +134,17 @@ export class ShadowActor {
         for (const b of this._bindings)
             b.unbind();
         this._bindings = [];
-        // 窗口 actor 可能已销毁（destroy 信号路径），disconnect 会抛错
+        // Window actor may already be destroyed, disconnect may throw
         try {
             this._windowActor.disconnect(this._allocId);
             this._windowActor.disconnect(this._destroyId);
         } catch {
-            // actor 已销毁——信号随之释放，无需处理
+            // Actor destroyed: signals released automatically
         }
         try {
             this._container.remove_child(this._actor);
         } catch {
-            // container 可能已销毁
+            // Container may already be destroyed
         }
         this._actor.destroy();
         this._actor = null;

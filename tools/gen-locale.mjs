@@ -2,12 +2,12 @@
 /**
  * tools/gen-locale.mjs
  *
- * 负责 gettext 多语言文件的编译、检查与提取。
+ * Compiles, checks, and extracts gettext translation files.
  *
- * 用法：
- *   node tools/gen-locale.mjs          # 编译 po/*.po 到 src/locale/<lang>/LC_MESSAGES/<domain>.mo
- *   node tools/gen-locale.mjs --check  # 检查 mo 文件是否最新且与 po 一致
- *   node tools/gen-locale.mjs --extract # 重新提取 pot 并合并 po
+ * Usage:
+ *   node tools/gen-locale.mjs          # Compiles po/*.po to src/locale/<lang>/LC_MESSAGES/<domain>.mo
+ *   node tools/gen-locale.mjs --check  # Verifies that mo files are up to date and consistent with po files
+ *   node tools/gen-locale.mjs --extract # Re-extracts pot from source and updates po files
  */
 
 import { execFileSync } from 'child_process';
@@ -54,7 +54,7 @@ if (isExtract) {
 
     fs.mkdirSync(poDir, { recursive: true });
 
-    console.log(`[gen-locale] 提取源码文本到 ${potFile}...`);
+    console.log(`[gen-locale] Extracting source strings to ${potFile}...`);
     execFileSync('xgettext', [
         `--default-domain=${domain}`,
         '--output=' + potFile,
@@ -68,17 +68,17 @@ if (isExtract) {
 
     const poFiles = getPoFiles();
     for (const poFile of poFiles) {
-        console.log(`[gen-locale] 合并更新 ${path.basename(poFile)}...`);
+        console.log(`[gen-locale] Merging updates for ${path.basename(poFile)}...`);
         execFileSync('msgmerge', ['--update', poFile, potFile]);
     }
-    console.log('[gen-locale] 提取与合并完成');
+    console.log('[gen-locale] Extraction and merge completed');
     process.exit(0);
 }
 
 if (isCheck) {
     const poFiles = getPoFiles();
     if (poFiles.length === 0) {
-        console.log('[gen-locale] 无 .po 文件需要检查');
+        console.log('[gen-locale] No .po files to check');
         process.exit(0);
     }
 
@@ -86,31 +86,32 @@ if (isCheck) {
         const lang = path.basename(poFile, '.po');
         const moFile = path.join(srcLocaleDir, lang, 'LC_MESSAGES', `${domain}.mo`);
         if (!fs.existsSync(moFile)) {
-            console.error(`[gen-locale] 缺少编译产物: ${moFile}，请运行 node tools/gen-locale.mjs`);
+            console.error(`[gen-locale] Missing compiled file: ${moFile}, please run node tools/gen-locale.mjs`);
             process.exit(1);
         }
 
         const poMtime = fs.statSync(poFile).mtimeMs;
         const moMtime = fs.statSync(moFile).mtimeMs;
         if (poMtime > moMtime) {
-            console.error(`[gen-locale] ${moFile} 落后于 ${poFile}，请运行 node tools/gen-locale.mjs 重新编译`);
+            console.error(`[gen-locale] ${moFile} is older than ${poFile}, please run node tools/gen-locale.mjs to recompile`);
             process.exit(1);
         }
     }
 
-    console.log(`[gen-locale] OK: 所有 ${poFiles.length} 个语言包编译产物均有效且最新`);
+    console.log(`[gen-locale] OK: All ${poFiles.length} locale MO files are valid and up to date`);
     process.exit(0);
 }
 
-// 默认执行：编译所有 po 文件
+// Default execution: compile all po files
 const poFiles = getPoFiles();
 if (poFiles.length === 0) {
-    console.log('[gen-locale] 没有找到 po 文件');
+    console.log('[gen-locale] No po files found');
     process.exit(0);
 }
 
 for (const poFile of poFiles) {
     const { lang, moFile } = compilePo(poFile);
-    console.log(`[gen-locale] 编译 ${lang} -> ${path.relative(rootDir, moFile)}`);
+    console.log(`[gen-locale] Compiling ${lang} -> ${path.relative(rootDir, moFile)}`);
 }
-console.log(`[gen-locale] 成功编译 ${poFiles.length} 个语言包`);
+console.log(`[gen-locale] Successfully compiled ${poFiles.length} locale(s)`);
+

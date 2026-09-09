@@ -1,11 +1,11 @@
 /**
- * shader 单测：验证生成的阴影着色器包含 GTK4 GSK 原生 2D 解析高斯数学内核。
+ * shader unit tests: verifies generated shadow shader includes GTK4 GSK analytical 2D Gaussian kernel.
  */
 
 import { DECLARATIONS, CODE } from '../src/effects/shadowShader.generated.js';
 
 describe('shadowShader.generated', () => {
-    it('DECLARATIONS 包含必要的数学常量与函数', () => {
+    it('DECLARATIONS includes essential math constants and functions', () => {
         expect(DECLARATIONS).toContain('const float PI = 3.141592653589793');
         expect(DECLARATIONS).toContain('const float SQRT1_2 = 0.7071067811865475');
         expect(DECLARATIONS).toContain('float\ngauss');
@@ -18,7 +18,7 @@ describe('shadowShader.generated', () => {
         expect(DECLARATIONS).toContain('evalShadowLayer');
     });
 
-    it('DECLARATIONS 包含窗口与阴影 uniform 声明', () => {
+    it('DECLARATIONS includes window and shadow uniform declarations', () => {
         expect(DECLARATIONS).toContain('uniform vec2 uWinSize;');
         expect(DECLARATIONS).toContain('uniform float uRadius;');
         expect(DECLARATIONS).toContain('uniform vec4 uShadow1;');
@@ -27,7 +27,7 @@ describe('shadowShader.generated', () => {
         expect(DECLARATIONS).toContain('uniform vec2 uPad;');
     });
 
-    it('CODE 包含三层阴影求值、GTK 原生 SNAP_BLEED 保守外溢剪裁与累加', () => {
+    it('CODE includes 3-layer shadow evaluation, GTK native SNAP_BLEED clipping and accumulation', () => {
         expect(CODE).toContain('clipAlpha = clamp(d + 0.5 + 0.8, 0.0, 1.0);');
         expect(CODE).toContain('evalShadowLayer(uShadow1');
         expect(CODE).toContain('evalShadowLayer(uShadow2');
@@ -35,7 +35,7 @@ describe('shadowShader.generated', () => {
         expect(CODE).toContain('cogl_color_out = vec4(vec3(0.0), min(a, 1.0) * cogl_color_in.a);');
     });
 
-    it('CODE 包含完全透明时的提早短路优化', () => {
+    it('CODE includes early short-circuit optimization when fully transparent', () => {
         expect(CODE).toContain('if (cogl_color_in.a <= 0.0)');
     });
 });

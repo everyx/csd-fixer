@@ -1,17 +1,18 @@
 /**
- * 圆角裁剪效果：挂窗口 actor，GLSL 把窗口内容裁成圆角矩形并补充内亮边。
+ * Rounded corner clipping effect: attached to window actor.
+ * Uses GLSL to clip window contents to a rounded rectangle and adds an inner highlight outline.
  *
- * shader 数学原理：
- *   SDF（有符号距离场）计算窗口边界距离 d：
- *     p = cogl_tex_coord0_in.xy * uSize - halfSize（以窗口中心为原点）
+ * Shader mathematical principles:
+ *   SDF (Signed Distance Field) computes distance d to window edge:
+ *     p = cogl_tex_coord0_in.xy * uSize - halfSize (window center as origin)
  *     d = sdRoundedBox(p, halfSize, uRadius)
- *     窗内 d < 0，窗外 d > 0，边缘 d = 0
- *   圆角裁剪：
- *     cogl_color_out *= 1.0 - clamp(d + 0.5, 0.0, 1.0)（1px 抗锯齿）
- *   内亮边（libadwaita window outline 1px 白）：
- *     紧贴窗口边缘内侧 1px（d ∈ [-1.0, 0.0]）
- *     clamp(1.0 + d, 0.0, 1.0) 在 d <= -1.0 时严格为 0（窗内深处零影响，杜绝全白覆盖 bug）
- *     uOutline.rgb 归一化到 [0.0, 1.0]，避免 255 亮度过曝
+ *     inside window d < 0, outside window d > 0, boundary d = 0
+ *   Rounded clipping:
+ *     cogl_color_out *= 1.0 - clamp(d + 0.5, 0.0, 1.0) (1px anti-aliasing)
+ *   Inner highlight outline (libadwaita 1px white window outline):
+ *     Snugs along inside window boundary by 1px (d in [-1.0, 0.0])
+ *     clamp(1.0 + d, 0.0, 1.0) strictly evaluates to 0 when d <= -1.0
+ *     uOutline.rgb normalized to [0.0, 1.0]
  */
 
 import GObject from 'gi://GObject';
@@ -19,12 +20,12 @@ import Cogl from 'gi://Cogl';
 import Shell from 'gi://Shell';
 
 const DECLARATIONS = `
-uniform vec2 uSize;      // 窗口尺寸 (width, height)
-uniform float uRadius;   // 圆角半径
-uniform vec4 uOutline;   // 内亮边 (r, g, b, alpha)，alpha=0 关闭，rgb ∈ [0.0, 1.0]
+uniform vec2 uSize;      // Window size (width, height)
+uniform float uRadius;   // Corner radius
+uniform vec4 uOutline;   // Inner highlight (r, g, b, alpha), disabled when alpha=0, rgb in [0.0, 1.0]
 
 // ClutterOffscreenEffect (_clutter_actor_box_enlarge_for_effects)
-// 为防抖动向左上外扩 2px，全量增加 3px
+// Pad 2px top-left to avoid jitter, 3px overall enlargement
 const vec2 FBO_OFFSET = vec2(2.0, 2.0);
 const vec2 FBO_EXTRA  = vec2(3.0, 3.0);
 
@@ -41,14 +42,14 @@ const CODE = `
     vec2 p = cogl_tex_coord0_in.xy * quadSize;
     float d = sdRoundedBox(p - c, halfSize, uRadius);
 
-    // 内亮边：紧贴窗口边缘内侧 1px（d ∈ [-1.0, 0.0]），跟随圆角形状并同步淡入淡出动效
+    // Inner highlight: 1px band inside window edge (d in [-1.0, 0.0]), tracks corner curvature and fades with window
     if (uOutline.a > 0.0) {
         float m = clamp(1.0 + d, 0.0, 1.0) * uOutline.a * cogl_color_in.a;
         cogl_color_out.rgb = uOutline.rgb * m + cogl_color_out.rgb * (1.0 - m);
         cogl_color_out.a = m + cogl_color_out.a * (1.0 - m);
     }
 
-    // 圆角裁剪（1px 抗锯齿，窗外区域归零，同时截断窗外任何多余绘制）
+    // Rounded clipping (1px anti-aliasing; zeroes out outside regions and clips excess drawing)
     cogl_color_out *= 1.0 - clamp(d + 0.5, 0.0, 1.0);
 `;
 
@@ -68,7 +69,7 @@ export const RoundedClipEffect = GObject.registerClass({
     }
 
     /**
-     * 更新裁剪参数（尺寸/半径/内亮边；outline 为 null 时关闭亮边）。
+     * Update clipping parameters (size/radius/outline; disabled when outline is null).
      */
     setParams(width, height, radius, outline) {
         this.set_uniform_float(this._uSize, 2, [width, height]);
