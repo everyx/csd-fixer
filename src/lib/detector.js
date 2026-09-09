@@ -128,24 +128,63 @@ export const RuleMode = {
 };
 
 /**
- * Resolves the rule mode for a window.
- *
- * Matching precedence:
- * 1. Exact match against wmClass in windowRules
- * 2. Case-insensitive match against windowRules
- * 3. Returns null if no rule matched
+ * D-Bus interface identifiers for interactive window inspection.
+ * Stored in pure module to avoid importing Shell/Clutter/Meta in prefs.js.
  */
-export function resolveRule(wmClass, windowRules = {}) {
+export const INSPECTOR_DBUS_NAME = 'org.gnome.Shell.Extensions.CsdFixer';
+export const INSPECTOR_DBUS_PATH = '/org/gnome/Shell/Extensions/CsdFixer';
+
+/**
+ * Splits a rule key into base application wmClass and optional specifier.
+ * E.g. "wechat:dialog" -> { baseWmClass: "wechat", specifier: "dialog" }
+ *      "wechat" -> { baseWmClass: "wechat", specifier: null }
+ */
+export function parseRuleKey(key) {
+    if (!key)
+        return {baseWmClass: '', specifier: null};
+    const colonIdx = key.indexOf(':');
+    if (colonIdx === -1)
+        return {baseWmClass: key, specifier: null};
+    return {
+        baseWmClass: key.slice(0, colonIdx),
+        specifier: key.slice(colonIdx + 1),
+    };
+}
+
+/**
+ * Resolves the rule mode for a window based on composite static fingerprint.
+ * Benchmarked against KWin's multi-criteria matching hierarchy (src/rules.cpp).
+ *
+ * Specificity precedence (most specific to least specific):
+ * 1. Exact title rule: `${wmClass}:title=${title}`
+ * 2. Window type rule: `${wmClass}:dialog` (if window is a dialog or transient child)
+ * 3. Base application rule: `${wmClass}`
+ *
+ * Case-insensitive fallback is performed for each specificity level.
+ * Returns null if no rule matched.
+ */
+export function resolveRule(wmClass, windowRules = {}, options = {}) {
     if (!wmClass)
         return null;
 
-    if (Object.prototype.hasOwnProperty.call(windowRules, wmClass))
-        return windowRules[wmClass];
+    const {isDialog = false, title = null} = options;
 
-    const lowerTarget = wmClass.toLowerCase();
-    for (const [key, val] of Object.entries(windowRules)) {
-        if (key.toLowerCase() === lowerTarget)
-            return val;
+    const candidates = [];
+    if (title && typeof title === 'string' && title.trim().length > 0)
+        candidates.push(`${wmClass}:title=${title.trim()}`);
+    if (isDialog)
+        candidates.push(`${wmClass}:dialog`);
+    candidates.push(wmClass);
+
+    for (const cand of candidates) {
+        if (Object.prototype.hasOwnProperty.call(windowRules, cand))
+            return windowRules[cand];
+
+        const lowerCand = cand.toLowerCase();
+        for (const [key, val] of Object.entries(windowRules)) {
+            if (key.toLowerCase() === lowerCand)
+                return val;
+        }
     }
 
     return null;
@@ -157,6 +196,8 @@ export function resolveRule(wmClass, windowRules = {}) {
  * Parameters:
  *   geometryScale: window buffer geometry scale (actor.get_geometry_scale, default 1)
  *   monitorScale: display physical scale factor (global.display.get_monitor_scale, e.g. 1.25, 1.333)
+ *   isDialog / hasParent: whether the window is a modal/dialog or child of another window
+ *   title: window title
  * Returns: { applyShadow: boolean, applyClip: boolean, reason: string }
  */
 export function evaluateWindowActions({
@@ -167,6 +208,9 @@ export function evaluateWindowActions({
     isMaximized = false, isFullscreen = false,
     hasSsd = false,
     windowType = WindowType.NORMAL,
+    isDialog = false,
+    hasParent = false,
+    title = null,
     wmClass,
     windowRules = {},
     preferCrispText = false,
@@ -189,8 +233,10 @@ export function evaluateWindowActions({
         };
     }
 
-    // 2. Rule evaluation
-    const rule = resolveRule(wmClass, windowRules);
+    // 2. Rule evaluation (composite fingerprint matching)
+    const isWinDialog = Boolean(isDialog || hasParent ||
+        windowType === WindowType.DIALOG || windowType === WindowType.MODAL_DIALOG);
+    const rule = resolveRule(wmClass, windowRules, {isDialog: isWinDialog, title});
 
     if (rule === RuleMode.DISABLE_ALL) {
         return {

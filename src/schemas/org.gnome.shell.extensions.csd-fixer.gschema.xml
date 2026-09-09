@@ -7,10 +7,15 @@
       <default>{}</default>
       <summary>Custom application exclusion rules</summary>
       <description>
-        Key is wm_class or app_id, value is exclusion rule mode:
-        'disable-all': disable all decorations (no shadow, no corners);
-        'disable-clip': disable rounded corners (retaining shadow);
-        'disable-shadow': disable shadow (retaining rounded corners).
+        Dictionary mapping window identifier to exclusion rule mode.
+        Key format (composite static fingerprint):
+        - 'app': matches all windows of this app (e.g. 'wechat')
+        - 'app:dialog': matches child dialogs/transient windows of this app (e.g. 'wechat:dialog')
+        - 'app:title=...': matches windows with specific title (e.g. 'wechat:title=Exit')
+        Value modes:
+        - 'disable-all': disable all decorations (no shadow, no corners)
+        - 'disable-clip': disable rounded corners (retaining shadow)
+        - 'disable-shadow': disable shadow (retaining rounded corners)
       </description>
     </key>
     <key name="prefer-crisp-text" type="b">

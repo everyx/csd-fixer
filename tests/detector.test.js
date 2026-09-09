@@ -6,6 +6,7 @@
 import {
     shouldDecorate, computeInsets, WindowType, isFractionalScale,
     shouldClipWindow, RuleMode, resolveRule, evaluateWindowActions,
+    parseRuleKey,
 } from '../src/lib/detector.js';
 
 describe('computeInsets', () => {
@@ -158,6 +159,65 @@ describe('resolveRule', () => {
         expect(resolveRule(null, rules)).toBeNull();
         expect(resolveRule('', rules)).toBeNull();
     });
+
+    it('composite rules: dialog window matches wmClass:dialog with highest precedence over base wmClass', () => {
+        const compositeRules = {
+            'wechat': RuleMode.DISABLE_CLIP,
+            'wechat:dialog': RuleMode.DISABLE_ALL,
+        };
+
+        // Main normal window: matches base wmClass
+        expect(resolveRule('wechat', compositeRules, {isDialog: false})).toBe(RuleMode.DISABLE_CLIP);
+
+        // Dialog popup window: matches wechat:dialog (disable-all)
+        expect(resolveRule('wechat', compositeRules, {isDialog: true})).toBe(RuleMode.DISABLE_ALL);
+
+        // Case-insensitive dialog match
+        expect(resolveRule('WeChat', compositeRules, {isDialog: true})).toBe(RuleMode.DISABLE_ALL);
+    });
+
+    it('composite rules: title rule matches with highest precedence over dialog and base', () => {
+        const compositeRules = {
+            'wechat': RuleMode.DISABLE_CLIP,
+            'wechat:dialog': RuleMode.DISABLE_ALL,
+            'wechat:title=Special': RuleMode.DISABLE_SHADOW,
+        };
+
+        // Title matches specifically
+        expect(resolveRule('wechat', compositeRules, {isDialog: true, title: 'Special'})).toBe(RuleMode.DISABLE_SHADOW);
+
+        // Other dialog matches wechat:dialog
+        expect(resolveRule('wechat', compositeRules, {isDialog: true, title: 'Logout'})).toBe(RuleMode.DISABLE_ALL);
+    });
+
+    it('composite rules: fallback to base wmClass when no dialog or title rule exists', () => {
+        const compositeRules = {
+            'wechat': RuleMode.DISABLE_CLIP,
+        };
+
+        // When only base rule exists, dialog inherits base rule
+        expect(resolveRule('wechat', compositeRules, {isDialog: true})).toBe(RuleMode.DISABLE_CLIP);
+    });
+});
+
+describe('parseRuleKey', () => {
+    it('plain wmClass without specifier', () => {
+        expect(parseRuleKey('wechat')).toEqual({baseWmClass: 'wechat', specifier: null});
+        expect(parseRuleKey('steam')).toEqual({baseWmClass: 'steam', specifier: null});
+    });
+
+    it('dialog specifier', () => {
+        expect(parseRuleKey('wechat:dialog')).toEqual({baseWmClass: 'wechat', specifier: 'dialog'});
+    });
+
+    it('title specifier', () => {
+        expect(parseRuleKey('wechat:title=Exit')).toEqual({baseWmClass: 'wechat', specifier: 'title=Exit'});
+    });
+
+    it('empty or null', () => {
+        expect(parseRuleKey('')).toEqual({baseWmClass: '', specifier: null});
+        expect(parseRuleKey(null)).toEqual({baseWmClass: '', specifier: null});
+    });
 });
 
 describe('evaluateWindowActions', () => {
@@ -264,6 +324,56 @@ describe('evaluateWindowActions', () => {
         });
         expect(res.applyShadow).toBeTrue();
         expect(res.applyClip).toBeTrue();
+    });
+
+    it('dialog popup with wechat:dialog rule disables decorations on dialog while retaining them on main window', () => {
+        const rules = {
+            'wechat:dialog': RuleMode.DISABLE_ALL,
+        };
+
+        // WeChat main window (NORMAL, no parent)
+        const mainWin = evaluateWindowActions({
+            ...baseWin,
+            wmClass: 'wechat',
+            windowType: WindowType.NORMAL,
+            hasParent: false,
+            windowRules: rules,
+        });
+        expect(mainWin.applyShadow).toBeTrue();
+        expect(mainWin.applyClip).toBeTrue();
+
+        // WeChat exit popup (DIALOG windowType)
+        const dialogWin = evaluateWindowActions({
+            ...baseWin,
+            wmClass: 'wechat',
+            windowType: WindowType.DIALOG,
+            hasParent: true,
+            windowRules: rules,
+        });
+        expect(dialogWin.applyShadow).toBeFalse();
+        expect(dialogWin.applyClip).toBeFalse();
+        expect(dialogWin.reason).toContain('disabled-by-rule(wechat:disable-all)');
+
+        // WeChat modal popup (MODAL_DIALOG windowType)
+        const modalWin = evaluateWindowActions({
+            ...baseWin,
+            wmClass: 'wechat',
+            windowType: WindowType.MODAL_DIALOG,
+            windowRules: rules,
+        });
+        expect(modalWin.applyShadow).toBeFalse();
+        expect(modalWin.applyClip).toBeFalse();
+
+        // WeChat popup with transient parent even if type is NORMAL
+        const transientWin = evaluateWindowActions({
+            ...baseWin,
+            wmClass: 'wechat',
+            windowType: WindowType.NORMAL,
+            hasParent: true,
+            windowRules: rules,
+        });
+        expect(transientWin.applyShadow).toBeFalse();
+        expect(transientWin.applyClip).toBeFalse();
     });
 });
 
