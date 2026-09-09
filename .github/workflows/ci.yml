@@ -1,0 +1,121 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint:
+    name: Code Quality & Style
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gettext
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Check upstream code generation consistency
+        run: npm run check-style
+
+  ego-lint:
+    name: EGO Reviewer Compliance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Checkout gnome-extension-reviewer
+        uses: actions/checkout@v4
+        with:
+          repository: ZviBaratz/gnome-extension-reviewer
+          path: .ego-lint
+
+      - name: Install GLib schema compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libglib2.0-dev-bin
+
+      - name: Run ego-lint compliance checks
+        run: bash .ego-lint/ego-lint --show all src/
+
+  test:
+    name: Unit Tests (GJS + Jasmine)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install system test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gjs libglib2.0-dev-bin gettext meson ninja-build
+
+      - name: Install jasmine-gjs
+        run: |
+          git clone --depth 1 https://github.com/ptomato/jasmine-gjs.git /tmp/jasmine-gjs
+          meson setup /tmp/jasmine-gjs/build /tmp/jasmine-gjs --prefix=/usr
+          sudo ninja -C /tmp/jasmine-gjs/build install
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Run Jasmine unit tests
+        run: npm test
+
+  pack:
+    name: Extension Package Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gnome-shell gettext libglib2.0-dev-bin
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Pack extension
+        run: npm run pack
+
+      - name: Upload extension zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: csd-fixer-extension
+          path: dist/*.zip
+          if-no-files-found: error
