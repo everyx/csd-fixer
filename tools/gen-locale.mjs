@@ -10,7 +10,7 @@
  *   node tools/gen-locale.mjs --extract # Re-extracts pot from source and updates po files
  */
 
-import { execFileSync } from 'child_process';
+import { execFileSync, spawnSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -76,6 +76,47 @@ if (isExtract) {
 }
 
 if (isCheck) {
+    const potFile = path.join(poDir, `${domain}.pot`);
+    const potFilesList = path.join(poDir, 'POTFILES.in');
+
+    if (!fs.existsSync(potFile)) {
+        console.error(`[gen-locale] --check failed: template file ${potFile} not found`);
+        process.exit(1);
+    }
+
+    // 1. Verify that po/csd-fixer.pot matches current source code exactly
+    const diskPot = fs.readFileSync(potFile, 'utf8');
+    let freshPot = '';
+    try {
+        freshPot = execFileSync('xgettext', [
+            `--default-domain=${domain}`,
+            '--output=-',
+            '--language=JavaScript',
+            '--keyword=_',
+            '--keyword=N_',
+            '--from-code=UTF-8',
+            '--files-from=' + potFilesList,
+            '--add-comments',
+        ], { cwd: rootDir, encoding: 'utf8' });
+    } catch (e) {
+        console.error('[gen-locale] --check failed: error extracting strings with xgettext:', e.message);
+        process.exit(1);
+    }
+
+    const normalizePot = content => content
+        .split('\n')
+        .filter(l => !l.startsWith('"POT-Creation-Date:'))
+        .join('\n')
+        .trim();
+
+    if (normalizePot(diskPot) !== normalizePot(freshPot)) {
+        console.error(`[gen-locale] --check failed: ${path.basename(potFile)} is out of sync with source code.`);
+        console.error('[gen-locale] Strings in source files have been changed, added, or removed.');
+        console.error('[gen-locale] Please run "pnpm run update-po" and commit the updated translation files.');
+        process.exit(1);
+    }
+
+    // 2. Verify all .po catalogs for syntax and completeness
     const poFiles = getPoFiles();
     if (poFiles.length === 0) {
         console.log('[gen-locale] No .po files to check');
@@ -83,15 +124,24 @@ if (isCheck) {
     }
 
     for (const poFile of poFiles) {
+        const basename = path.basename(poFile);
         try {
             execFileSync('msgfmt', ['--check', '-o', '/dev/null', poFile]);
         } catch (e) {
-            console.error(`[gen-locale] --check failed: syntax error in ${poFile}`);
+            console.error(`[gen-locale] --check failed: syntax error in ${basename}`);
+            process.exit(1);
+        }
+
+        const statsResult = spawnSync('msgfmt', ['--statistics', '-o', '/dev/null', poFile]);
+        const stats = statsResult.stderr ? statsResult.stderr.toString().trim() : '';
+        if (stats.includes('fuzzy') || stats.includes('untranslated')) {
+            console.error(`[gen-locale] --check failed: ${basename} has incomplete translations: ${stats}`);
+            console.error('[gen-locale] Please complete translations and run "pnpm run compile-locales".');
             process.exit(1);
         }
     }
 
-    console.log(`[gen-locale] OK: All ${poFiles.length} locale PO files are syntactically valid`);
+    console.log(`[gen-locale] OK: Template ${path.basename(potFile)} is synchronized with source code, and all ${poFiles.length} PO files are complete and valid`);
     process.exit(0);
 }
 
