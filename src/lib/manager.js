@@ -94,6 +94,7 @@ export class Manager {
             'position-changed', 'size-changed', 'notify::appears-focused',
             'notify::maximized-horizontally', 'notify::maximized-vertically',
             'notify::fullscreen', 'notify::main-monitor', 'highest-scale-monitor-changed',
+            'notify::title',
         ];
         for (const sig of windowSignals) {
             try {
@@ -102,7 +103,7 @@ export class Manager {
                 // Silently ignore if Mutter version lacks certain signals
             }
         }
-        this._connect(win, 'unmanaging', () => this._forgetWindow(win));
+        this._windows.get(win).signals.push([win, win.connect('unmanaging', () => this._forgetWindow(win))]);
         // Actor allocation changes (initial frame size 0 -> ready re-evaluation + size tracking)
         const actor = win.get_compositor_private();
         if (actor) {
@@ -270,20 +271,28 @@ export class Manager {
         const f = win.get_frame_rect();
         const hasSsd = Boolean(win.decorated && !win.is_client_decorated());
         const wmClass = win.get_wm_class();
-        const isX11 = win.get_client_type() === Meta.WindowClientType.X11;
         const geometryScale = actor.get_geometry_scale?.() ?? 1;
         const monitorScale = this._getMonitorScale(win);
+        const hasParent = Boolean(win.get_transient_for?.());
+        const windowType = win.get_window_type();
+        const isDialog = windowType === Meta.WindowType.DIALOG ||
+                         windowType === Meta.WindowType.MODAL_DIALOG ||
+                         hasParent ||
+                         (win.is_attached_dialog?.() ?? false);
+        const title = win.get_title?.() ?? null;
 
         return evaluateWindowActions({
             bufferWidth: b.width, bufferHeight: b.height,
             frameWidth: f.width, frameHeight: f.height,
             geometryScale,
             monitorScale,
-            isX11,
             isMaximized: win.maximized_horizontally && win.maximized_vertically,
             isFullscreen: win.is_fullscreen(),
             hasSsd,
-            windowType: win.get_window_type(),
+            windowType,
+            isDialog,
+            hasParent,
+            title,
             wmClass,
             windowRules: this._getWindowRules(),
             preferCrispText: this._settings.get_boolean('prefer-crisp-text'),

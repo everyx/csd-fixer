@@ -12,15 +12,22 @@
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {Manager} from './lib/manager.js';
+import {InspectorService} from './lib/inspector.js';
 
 export default class CsdFixerExtension extends Extension {
     enable() {
         this._manager = new Manager(this);
         this._manager.enable();
+
+        this._inspector = new InspectorService();
     }
 
     disable() {
+        this._inspector?.destroy();
+        this._inspector = null;
+
         this._manager?.disable();
         this._manager = null;
     }
 }
+
