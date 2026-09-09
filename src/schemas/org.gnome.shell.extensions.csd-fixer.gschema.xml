@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="csd-fixer">
+  <schema id="org.gnome.shell.extensions.csd-fixer"
+          path="/org/gnome/shell/extensions/csd-fixer/"
+          gettext-domain="csd-fixer">
+    <key name="window-rules" type="a{ss}">
+      <default>{}</default>
+      <summary>Custom application exclusion rules</summary>
+      <description>
+        Key is wm_class or app_id, value is exclusion rule mode:
+        'disable-all': disable all decorations (no shadow, no corners);
+        'disable-clip': disable rounded corners (retaining shadow);
+        'disable-shadow': disable shadow (retaining rounded corners).
+      </description>
+    </key>
+    <key name="prefer-crisp-text" type="b">
+      <default>false</default>
+      <summary>Prioritize crisp text rendering</summary>
+      <description>
+        Skip rounded corners on fractional scale monitors (retaining shadow) to avoid text blur and resampling overhead.
+      </description>
+    </key>
+  </schema>
+</schemalist>
