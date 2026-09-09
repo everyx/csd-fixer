@@ -83,22 +83,15 @@ if (isCheck) {
     }
 
     for (const poFile of poFiles) {
-        const lang = path.basename(poFile, '.po');
-        const moFile = path.join(srcLocaleDir, lang, 'LC_MESSAGES', `${domain}.mo`);
-        if (!fs.existsSync(moFile)) {
-            console.error(`[gen-locale] Missing compiled file: ${moFile}, please run node tools/gen-locale.mjs`);
-            process.exit(1);
-        }
-
-        const poMtime = fs.statSync(poFile).mtimeMs;
-        const moMtime = fs.statSync(moFile).mtimeMs;
-        if (poMtime > moMtime) {
-            console.error(`[gen-locale] ${moFile} is older than ${poFile}, please run node tools/gen-locale.mjs to recompile`);
+        try {
+            execFileSync('msgfmt', ['--check', '-o', '/dev/null', poFile]);
+        } catch (e) {
+            console.error(`[gen-locale] --check failed: syntax error in ${poFile}`);
             process.exit(1);
         }
     }
 
-    console.log(`[gen-locale] OK: All ${poFiles.length} locale MO files are valid and up to date`);
+    console.log(`[gen-locale] OK: All ${poFiles.length} locale PO files are syntactically valid`);
     process.exit(0);
 }
 
