@@ -51,11 +51,11 @@ describe('shouldDecorate', () => {
         expect(r.reason).toContain('no-csd');
     });
 
-    it('WeChat article window (XWayland, Chromium 4px resize grip) single side < 8px -> detected as lacking CSD, decorate', () => {
+    it('Wayland window with small resize grip (Chromium 4px resize grip) single side < 8px -> detected as lacking CSD, decorate', () => {
         // Captured real-world data: buf=[1156, 852], frame=[1148, 844], 4px per edge
         const r = shouldDecorate({
             ...base,
-            isX11: true,
+            isX11: false,
             wmClass: null,
             bufferWidth: 1156, bufferHeight: 852,
             frameWidth: 1148, frameHeight: 844,
@@ -63,6 +63,17 @@ describe('shouldDecorate', () => {
         expect(r.apply).toBeTrue();
         expect(r.reason).toContain('no-csd');
         expect(r.reason).toContain('4.0x4.0 < 8');
+    });
+
+    it('X11 / XWayland windows (WPS Office, Dida) -> Mutter C core manages native shadow, skip', () => {
+        const r = shouldDecorate({
+            ...base,
+            isX11: true,
+            bufferWidth: 800, bufferHeight: 600,
+            frameWidth: 800, frameHeight: 600,
+        });
+        expect(r.apply).toBeFalse();
+        expect(r.reason).toBe('x11-mutter-native-shadow');
     });
 
     it('genuine self-drawn CSD shadow (e.g. GTK4/Adwaita, single side 20px+ >= 8px) -> skip', () => {
@@ -236,6 +247,17 @@ describe('evaluateWindowActions', () => {
         expect(res.applyShadow).toBeTrue();
         expect(res.applyClip).toBeTrue();
         expect(res.reason).toContain('no-csd');
+    });
+
+    it('X11 window (WPS, dida): skips both shadow and clip due to native Mutter shadow', () => {
+        const res = evaluateWindowActions({
+            ...baseWin,
+            isX11: true,
+            wmClass: 'wps',
+        });
+        expect(res.applyShadow).toBeFalse();
+        expect(res.applyClip).toBeFalse();
+        expect(res.reason).toBe('x11-mutter-native-shadow');
     });
 
     it('disable-all rule: both shadow and clip disabled', () => {

@@ -269,7 +269,9 @@ export class Manager {
 
         const b = win.get_buffer_rect();
         const f = win.get_frame_rect();
-        const hasSsd = Boolean(win.decorated && !win.is_client_decorated());
+        const hasSsd = Boolean(win.decorated && !win.is_client_decorated?.());
+        const isX11 = win.get_client_type?.() === 1 ||
+                      (Meta?.WindowClientType && win.get_client_type?.() === Meta.WindowClientType.X11);
         const wmClass = win.get_wm_class();
         const geometryScale = actor.get_geometry_scale?.() ?? 1;
         const monitorScale = this._getMonitorScale(win);
@@ -289,6 +291,7 @@ export class Manager {
             isMaximized: win.maximized_horizontally && win.maximized_vertically,
             isFullscreen: win.is_fullscreen(),
             hasSsd,
+            isX11,
             windowType,
             isDialog,
             hasParent,

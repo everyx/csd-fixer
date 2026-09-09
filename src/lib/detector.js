@@ -42,6 +42,7 @@ export function computeInsets(bufferWidth, bufferHeight,
  *   scale                     geometry scale (>= 1)
  *   isMaximized/isFullscreen  boolean
  *   hasSsd                    whether native server-side decorations are present
+ *   isX11                     whether the client connects via X11 / XWayland
  *   windowType                Meta.WindowType
  *   insetThreshold            single-side CSD shadow threshold (default: Mutter min radius 8px)
  */
@@ -49,6 +50,7 @@ export function shouldDecorate({
     bufferWidth, bufferHeight, frameWidth, frameHeight, scale = 1,
     isMaximized = false, isFullscreen = false,
     hasSsd = false,
+    isX11 = false,
     windowType = WindowType.NORMAL,
     insetThreshold = MUTTER_CSD_MIN_INSET_THRESHOLD,
 }) {
@@ -65,7 +67,12 @@ export function shouldDecorate({
     if (hasSsd)
         return {apply: false, reason: 'has-ssd-frame'};
 
-    // 4. Core geometric criteria: matches Mutter shadow threshold
+    // 4. X11 / XWayland windows: Mutter C core natively renders box shadows
+    // (meta-window-actor-x11.c:has_shadow). Decorating causes duplicate shadows and breaks offscreen clip geometry.
+    if (isX11)
+        return {apply: false, reason: 'x11-mutter-native-shadow'};
+
+    // 5. Core geometric criteria: matches Mutter shadow threshold
     // Single-side margin = (physical buffer / scale - logical frame) / 2
     const {w, h} = computeInsets(bufferWidth, bufferHeight,
         frameWidth, frameHeight, scale);
@@ -198,6 +205,7 @@ export function resolveRule(wmClass, windowRules = {}, options = {}) {
  *   monitorScale: display physical scale factor (global.display.get_monitor_scale, e.g. 1.25, 1.333)
  *   isDialog / hasParent: whether the window is a modal/dialog or child of another window
  *   title: window title
+ *   isX11: whether window connects via X11 / XWayland
  * Returns: { applyShadow: boolean, applyClip: boolean, reason: string }
  */
 export function evaluateWindowActions({
@@ -207,6 +215,7 @@ export function evaluateWindowActions({
     monitorScale = scale,
     isMaximized = false, isFullscreen = false,
     hasSsd = false,
+    isX11 = false,
     windowType = WindowType.NORMAL,
     isDialog = false,
     hasParent = false,
@@ -221,7 +230,9 @@ export function evaluateWindowActions({
         bufferWidth, bufferHeight, frameWidth, frameHeight,
         scale: geometryScale,
         isMaximized, isFullscreen,
-        hasSsd, windowType,
+        hasSsd,
+        isX11,
+        windowType,
         insetThreshold,
     });
 
