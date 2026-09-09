@@ -2,6 +2,8 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
+![CSD Fixer Preview](assets/preview.webp)
+
 Seamlessly bring native GNOME rounded corners, subtle inner highlights, and soft drop shadows to non-CSD applications (covering both native Wayland and XWayland/X11 windows such as WeChat Linux, Qt apps, and Electron).
 
 ---
@@ -34,8 +36,11 @@ pnpm run install-ext
 ## 🛠️ Development
 
 ```sh
-# Run tests
+# Run unit tests
 pnpm test
+
+# Run headless E2E automated test (lifecycle, resize/move stress, zero-warning audit)
+pnpm run test:e2e
 
 # Verify style, shader, and locale consistency with upstream
 pnpm run check-style
@@ -45,6 +50,9 @@ pnpm run ego-lint
 
 # Build distributable extension package into dist/
 pnpm run pack
+
+# Verify extension package with official Shexli analyzer
+pnpm run shexli
 ```
 
 ---

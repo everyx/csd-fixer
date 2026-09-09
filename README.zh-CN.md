@@ -2,6 +2,8 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
+![CSD Fixer 效果预览](assets/preview.webp)
+
 为缺少客户端边框（CSD）的应用（涵盖 Wayland 原生与 XWayland/X11 窗口，如微信 Linux 版/内置网页浏览器、Qt 应用、Electron 以及各类无边框窗口），补齐与 GNOME 原生应用视觉一致的圆角、内亮边与高斯柔和阴影，消除桌面视觉割裂感。
 
 ---
@@ -37,6 +39,9 @@ pnpm run install-ext
 # 运行单元测试
 pnpm test
 
+# 运行无头端到端自动化测试（覆盖全生命周期、移动/拉伸压测、日志零警告审计）
+pnpm run test:e2e
+
 # 规则与样式一致性检查
 pnpm run check-style
 
@@ -45,6 +50,9 @@ pnpm run ego-lint
 
 # 打包发行文件
 pnpm run pack
+
+# 官方 Shexli 静态打包分析
+pnpm run shexli
 ```
 
 ---
