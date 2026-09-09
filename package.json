@@ -1,6 +1,6 @@
 {
   "name": "csd-fixer",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "GNOME Shell extension: restores GNOME native rounded corners and drop shadows to non-CSD applications",
