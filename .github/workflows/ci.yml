@@ -130,7 +130,9 @@ jobs:
         run: pnpm run pack
 
       - name: Verify package with Shexli (EGO analyzer)
-        run: pipx run shexli dist/*.zip
+        # Pin tree-sitter < 0.26.0 to work around upstream use-after-free heap corruption
+        # bug in py-tree-sitter 0.26.0 during AST traversal (tree-sitter/py-tree-sitter#472)
+        run: pipx run --with "tree-sitter<0.26.0" shexli dist/*.zip
 
       - name: Upload extension zip artifact
         uses: actions/upload-artifact@v7
