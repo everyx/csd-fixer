@@ -25,7 +25,8 @@
 ```sh
 git clone https://github.com/everyx/csd-fixer.git
 cd csd-fixer
-npm run install-ext
+pnpm install
+pnpm run install-ext
 ```
 
 ---
@@ -34,16 +35,16 @@ npm run install-ext
 
 ```sh
 # 运行单元测试
-npm test
+pnpm test
 
 # 规则与样式一致性检查
-npm run check-style
+pnpm run check-style
 
 # EGO 官方审查规范检查
-npm run ego-lint
+pnpm run ego-lint
 
 # 打包发行文件
-npm run pack
+pnpm run pack
 ```
 
 ---

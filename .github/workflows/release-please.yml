@@ -34,11 +34,14 @@ jobs:
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'npm'
+          cache: 'pnpm'
 
       - name: Install packaging tools
         run: |
@@ -46,10 +49,10 @@ jobs:
           sudo apt-get install -y gnome-shell gettext libglib2.0-dev-bin
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build extension package
-        run: npm run pack
+        run: pnpm run pack
 
       - name: Upload zip to GitHub Release
         env:

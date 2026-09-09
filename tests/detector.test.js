@@ -1,6 +1,6 @@
 /**
  * detector unit tests (jasmine-gjs).
- * Run: npm test
+ * Run: pnpm test
  */
 
 import {

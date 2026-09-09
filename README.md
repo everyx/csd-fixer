@@ -25,7 +25,8 @@ Install **CSD Fixer** directly from [extensions.gnome.org](https://extensions.gn
 ```sh
 git clone https://github.com/everyx/csd-fixer.git
 cd csd-fixer
-npm run install-ext
+pnpm install
+pnpm run install-ext
 ```
 
 ---
@@ -34,16 +35,16 @@ npm run install-ext
 
 ```sh
 # Run tests
-npm test
+pnpm test
 
 # Verify style, shader, and locale consistency with upstream
-npm run check-style
+pnpm run check-style
 
 # Run official EGO review static analysis
-npm run ego-lint
+pnpm run ego-lint
 
 # Build distributable extension package into dist/
-npm run pack
+pnpm run pack
 ```
 
 ---

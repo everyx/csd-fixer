@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # csd-fixer development helper: runs GNOME Shell + test applications in headless nested session
-# Usage (or equivalent npm scripts, see package.json):
+# Usage (or equivalent pnpm scripts, see package.json):
 #   ./tools/dev.sh shell        # Starts headless nested shell in background (log: /tmp/csd-fixer-dev/shell.log)
 #   ./tools/dev.sh log          # Streams nested shell log (Ctrl+C to exit)
 #   ./tools/dev.sh app <cmd>    # Launches test application inside nested session (same WAYLAND_DISPLAY)
