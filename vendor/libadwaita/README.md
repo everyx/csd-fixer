@@ -5,8 +5,8 @@ Authoritative source of decoration styles (CSD window decorations), vendored fro
 - Source: https://gitlab.gnome.org/GNOME/libadwaita
 - COMMIT: See the COMMIT file in this directory (currently `cat COMMIT`)
 - Purpose: `tools/gen-style.mjs` parses window.csd rounded corner and shadow parameters from here,
-  generating `src/style/defaults.js` (do not edit the generated file directly).
+  generating `src/lib/adwaitaStyle.generated.js` (do not edit the generated file directly).
 - Update instructions:
   1. Re-vendor upstream files and update COMMIT
   2. Run `node tools/gen-style.mjs` (fails if assertion errors occur)
-  3. Verify that the generated diff in `defaults.js` matches expectations
+  3. Verify that the generated diff in `adwaitaStyle.generated.js` matches expectations

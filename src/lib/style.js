@@ -4,7 +4,7 @@
  * Pure logic module, unit-testable.
  */
 
-import {STYLE} from '../style/defaults.js';
+import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
 
 /**
  * Returns decoration parameters for the given window state.
@@ -21,7 +21,7 @@ import {STYLE} from '../style/defaults.js';
  * and deepens outline (7% -> 30%).
  */
 export function styleForWindow(winState) {
-    const {window} = STYLE;
+    const {window} = ADWAITA_STYLE;
     const outline = winState.highContrast
         ? window.outline.highContrast : window.outline.normal;
 

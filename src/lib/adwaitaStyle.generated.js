@@ -7,7 +7,7 @@
  *   focused / backdrop, maximized / fullscreen, tiled, high contrast
  */
 
-export const STYLE = {
+export const ADWAITA_STYLE = {
     window: {
         radius: 15,
         shadows: [{blur: 14, spread: 5, alpha: 0.15}, {blur: 5, spread: 2, alpha: 0.1}, {blur: 0, spread: 1, alpha: 0.05}],
@@ -31,3 +31,5 @@ export const STYLE = {
         },
     },
 };
+
+export {ADWAITA_STYLE as STYLE};

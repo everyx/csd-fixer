@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
  * gen-style.mjs - Extracts window.csd decoration parameters from vendored libadwaita SCSS,
- * generating src/style/defaults.js.
+ * generating src/lib/adwaitaStyle.generated.js.
  *
  * Design: narrow parser + assertions. Only recognizes specific file/block/variable chains,
  * rather than implementing a generic SCSS parser.
  * If upstream format changes break any assertion, this script immediately errors out (never emits bad data).
  *
  * Usage: node tools/gen-style.mjs [--check]
- *   --check: Only verifies generated results match existing defaults.js (used in CI), exits with 1 if mismatch.
+ *   --check: Only verifies generated results match existing adwaitaStyle.generated.js (used in CI), exits with 1 if mismatch.
  */
 
 import {readFileSync, writeFileSync, existsSync} from 'node:fs';
@@ -17,7 +17,7 @@ import path from 'node:path';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const VENDOR = path.join(ROOT, 'vendor', 'libadwaita');
-const OUT = path.join(ROOT, 'src', 'style', 'defaults.js');
+const OUT = path.join(ROOT, 'src', 'lib', 'adwaitaStyle.generated.js');
 
 const CHECK = process.argv.includes('--check');
 
@@ -198,7 +198,7 @@ const js = `/**
  *   focused / backdrop, maximized / fullscreen, tiled, high contrast
  */
 
-export const STYLE = {
+export const ADWAITA_STYLE = {
     window: {
         radius: ${radius},
         shadows: [${fmtShadows(shadows)}],
@@ -222,6 +222,8 @@ export const STYLE = {
         },
     },
 };
+
+export {ADWAITA_STYLE as STYLE};
 `;
 
 // ---------- Output ----------
@@ -229,10 +231,10 @@ export const STYLE = {
 if (CHECK) {
     const old = existsSync(OUT) ? readFileSync(OUT, 'utf8') : '';
     if (old !== js) {
-        console.error('[gen-style] --check failed: defaults.js does not match upstream, please run node tools/gen-style.mjs');
+        console.error('[gen-style] --check failed: adwaitaStyle.generated.js does not match upstream, please run node tools/gen-style.mjs');
         process.exit(1);
     }
-    console.log(`[gen-style] OK: defaults.js matches upstream (commit ${commit})`);
+    console.log(`[gen-style] OK: adwaitaStyle.generated.js matches upstream (commit ${commit})`);
 } else {
     writeFileSync(OUT, js);
     console.log(`[gen-style] Generated ${OUT} (radius=${radius}px, shadows=${shadows.length} layers, commit ${commit})`);

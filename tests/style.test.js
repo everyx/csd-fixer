@@ -3,10 +3,15 @@
  */
 
 import {styleForWindow} from '../src/lib/style.js';
-import {STYLE} from '../src/style/defaults.js';
+import {ADWAITA_STYLE} from '../src/lib/adwaitaStyle.generated.js';
 
 describe('styleForWindow', () => {
     const base = {focused: true, maximized: false, fullscreen: false, tiled: false, highContrast: false};
+
+    it('ADWAITA_STYLE defines valid window decoration defaults', () => {
+        expect(ADWAITA_STYLE.window.radius).toBeGreaterThan(0);
+        expect(ADWAITA_STYLE.window.shadows.length).toBeGreaterThan(0);
+    });
 
     it('focused normal window -> rounded corners + 3-layer shadow', () => {
         const s = styleForWindow(base);
