@@ -6,7 +6,8 @@
 import {
     shouldDecorate, computeInsets, WindowType, isFractionalScale,
     shouldClipWindow, RuleMode, resolveRule, evaluateWindowActions,
-    parseRuleKey, isDialogWindow, sanitizeWindowRules,
+    parseRuleKey, isDialogWindow, isWindowMaximized, isWindowTiled,
+    sanitizeWindowRules,
 } from '../src/lib/detector.js';
 
 describe('computeInsets', () => {
@@ -492,6 +493,141 @@ describe('evaluateWindowActions', () => {
         });
         expect(transientWin.applyShadow).toBeFalse();
         expect(transientWin.applyClip).toBeFalse();
+    });
+
+    it('GNOME tiling alignment: hasTileMatch suppresses shadow to prevent adjacent window obstruction', () => {
+        // Aligns with Mutter meta-window-actor-x11.c:392
+        const snapTiledWin = evaluateWindowActions({
+            ...baseWin,
+            isMaximized: false,
+            hasTileMatch: true,
+        });
+        expect(snapTiledWin.applyShadow).toBeFalse();
+        expect(snapTiledWin.applyClip).toBeTrue();
+        expect(snapTiledWin.reason).toContain('tile-match(suppress-shadow');
+    });
+
+    it('GNOME tiling alignment: single tiled window without match retains shadow', () => {
+        const singleTiledWin = evaluateWindowActions({
+            ...baseWin,
+            isMaximized: false,
+            hasTileMatch: false,
+        });
+        expect(singleTiledWin.applyShadow).toBeTrue();
+        expect(singleTiledWin.applyClip).toBeTrue();
+    });
+
+    it('GNOME tiling alignment: full maximized window skips all decorations', () => {
+        const maximizedWin = evaluateWindowActions({
+            ...baseWin,
+            isMaximized: true,
+            hasTileMatch: false,
+        });
+        expect(maximizedWin.applyShadow).toBeFalse();
+        expect(maximizedWin.applyClip).toBeFalse();
+        expect(maximizedWin.reason).toBe('maximized/fullscreen');
+    });
+});
+
+describe('isWindowMaximized', () => {
+    it('uses win.is_maximized() when method is present', () => {
+        const winTrue = {
+            is_maximized: () => true,
+            maximized_horizontally: false,
+            maximized_vertically: false,
+        };
+        expect(isWindowMaximized(winTrue)).toBeTrue();
+
+        const winFalse = {
+            is_maximized: () => false,
+            maximized_horizontally: true,
+            maximized_vertically: true,
+        };
+        expect(isWindowMaximized(winFalse)).toBeFalse();
+    });
+
+    it('falls back to maximized_horizontally && maximized_vertically when is_maximized is absent', () => {
+        expect(isWindowMaximized({
+            maximized_horizontally: true,
+            maximized_vertically: true,
+        })).toBeTrue();
+
+        expect(isWindowMaximized({
+            maximized_horizontally: true,
+            maximized_vertically: false,
+        })).toBeFalse();
+
+        expect(isWindowMaximized({
+            maximized_horizontally: false,
+            maximized_vertically: true,
+        })).toBeFalse();
+    });
+
+    it('handles GObject property getters returning booleans on instances', () => {
+        const mockGObjectWin = {
+            get maximized_horizontally() { return true; },
+            get maximized_vertically() { return true; },
+        };
+        expect(isWindowMaximized(mockGObjectWin)).toBeTrue();
+    });
+
+    it('handles null/undefined gracefully', () => {
+        expect(isWindowMaximized(null)).toBeFalse();
+        expect(isWindowMaximized(undefined)).toBeFalse();
+    });
+});
+
+describe('isWindowTiled', () => {
+    it('returns false for fully maximized window', () => {
+        const win = {
+            is_maximized: () => true,
+            maximized_horizontally: true,
+            maximized_vertically: true,
+            get_tile_match: () => ({}),
+        };
+        expect(isWindowTiled(win)).toBeFalse();
+        expect(isWindowTiled(win, {isMaximized: true})).toBeFalse();
+    });
+
+    it('returns true for single-axis half-tiled window (hMax !== vMax)', () => {
+        const winSnapLeft = {
+            is_maximized: () => false,
+            maximized_horizontally: false,
+            maximized_vertically: true,
+        };
+        expect(isWindowTiled(winSnapLeft)).toBeTrue();
+
+        const winSnapTop = {
+            is_maximized: () => false,
+            maximized_horizontally: true,
+            maximized_vertically: false,
+        };
+        expect(isWindowTiled(winSnapTop)).toBeTrue();
+    });
+
+    it('returns true when get_tile_match() returns an adjacent window', () => {
+        const winWithMatch = {
+            is_maximized: () => false,
+            maximized_horizontally: false,
+            maximized_vertically: false,
+            get_tile_match: () => ({title: 'Adjacent Window'}),
+        };
+        expect(isWindowTiled(winWithMatch)).toBeTrue();
+    });
+
+    it('returns false for normal non-tiled floating window', () => {
+        const floatingWin = {
+            is_maximized: () => false,
+            maximized_horizontally: false,
+            maximized_vertically: false,
+            get_tile_match: () => null,
+        };
+        expect(isWindowTiled(floatingWin)).toBeFalse();
+    });
+
+    it('handles null/undefined gracefully', () => {
+        expect(isWindowTiled(null)).toBeFalse();
+        expect(isWindowTiled(undefined)).toBeFalse();
     });
 });
 

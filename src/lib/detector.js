@@ -135,6 +135,56 @@ export const RuleMode = {
 };
 
 /**
+ * Checks whether a window is maximized (horizontally and vertically).
+ * Supports both Mutter method API (win.is_maximized()) and property fallback.
+ *
+ * @param {object} win - Meta.Window instance
+ * @returns {boolean}
+ */
+export function isWindowMaximized(win) {
+    if (!win)
+        return false;
+    if (typeof win.is_maximized === 'function')
+        return Boolean(win.is_maximized());
+    return Boolean(win.maximized_horizontally && win.maximized_vertically);
+}
+
+/**
+ * Checks whether a window is in a snap-tiled state.
+ *
+ * Design intent & dual-semantics of get_tile_match():
+ * 1. Geometry layer (here in isWindowTiled):
+ *    Determines whether a window should have flat square corners (radius: 0) and 1px border.
+ *    Any snap-tiled window (whether single-axis half-tiled or snap-matched with a neighbor)
+ *    must flatten its corners to prevent background leak against screen edges or split borders (Libadwaita alignment).
+ * 2. Compositor layer (in evaluateWindowActions):
+ *    Suppresses shadows ONLY when hasTileMatch is true (two windows tiled side-by-side touching).
+ *    Single tiled windows without an adjacent neighbor retain their outer edge shadow.
+ *
+ * A window is considered tiled when:
+ * 1. It is not fully maximized (neither fullscreen nor both axes maximized), AND
+ * 2. Either it is half-tiled (single-axis maximized, hMax !== vMax), OR
+ * 3. It is snap-tiled with an adjacent matching window (win.get_tile_match()).
+ *
+ * @param {object} win - Meta.Window instance
+ * @param {object} [options={}]
+ * @param {boolean} [options.isMaximized] - Precomputed maximization state
+ * @param {boolean} [options.hasTileMatch] - Precomputed tile match state
+ * @returns {boolean}
+ */
+export function isWindowTiled(win, options = {}) {
+    if (!win)
+        return false;
+    const isMax = options.isMaximized ?? isWindowMaximized(win);
+    if (isMax)
+        return false;
+    const hasMatch = options.hasTileMatch ?? Boolean(win.get_tile_match?.());
+    const hMax = Boolean(win.maximized_horizontally);
+    const vMax = Boolean(win.maximized_vertically);
+    return (hMax !== vMax) || hasMatch;
+}
+
+/**
  * D-Bus interface identifiers for interactive window inspection.
  * Stored in pure module to avoid importing Shell/Clutter/Meta in prefs.js.
  */
@@ -281,6 +331,7 @@ export function resolveRule(wmClass, windowRules = {}, options = {}) {
  * @property {number} [windowType=WindowType.NORMAL] - Wayland/Meta window type
  * @property {boolean} [isDialog=false] - Whether window is a dialog
  * @property {boolean} [hasParent=false] - Whether window has transient parent
+ * @property {boolean} [hasTileMatch=false] - Whether window is snap-tiled with an adjacent matching window
  * @property {string|null} [title=null] - Window title
  * @property {string} [wmClass] - Window WM_CLASS / app ID
  * @property {Record<string, string>} [windowRules={}] - Exclusion rules
@@ -305,6 +356,7 @@ export function evaluateWindowActions({
     windowType = WindowType.NORMAL,
     isDialog = false,
     hasParent = false,
+    hasTileMatch = false,
     title = null,
     wmClass,
     windowRules = {},
@@ -350,15 +402,24 @@ export function evaluateWindowActions({
         };
     }
 
-    const applyShadow = rule !== RuleMode.DISABLE_SHADOW;
+    // 3. Shadow and clip evaluation
+    // Snap-tiled window shadow suppression:
+    // Emulates Mutter C core (meta-window-actor-x11.c:392) for Wayland clients without CSD:
+    // "If we have two snap-tiled windows, we don't want the shadow to obstruct the other window."
+    // Suppresses shadow when two windows are snap-tiled adjacent to each other.
+    const applyShadow = rule !== RuleMode.DISABLE_SHADOW && !hasTileMatch;
     const applyClip = rule === RuleMode.DISABLE_CLIP
         ? false
         : shouldClipWindow({preferCrispText, scale: monitorScale});
 
+    let reason = rule ? `rule-applied(${wmClass}:${rule})` : base.reason;
+    if (hasTileMatch && !applyShadow && rule !== RuleMode.DISABLE_SHADOW)
+        reason = `tile-match(suppress-shadow,${reason})`;
+
     return {
         applyShadow,
         applyClip,
-        reason: rule ? `rule-applied(${wmClass}:${rule})` : base.reason,
+        reason,
     };
 }
 

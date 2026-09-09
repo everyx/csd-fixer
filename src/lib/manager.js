@@ -9,6 +9,8 @@
  *  - win.get_client_type()               : 45–50 stable method (returns Meta.WindowClientType).
  *  - win.decorated                       : 45–50 GObject property (boolean: whether window has frame/SSD).
  *  - win.is_client_decorated             : Non-existent on Meta.Window (GTK internal concept only).
+ *  - win.is_maximized()                  : 45–50 stable method (canonical C meta_window_is_maximized).
+ *  - win.get_tile_match()                : 45–50 stable method (returns adjacent matching tile window).
  *  - global.display?.get_monitor_scale   : 45–50 display scale method, optional chaining for safety.
  *  - global.backend?.get_monitor_manager : 45–50 monitor manager, optional chaining for safety.
  *
@@ -21,7 +23,13 @@ import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import St from 'gi://St';
 
-import {evaluateWindowActions, isDialogWindow, sanitizeWindowRules} from './detector.js';
+import {
+    evaluateWindowActions,
+    isDialogWindow,
+    isWindowMaximized,
+    isWindowTiled,
+    sanitizeWindowRules,
+} from './detector.js';
 import {styleForWindow} from './style.js';
 import {RoundedClipEffect} from '../effects/clipEffect.js';
 import {SdfShadowEffect} from '../effects/shadowEffect.js';
@@ -286,6 +294,8 @@ export class Manager {
         const isAttachedDialog = Boolean(win.is_attached_dialog?.());
         const windowType = win.get_window_type();
         const isDialog = isDialogWindow({windowType, hasParent, isAttachedDialog});
+        const isMaximized = isWindowMaximized(win);
+        const hasTileMatch = Boolean(win.get_tile_match?.());
         const title = win.get_title?.() ?? null;
 
         return evaluateWindowActions({
@@ -296,13 +306,14 @@ export class Manager {
             monitorScale,
 
             // Window state & type
-            isMaximized: win.maximized_horizontally && win.maximized_vertically,
+            isMaximized,
             isFullscreen: win.is_fullscreen(),
             hasSsd,
             isX11,
             windowType,
             isDialog,
             hasParent,
+            hasTileMatch,
             title,
             wmClass,
 
@@ -319,13 +330,15 @@ export class Manager {
 
     /** Reads window state -> styleForWindow */
     _styleOf(win) {
-        const hMax = win.maximized_horizontally;
-        const vMax = win.maximized_vertically;
+        const isMaximized = isWindowMaximized(win);
+        const hasTileMatch = Boolean(win.get_tile_match?.());
+        const isTiled = isWindowTiled(win, {isMaximized, hasTileMatch});
+
         return styleForWindow({
             focused: win.appears_focused,
-            maximized: hMax && vMax,
+            maximized: isMaximized,
             fullscreen: win.is_fullscreen(),
-            tiled: hMax !== vMax,  // Half-tile = single-axis maximized (mutter tiling)
+            tiled: isTiled,
             highContrast: St.Settings.get().high_contrast,
         });
     }
