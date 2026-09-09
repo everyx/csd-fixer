@@ -1,6 +1,6 @@
 {
   "name": "csd-fixer",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "GNOME Shell 扩展：给 Wayland 下无 CSD 的窗口补齐 GNOME 原生风格的圆角与阴影",
