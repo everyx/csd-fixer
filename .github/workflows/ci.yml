@@ -39,7 +39,9 @@ jobs:
         run: pnpm run lint
 
       - name: Check upstream code generation consistency
-        run: pnpm run check-style
+        run: |
+          pnpm run check-style
+          git diff --exit-code
 
   ego-lint:
     name: EGO Reviewer Compliance
