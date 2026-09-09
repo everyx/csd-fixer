@@ -62,7 +62,12 @@ jobs:
           sudo apt-get install -y libglib2.0-dev-bin
 
       - name: Run ego-lint compliance checks
-        run: bash .ego-lint/ego-lint --show all src/
+        run: |
+          # Workaround upstream bug in ZviBaratz/gnome-extension-reviewer:
+          # Under `set -eo pipefail`, when an extension has 0 warnings, `grep "^WARN|"` exits with 1,
+          # aborting the script right before verdict evaluation.
+          sed -i 's/grep "\^WARN|" "\$RESULTS_FILE"/grep "\^WARN|" "\$RESULTS_FILE" 2>\/dev\/null || true/g' .ego-lint/skills/ego-lint/scripts/ego-lint.sh
+          bash .ego-lint/ego-lint --show all src/
 
   test:
     name: Unit Tests (GJS + Jasmine)
