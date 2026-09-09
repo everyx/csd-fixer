@@ -124,6 +124,9 @@ jobs:
       - name: Pack extension
         run: pnpm run pack
 
+      - name: Verify package with Shexli (EGO analyzer)
+        run: pipx run shexli dist/*.zip
+
       - name: Upload extension zip artifact
         uses: actions/upload-artifact@v4
         with:
