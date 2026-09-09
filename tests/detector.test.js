@@ -5,9 +5,10 @@
 
 import {
     shouldDecorate, computeInsets, WindowType, isFractionalScale,
-    shouldClipWindow, RuleMode, resolveRule, evaluateWindowActions,
-    parseRuleKey, isDialogWindow, isWindowMaximized, isWindowTiled,
-    sanitizeWindowRules,
+    shouldClipWindow, ExclusionTarget, normalizeRuleMode,
+    isWindowMaximized, isWindowTiled,
+    resolveRule, evaluateWindowActions,
+    parseRuleKey, isDialogWindow, sanitizeWindowRules,
 } from '../src/lib/detector.js';
 
 describe('computeInsets', () => {
@@ -150,20 +151,20 @@ describe('shouldClipWindow', () => {
 
 describe('resolveRule', () => {
     const rules = {
-        'wechat': RuleMode.DISABLE_CLIP,
-        'steam': RuleMode.DISABLE_ALL,
-        'my-game': RuleMode.DISABLE_SHADOW,
+        'wechat': ExclusionTarget.CLIP,
+        'steam': ExclusionTarget.ALL,
+        'my-game': ExclusionTarget.SHADOW,
     };
 
     it('exact match in windowRules', () => {
-        expect(resolveRule('wechat', rules)).toBe(RuleMode.DISABLE_CLIP);
-        expect(resolveRule('steam', rules)).toBe(RuleMode.DISABLE_ALL);
-        expect(resolveRule('my-game', rules)).toBe(RuleMode.DISABLE_SHADOW);
+        expect(resolveRule('wechat', rules)).toBe(ExclusionTarget.CLIP);
+        expect(resolveRule('steam', rules)).toBe(ExclusionTarget.ALL);
+        expect(resolveRule('my-game', rules)).toBe(ExclusionTarget.SHADOW);
     });
 
     it('case-insensitive match in windowRules', () => {
-        expect(resolveRule('WeChat', rules)).toBe(RuleMode.DISABLE_CLIP);
-        expect(resolveRule('STEAM', rules)).toBe(RuleMode.DISABLE_ALL);
+        expect(resolveRule('WeChat', rules)).toBe(ExclusionTarget.CLIP);
+        expect(resolveRule('STEAM', rules)).toBe(ExclusionTarget.ALL);
     });
 
     it('no match returns null', () => {
@@ -174,52 +175,52 @@ describe('resolveRule', () => {
 
     it('composite rules: dialog window matches wmClass:dialog with highest precedence over base wmClass', () => {
         const compositeRules = {
-            'wechat': RuleMode.DISABLE_CLIP,
-            'wechat:dialog': RuleMode.DISABLE_ALL,
+            'wechat': ExclusionTarget.CLIP,
+            'wechat:dialog': ExclusionTarget.ALL,
         };
 
         // Main normal window: matches base wmClass
-        expect(resolveRule('wechat', compositeRules, {isDialog: false})).toBe(RuleMode.DISABLE_CLIP);
+        expect(resolveRule('wechat', compositeRules, {isDialog: false})).toBe(ExclusionTarget.CLIP);
 
         // Dialog popup window: matches wechat:dialog (disable-all)
-        expect(resolveRule('wechat', compositeRules, {isDialog: true})).toBe(RuleMode.DISABLE_ALL);
+        expect(resolveRule('wechat', compositeRules, {isDialog: true})).toBe(ExclusionTarget.ALL);
 
         // Case-insensitive dialog match
-        expect(resolveRule('WeChat', compositeRules, {isDialog: true})).toBe(RuleMode.DISABLE_ALL);
+        expect(resolveRule('WeChat', compositeRules, {isDialog: true})).toBe(ExclusionTarget.ALL);
     });
 
     it('composite rules: title rule matches with highest precedence over dialog and base', () => {
         const compositeRules = {
-            'wechat': RuleMode.DISABLE_CLIP,
-            'wechat:dialog': RuleMode.DISABLE_ALL,
-            'wechat:title=Special': RuleMode.DISABLE_SHADOW,
+            'wechat': ExclusionTarget.CLIP,
+            'wechat:dialog': ExclusionTarget.ALL,
+            'wechat:title=Special': ExclusionTarget.SHADOW,
         };
 
         // Title matches specifically
-        expect(resolveRule('wechat', compositeRules, {isDialog: true, title: 'Special'})).toBe(RuleMode.DISABLE_SHADOW);
+        expect(resolveRule('wechat', compositeRules, {isDialog: true, title: 'Special'})).toBe(ExclusionTarget.SHADOW);
 
         // Other dialog matches wechat:dialog
-        expect(resolveRule('wechat', compositeRules, {isDialog: true, title: 'Logout'})).toBe(RuleMode.DISABLE_ALL);
+        expect(resolveRule('wechat', compositeRules, {isDialog: true, title: 'Logout'})).toBe(ExclusionTarget.ALL);
     });
 
     it('composite rules: fallback to base wmClass when no dialog or title rule exists', () => {
         const compositeRules = {
-            'wechat': RuleMode.DISABLE_CLIP,
+            'wechat': ExclusionTarget.CLIP,
         };
 
         // When only base rule exists, dialog inherits base rule
-        expect(resolveRule('wechat', compositeRules, {isDialog: true})).toBe(RuleMode.DISABLE_CLIP);
+        expect(resolveRule('wechat', compositeRules, {isDialog: true})).toBe(ExclusionTarget.CLIP);
     });
 
     it('bidirectional case-insensitive match (uppercase rule key matches lowercase wmClass)', () => {
         const uppercaseRules = {
-            'WeChat': RuleMode.DISABLE_CLIP,
-            'Steam:dialog': RuleMode.DISABLE_ALL,
-            'Discord:title=Voice Channel': RuleMode.DISABLE_SHADOW,
+            'WeChat': ExclusionTarget.CLIP,
+            'Steam:dialog': ExclusionTarget.ALL,
+            'Discord:title=Voice Channel': ExclusionTarget.SHADOW,
         };
-        expect(resolveRule('wechat', uppercaseRules)).toBe(RuleMode.DISABLE_CLIP);
-        expect(resolveRule('steam', uppercaseRules, {isDialog: true})).toBe(RuleMode.DISABLE_ALL);
-        expect(resolveRule('discord', uppercaseRules, {title: 'Voice Channel'})).toBe(RuleMode.DISABLE_SHADOW);
+        expect(resolveRule('wechat', uppercaseRules)).toBe(ExclusionTarget.CLIP);
+        expect(resolveRule('steam', uppercaseRules, {isDialog: true})).toBe(ExclusionTarget.ALL);
+        expect(resolveRule('discord', uppercaseRules, {title: 'Voice Channel'})).toBe(ExclusionTarget.SHADOW);
     });
 });
 
@@ -257,43 +258,66 @@ describe('rule key contract & round-trip', () => {
 
     it('prefs rule keys match resolveRule candidate structure', () => {
         const prefsGeneratedRules = {
-            'code:dialog': RuleMode.DISABLE_ALL,
-            'code:title=Preferences': RuleMode.DISABLE_CLIP,
+            'code:dialog': ExclusionTarget.ALL,
+            'code:title=Preferences': ExclusionTarget.CLIP,
         };
-        expect(resolveRule('code', prefsGeneratedRules, {isDialog: true})).toBe(RuleMode.DISABLE_ALL);
-        expect(resolveRule('code', prefsGeneratedRules, {title: 'Preferences'})).toBe(RuleMode.DISABLE_CLIP);
+        expect(resolveRule('code', prefsGeneratedRules, {isDialog: true})).toBe(ExclusionTarget.ALL);
+        expect(resolveRule('code', prefsGeneratedRules, {title: 'Preferences'})).toBe(ExclusionTarget.CLIP);
     });
 });
 
 describe('sanitizeWindowRules', () => {
     it('passes valid rule keys unchanged', () => {
         const input = {
-            'wechat': RuleMode.DISABLE_CLIP,
-            'steam:dialog': RuleMode.DISABLE_ALL,
-            'discord:title=Voice Channel': RuleMode.DISABLE_SHADOW,
+            'wechat': ExclusionTarget.CLIP,
+            'steam:dialog': ExclusionTarget.ALL,
+            'discord:title=Voice Channel': ExclusionTarget.SHADOW,
         };
         expect(sanitizeWindowRules(input)).toEqual(input);
     });
 
     it('drops invalid rule keys and non-string entries', () => {
         const input = {
-            'wechat': RuleMode.DISABLE_CLIP,
-            'invalid:key:too:many:colons': RuleMode.DISABLE_ALL,
-            'has space': RuleMode.DISABLE_CLIP,
+            'wechat': ExclusionTarget.CLIP,
+            'invalid:key:too:many:colons': ExclusionTarget.ALL,
+            'has space': ExclusionTarget.CLIP,
             'valid_app': 123,
         };
         expect(sanitizeWindowRules(input)).toEqual({
-            'wechat': RuleMode.DISABLE_CLIP,
+            'wechat': ExclusionTarget.CLIP,
         });
     });
 
     it('rejects case-colliding duplicate keys deterministically', () => {
         const input = {
-            'wechat': RuleMode.DISABLE_CLIP,
-            'WeChat': RuleMode.DISABLE_ALL,
+            'wechat': ExclusionTarget.CLIP,
+            'WeChat': ExclusionTarget.ALL,
         };
         expect(sanitizeWindowRules(input)).toEqual({
-            'wechat': RuleMode.DISABLE_CLIP,
+            'wechat': ExclusionTarget.CLIP,
+        });
+    });
+
+    it('migrates legacy disable-* rule modes to canonical forms', () => {
+        const legacyInput = {
+            'wechat': 'disable-clip',
+            'steam:dialog': 'disable-all',
+            'discord:title=Voice Channel': 'disable-shadow',
+        };
+        expect(sanitizeWindowRules(legacyInput)).toEqual({
+            'wechat': ExclusionTarget.CLIP,
+            'steam:dialog': ExclusionTarget.ALL,
+            'discord:title=Voice Channel': ExclusionTarget.SHADOW,
+        });
+    });
+
+    it('drops entries with invalid rule modes', () => {
+        const input = {
+            'wechat': ExclusionTarget.CLIP,
+            'bad-app': 'not-a-valid-mode',
+        };
+        expect(sanitizeWindowRules(input)).toEqual({
+            'wechat': ExclusionTarget.CLIP,
         });
     });
 
@@ -301,6 +325,33 @@ describe('sanitizeWindowRules', () => {
         expect(sanitizeWindowRules(null)).toEqual({});
         expect(sanitizeWindowRules(undefined)).toEqual({});
         expect(sanitizeWindowRules('string')).toEqual({});
+    });
+});
+
+describe('normalizeRuleMode', () => {
+    it('returns canonical modes as-is', () => {
+        expect(normalizeRuleMode('all')).toBe('all');
+        expect(normalizeRuleMode('clip')).toBe('clip');
+        expect(normalizeRuleMode('shadow')).toBe('shadow');
+    });
+
+    it('maps legacy disable-* modes to canonical modes', () => {
+        expect(normalizeRuleMode('disable-all')).toBe('all');
+        expect(normalizeRuleMode('disable-clip')).toBe('clip');
+        expect(normalizeRuleMode('disable-shadow')).toBe('shadow');
+    });
+
+    it('is case-insensitive', () => {
+        expect(normalizeRuleMode('ALL')).toBe('all');
+        expect(normalizeRuleMode('Disable-Clip')).toBe('clip');
+        expect(normalizeRuleMode('DISABLE-SHADOW')).toBe('shadow');
+    });
+
+    it('returns null for invalid modes', () => {
+        expect(normalizeRuleMode('invalid')).toBeNull();
+        expect(normalizeRuleMode('')).toBeNull();
+        expect(normalizeRuleMode(null)).toBeNull();
+        expect(normalizeRuleMode(undefined)).toBeNull();
     });
 });
 
@@ -361,7 +412,7 @@ describe('evaluateWindowActions', () => {
         const res = evaluateWindowActions({
             ...baseWin,
             wmClass: 'overlay-app',
-            windowRules: {'overlay-app': RuleMode.DISABLE_ALL},
+            windowRules: {'overlay-app': ExclusionTarget.ALL},
         });
         expect(res.applyShadow).toBeFalse();
         expect(res.applyClip).toBeFalse();
@@ -372,7 +423,7 @@ describe('evaluateWindowActions', () => {
         const res = evaluateWindowActions({
             ...baseWin,
             wmClass: 'wechat',
-            windowRules: {'wechat': RuleMode.DISABLE_CLIP},
+            windowRules: {'wechat': ExclusionTarget.CLIP},
         });
         expect(res.applyShadow).toBeTrue();
         expect(res.applyClip).toBeFalse();
@@ -383,7 +434,7 @@ describe('evaluateWindowActions', () => {
         const res = evaluateWindowActions({
             ...baseWin,
             wmClass: 'custom-tool',
-            windowRules: {'custom-tool': RuleMode.DISABLE_SHADOW},
+            windowRules: {'custom-tool': ExclusionTarget.SHADOW},
         });
         expect(res.applyShadow).toBeFalse();
         expect(res.applyClip).toBeTrue();
@@ -395,7 +446,7 @@ describe('evaluateWindowActions', () => {
             ...baseWin,
             bufferWidth: 460, bufferHeight: 360, // single side 30px >= 8px
             wmClass: 'gtk4-app',
-            windowRules: {'gtk4-app': RuleMode.DISABLE_CLIP},
+            windowRules: {'gtk4-app': ExclusionTarget.CLIP},
         };
         const res = evaluateWindowActions(csdWin);
         expect(res.applyShadow).toBeFalse();
@@ -447,7 +498,7 @@ describe('evaluateWindowActions', () => {
 
     it('dialog popup with wechat:dialog rule disables decorations on dialog while retaining them on main window', () => {
         const rules = {
-            'wechat:dialog': RuleMode.DISABLE_ALL,
+            'wechat:dialog': ExclusionTarget.ALL,
         };
 
         // WeChat main window (NORMAL, no parent)
@@ -471,7 +522,7 @@ describe('evaluateWindowActions', () => {
         });
         expect(dialogWin.applyShadow).toBeFalse();
         expect(dialogWin.applyClip).toBeFalse();
-        expect(dialogWin.reason).toContain('disabled-by-rule(wechat:disable-all)');
+        expect(dialogWin.reason).toContain('disabled-by-rule(wechat:all)');
 
         // WeChat modal popup (MODAL_DIALOG windowType)
         const modalWin = evaluateWindowActions({

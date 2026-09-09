@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-09 15:48+0800\n"
+"POT-Creation-Date: 2026-09-09 23:18+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,109 +17,109 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: src/prefs.js:16
+#: src/prefs.js:17
 msgid "Disable all"
 msgstr ""
 
-#: src/prefs.js:17
+#: src/prefs.js:18
 msgid "Disable corners"
 msgstr ""
 
-#: src/prefs.js:18
+#: src/prefs.js:19
 msgid "Disable shadow"
 msgstr ""
 
-#: src/prefs.js:122 src/prefs.js:130
+#: src/prefs.js:124 src/prefs.js:132
 msgid "OK"
 msgstr ""
 
-#: src/prefs.js:142
+#: src/prefs.js:144
 msgid "General"
 msgstr ""
 
-#: src/prefs.js:149
+#: src/prefs.js:151
 msgid "Display & Rendering"
 msgstr ""
 
-#: src/prefs.js:150
+#: src/prefs.js:152
 msgid "Control window decoration behavior across screen scales"
 msgstr ""
 
-#: src/prefs.js:155
+#: src/prefs.js:157
 msgid "Prioritize Crisp Text"
 msgstr ""
 
-#: src/prefs.js:156
+#: src/prefs.js:158
 msgid ""
 "Skip rounded corners on fractional scale monitors (retaining shadow) to "
 "avoid text blur and resampling overhead"
 msgstr ""
 
-#: src/prefs.js:163
+#: src/prefs.js:165
 msgid "Inspect Window…"
 msgstr ""
 
-#: src/prefs.js:165
+#: src/prefs.js:167
 msgid ""
 "Click an on-screen window to automatically detect and add exclusion rule"
 msgstr ""
 
-#: src/prefs.js:169
+#: src/prefs.js:171
 msgid "Application Exclusion Rules"
 msgstr ""
 
-#: src/prefs.js:170
+#: src/prefs.js:172
 msgid ""
 "Configure individual exclusions for specific windows (disable all, skip "
 "corners, or skip shadow)"
 msgstr ""
 
-#: src/prefs.js:190
+#: src/prefs.js:192
 msgid "No Special Rules"
 msgstr ""
 
-#: src/prefs.js:191
+#: src/prefs.js:193
 msgid ""
 "All normal windows without server-side decorations will have native shadow "
 "and rounded corners applied by default"
 msgstr ""
 
-#: src/prefs.js:204
+#: src/prefs.js:206
 msgid "Custom Identifier"
 msgstr ""
 
-#: src/prefs.js:208 src/prefs.js:209
+#: src/prefs.js:210 src/prefs.js:211
 msgid "Dialogs & Popups"
 msgstr ""
 
-#: src/prefs.js:210
+#: src/prefs.js:212
 msgid "Child dialogs and transient windows"
 msgstr ""
 
-#: src/prefs.js:214
+#: src/prefs.js:216
 msgid "Specific window title"
 msgstr ""
 
-#: src/prefs.js:259
+#: src/prefs.js:261
 msgid "Remove Rule"
 msgstr ""
 
-#: src/prefs.js:284
+#: src/prefs.js:286
 msgid "Window Inspection Failed"
 msgstr ""
 
-#: src/prefs.js:285
+#: src/prefs.js:287
 msgid ""
 "Could not connect to CSD Fixer extension. Please ensure the extension is "
 "enabled."
 msgstr ""
 
-#: src/prefs.js:299
+#: src/prefs.js:301
 #, javascript-format
 msgid "Rule for \"%s\" already exists"
 msgstr ""
 
-#: src/prefs.js:310
+#: src/prefs.js:312
 #, javascript-format
 msgid "Added rule for \"%s\""
 msgstr ""

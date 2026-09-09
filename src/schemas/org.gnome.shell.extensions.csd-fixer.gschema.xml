@@ -13,9 +13,10 @@
         - 'app:dialog': matches child dialogs/transient windows of this app (e.g. 'wechat:dialog')
         - 'app:title=...': matches windows with specific title (e.g. 'wechat:title=Exit')
         Value modes:
-        - 'disable-all': disable all decorations (no shadow, no corners)
-        - 'disable-clip': disable rounded corners (retaining shadow)
-        - 'disable-shadow': disable shadow (retaining rounded corners)
+        - 'all': disable all decorations (no shadow, no corners)
+        - 'clip': disable rounded corners (retaining shadow)
+        - 'shadow': disable shadow (retaining rounded corners)
+        (Legacy 'disable-*' values are transparently accepted and migrated)
       </description>
     </key>
     <key name="prefer-crisp-text" type="b">

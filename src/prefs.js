@@ -5,17 +5,18 @@ import Gtk from 'gi://Gtk';
 
 import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 import {
-    RuleMode,
+    ExclusionTarget,
     parseRuleKey,
+    sanitizeWindowRules,
     INSPECTOR_DBUS_NAME,
     INSPECTOR_DBUS_PATH,
 } from './lib/detector.js';
 
 function getRuleModes() {
     return [
-        {id: RuleMode.DISABLE_ALL, label: _('Disable all')},
-        {id: RuleMode.DISABLE_CLIP, label: _('Disable corners')},
-        {id: RuleMode.DISABLE_SHADOW, label: _('Disable shadow')},
+        {id: ExclusionTarget.ALL, label: _('Disable all')},
+        {id: ExclusionTarget.CLIP, label: _('Disable corners')},
+        {id: ExclusionTarget.SHADOW, label: _('Disable shadow')},
     ];
 }
 
@@ -73,7 +74,8 @@ function findAppInfoByWmClass(wmClass, appsList) {
 function getWindowRules(settings) {
     try {
         const v = settings.get_value('window-rules');
-        return v ? v.deep_unpack() : {};
+        const raw = v ? v.deep_unpack() : {};
+        return sanitizeWindowRules(raw);
     } catch {
         return {};
     }
@@ -244,7 +246,7 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
                     valign: Gtk.Align.CENTER,
                 });
                 dropDown.connect('notify::selected', () => {
-                    const newMode = ruleModes[dropDown.selected]?.id || RuleMode.DISABLE_ALL;
+                    const newMode = ruleModes[dropDown.selected]?.id || ExclusionTarget.ALL;
                     const updated = getWindowRules(settings);
                     updated[ruleKey] = newMode;
                     setWindowRules(settings, updated);
@@ -301,7 +303,7 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
                     return;
                 }
 
-                currentRules[ruleKey] = RuleMode.DISABLE_ALL;
+                currentRules[ruleKey] = ExclusionTarget.ALL;
                 setWindowRules(settings, currentRules);
 
                 refreshRulesList();

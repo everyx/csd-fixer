@@ -126,13 +126,40 @@ export function shouldClipWindow({preferCrispText = false, scale = 1}) {
 }
 
 /**
- * Window rule mode enumeration.
+ * Window exclusion rule mode enumeration.
+ * Specifies decoration capabilities to exclude for a window.
  */
-export const RuleMode = {
-    DISABLE_ALL: 'disable-all',       // Completely disabled (no shadow, no corner clipping)
-    DISABLE_CLIP: 'disable-clip',     // Disable corner clipping (retains shadow)
-    DISABLE_SHADOW: 'disable-shadow', // Disable shadow (retains corner clipping)
+export const ExclusionTarget = {
+    ALL: 'all',       // Completely disabled (no shadow, no corner clipping)
+    CLIP: 'clip',     // Disable corner clipping (retains shadow)
+    SHADOW: 'shadow', // Disable shadow (retains corner clipping)
 };
+
+export const RULE_MODE_ALIASES = {
+    'disable-all': ExclusionTarget.ALL,
+    'disable-clip': ExclusionTarget.CLIP,
+    'disable-shadow': ExclusionTarget.SHADOW,
+};
+
+/**
+ * Normalizes an exclusion rule mode to its canonical form ('all', 'clip', 'shadow').
+ * Transparently maps legacy 'disable-*' modes for backward compatibility.
+ *
+ * @param {string} mode
+ * @returns {'all'|'clip'|'shadow'|null}
+ */
+export function normalizeRuleMode(mode) {
+    if (typeof mode !== 'string')
+        return null;
+    const lower = mode.toLowerCase();
+    if (RULE_MODE_ALIASES[lower])
+        return RULE_MODE_ALIASES[lower];
+    if (lower === ExclusionTarget.ALL ||
+        lower === ExclusionTarget.CLIP ||
+        lower === ExclusionTarget.SHADOW)
+        return lower;
+    return null;
+}
 
 /**
  * Checks whether a window is maximized (horizontally and vertically).
@@ -237,6 +264,12 @@ export function sanitizeWindowRules(rawRules = {}) {
             continue;
         }
 
+        const normalizedMode = normalizeRuleMode(val);
+        if (!normalizedMode) {
+            console.warn(`[csd-fixer] Dropping window rule with invalid mode: "${val}" for key "${key}"`);
+            continue;
+        }
+
         const lowerKey = key.toLowerCase();
         if (seenLowerKeys.has(lowerKey)) {
             const existingKey = seenLowerKeys.get(lowerKey);
@@ -245,7 +278,7 @@ export function sanitizeWindowRules(rawRules = {}) {
         }
 
         seenLowerKeys.set(lowerKey, key);
-        clean[key] = val;
+        clean[key] = normalizedMode;
     }
 
     return clean;
@@ -286,7 +319,7 @@ export function parseRuleKey(key) {
  * @param {object} [options={}]
  * @param {boolean} [options.isDialog=false] - Whether window acts as dialog/transient
  * @param {string|null} [options.title=null] - Window title
- * @returns {string|null} RuleMode or null if no rule matched
+ * @returns {string|null} ExclusionTarget mode or null if no rule matched
  */
 export function resolveRule(wmClass, windowRules = {}, options = {}) {
     if (!wmClass)
@@ -393,12 +426,13 @@ export function evaluateWindowActions({
         hasParent: Boolean(isDialog || hasParent),
     });
     const rule = resolveRule(wmClass, windowRules, {isDialog: isWinDialog, title});
+    const canonicalRule = normalizeRuleMode(rule);
 
-    if (rule === RuleMode.DISABLE_ALL) {
+    if (canonicalRule === ExclusionTarget.ALL) {
         return {
             applyShadow: false,
             applyClip: false,
-            reason: `disabled-by-rule(${wmClass}:disable-all)`,
+            reason: `disabled-by-rule(${wmClass}:all)`,
         };
     }
 
@@ -407,13 +441,13 @@ export function evaluateWindowActions({
     // Emulates Mutter C core (meta-window-actor-x11.c:392) for Wayland clients without CSD:
     // "If we have two snap-tiled windows, we don't want the shadow to obstruct the other window."
     // Suppresses shadow when two windows are snap-tiled adjacent to each other.
-    const applyShadow = rule !== RuleMode.DISABLE_SHADOW && !hasTileMatch;
-    const applyClip = rule === RuleMode.DISABLE_CLIP
+    const applyShadow = canonicalRule !== ExclusionTarget.SHADOW && !hasTileMatch;
+    const applyClip = canonicalRule === ExclusionTarget.CLIP
         ? false
         : shouldClipWindow({preferCrispText, scale: monitorScale});
 
-    let reason = rule ? `rule-applied(${wmClass}:${rule})` : base.reason;
-    if (hasTileMatch && !applyShadow && rule !== RuleMode.DISABLE_SHADOW)
+    let reason = canonicalRule ? `rule-applied(${wmClass}:${canonicalRule})` : base.reason;
+    if (hasTileMatch && !applyShadow && canonicalRule !== ExclusionTarget.SHADOW)
         reason = `tile-match(suppress-shadow,${reason})`;
 
     return {
