@@ -64,8 +64,13 @@ export class Manager {
             GLib.Source.remove(this._reconcileTimeout);
             this._reconcileTimeout = null;
         }
-        for (const [win] of this._windows)
+        for (const [win, state] of this._windows) {
+            if (state.idleId) {
+                GLib.Source.remove(state.idleId);
+                state.idleId = null;
+            }
             this._undecorate(win);
+        }
         this._windows.clear();
         for (const [obj, id] of this._signals)
             obj.disconnect(id);
@@ -83,7 +88,7 @@ export class Manager {
     _trackWindow(win) {
         if (this._windows.has(win))
             return;
-        this._windows.set(win, {clip: null, shadow: null, shadowFx: null, signals: []});
+        this._windows.set(win, {clip: null, shadow: null, shadowFx: null, idleId: null, signals: []});
         // Window-level signals (position/size/focus/monitor changes -> idempotent re-evaluation)
         const windowSignals = [
             'position-changed', 'size-changed', 'notify::appears-focused',
@@ -103,11 +108,18 @@ export class Manager {
         if (actor) {
             this._windows.get(win).signals.push([actor, actor.connect('notify::allocation', () => {
                 const state = this._windows.get(win);
-                // First frame ready: synchronize immediately to avoid 50ms delay dropping initial fade-in
-                if (state && (!state.clip && !state.shadow) && actor.width > 0 && actor.height > 0)
-                    this._reconcileWindow(win);
-                else
+                // First frame ready: defer to idle so we don't mutate actor hierarchy during allocation pass
+                if (state && (!state.clip && !state.shadow) && actor.width > 0 && actor.height > 0) {
+                    if (state.idleId)
+                        GLib.Source.remove(state.idleId);
+                    state.idleId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                        state.idleId = null;
+                        this._reconcileWindow(win);
+                        return GLib.SOURCE_REMOVE;
+                    });
+                } else {
                     this._reconcileDebounced();
+                }
             })]);
         }
         if (actor && actor.width > 0 && actor.height > 0)
@@ -119,6 +131,10 @@ export class Manager {
     _forgetWindow(win) {
         const state = this._windows.get(win);
         if (state) {
+            if (state.idleId) {
+                GLib.Source.remove(state.idleId);
+                state.idleId = null;
+            }
             for (const [obj, id] of state.signals)
                 obj.disconnect(id);
             // Retain clipEffect and shadowActor to fade naturally with windowActor on close

@@ -13,6 +13,7 @@
   "scripts": {
     "pretest": "pnpm run compile-locales",
     "test": "jasmine --module tests/",
+    "test:e2e": "tools/test-e2e.sh",
     "lint": "eslint src/",
     "shell": "tools/dev.sh shell",
     "log": "tools/dev.sh log",

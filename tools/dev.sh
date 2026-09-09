@@ -78,9 +78,10 @@ cmd_ext() {
     cmd_shell
     # Run gnome-extensions inside nested session D-Bus (must go through nested shell's own bus)
     echo ">> [nested-dbus] gnome-extensions $*"
-    bus="$(grep -o 'DBUS_SESSION_BUS_ADDRESS=[^ ]*' "$LOG" | head -1 || true)"
+    pid="$(cat "$PIDFILE")"
+    bus="$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep '^DBUS_SESSION_BUS_ADDRESS=' | cut -d= -f2- || true)"
     if [[ -n "$bus" ]]; then
-        env "${bus/=*}"="$(echo "$bus" | cut -d= -f2-)" gnome-extensions "$@"
+        env DBUS_SESSION_BUS_ADDRESS="$bus" gnome-extensions "$@"
     else
         echo "!! Cannot find nested session bus address, please verify with ./dev.sh shell"; exit 1
     fi
