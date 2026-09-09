@@ -109,6 +109,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Install pnpm
         uses: pnpm/action-setup@v6
 
@@ -130,9 +133,7 @@ jobs:
         run: pnpm run pack
 
       - name: Verify package with Shexli (EGO analyzer)
-        # Pin tree-sitter < 0.26.0 to work around upstream use-after-free heap corruption
-        # bug in py-tree-sitter 0.26.0 during AST traversal (tree-sitter/py-tree-sitter#472)
-        run: pipx run --with "tree-sitter<0.26.0" shexli dist/*.zip
+        run: pnpm run shexli
 
       - name: Upload extension zip artifact
         uses: actions/upload-artifact@v7
