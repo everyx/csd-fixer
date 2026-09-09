@@ -20,7 +20,7 @@ import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-import {INSPECTOR_DBUS_NAME, INSPECTOR_DBUS_PATH} from './detector.js';
+import {INSPECTOR_DBUS_NAME, INSPECTOR_DBUS_PATH, isDialogWindow} from './detector.js';
 
 const INSPECTOR_DBUS_IFACE_XML = `
 <node>
@@ -186,10 +186,8 @@ export class InspectorService {
         const title = win.get_title?.() ?? '';
         const windowType = win.get_window_type?.() ?? Meta.WindowType.NORMAL;
         const hasParent = Boolean(win.get_transient_for?.());
-        const isDialog = windowType === Meta.WindowType.DIALOG ||
-                         windowType === Meta.WindowType.MODAL_DIALOG ||
-                         hasParent ||
-                         (win.is_attached_dialog?.() ?? false);
+        const isAttachedDialog = Boolean(win.is_attached_dialog?.());
+        const isDialog = isDialogWindow({windowType, hasParent, isAttachedDialog});
 
         const properties = {
             wmClass,

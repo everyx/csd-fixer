@@ -5,6 +5,12 @@
  *   - Monitors window creation/destruction/state changes (idempotent: re-evaluates -> compares -> adds/removes effects)
  *   - Reads GSettings (corner radius, text clarity prioritization, window exclusion rules)
  *   - Attaches decoration effects to matching windows (effects/shadow modules)
+ * Shell version compatibility matrix (45 → 50, verified via live GJS typelib and Mutter C source):
+ *  - win.get_client_type()               : 45–50 stable method (returns Meta.WindowClientType).
+ *  - win.decorated                       : 45–50 GObject property (boolean: whether window has frame/SSD).
+ *  - win.is_client_decorated             : Non-existent on Meta.Window (GTK internal concept only).
+ *  - global.display?.get_monitor_scale   : 45–50 display scale method, optional chaining for safety.
+ *  - global.backend?.get_monitor_manager : 45–50 monitor manager, optional chaining for safety.
  *
  * Design constraints:
  *   - All window state evaluation delegates to detector.evaluateWindowActions (pure function, unit-testable)
@@ -15,7 +21,7 @@ import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import St from 'gi://St';
 
-import {evaluateWindowActions} from './detector.js';
+import {evaluateWindowActions, isDialogWindow, sanitizeWindowRules} from './detector.js';
 import {styleForWindow} from './style.js';
 import {RoundedClipEffect} from '../effects/clipEffect.js';
 import {SdfShadowEffect} from '../effects/shadowEffect.js';
@@ -157,7 +163,8 @@ export class Manager {
     _getWindowRules() {
         try {
             const v = this._settings.get_value('window-rules');
-            return v ? v.deep_unpack() : {};
+            const raw = v ? v.deep_unpack() : {};
+            return sanitizeWindowRules(raw);
         } catch {
             return {};
         }
@@ -269,25 +276,26 @@ export class Manager {
 
         const b = win.get_buffer_rect();
         const f = win.get_frame_rect();
-        const hasSsd = Boolean(win.decorated && !win.is_client_decorated?.());
+        const hasSsd = Boolean(win.decorated);
         const isX11 = win.get_client_type?.() === 1 ||
                       (Meta?.WindowClientType && win.get_client_type?.() === Meta.WindowClientType.X11);
         const wmClass = win.get_wm_class();
         const geometryScale = actor.get_geometry_scale?.() ?? 1;
         const monitorScale = this._getMonitorScale(win);
         const hasParent = Boolean(win.get_transient_for?.());
+        const isAttachedDialog = Boolean(win.is_attached_dialog?.());
         const windowType = win.get_window_type();
-        const isDialog = windowType === Meta.WindowType.DIALOG ||
-                         windowType === Meta.WindowType.MODAL_DIALOG ||
-                         hasParent ||
-                         (win.is_attached_dialog?.() ?? false);
+        const isDialog = isDialogWindow({windowType, hasParent, isAttachedDialog});
         const title = win.get_title?.() ?? null;
 
         return evaluateWindowActions({
+            // Geometry & scale
             bufferWidth: b.width, bufferHeight: b.height,
             frameWidth: f.width, frameHeight: f.height,
             geometryScale,
             monitorScale,
+
+            // Window state & type
             isMaximized: win.maximized_horizontally && win.maximized_vertically,
             isFullscreen: win.is_fullscreen(),
             hasSsd,
@@ -297,6 +305,8 @@ export class Manager {
             hasParent,
             title,
             wmClass,
+
+            // Preferences & rules
             windowRules: this._getWindowRules(),
             preferCrispText: this._settings.get_boolean('prefer-crisp-text'),
         });

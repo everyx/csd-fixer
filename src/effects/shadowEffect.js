@@ -4,9 +4,10 @@
  * Rendering kernel (transpiled by tools/gen-shader.mjs from GTK4 GSK gskgpuboxshadow.glsl):
  *   - 2D analytical Gaussian integral (double product of error function erf) + 8-step corner numerical integral subtraction;
  *   - Standard CSS parameter conversion (sigma = blur / 2);
- *   - Complementary hollow mask (clipAlpha = clamp(d + 0.5, 0.0, 1.0)):
- *     Strictly complementary to window RoundedClipEffect (summing identically to 1.000000), preventing
- *     seam light-leak while eliminating dark fringe bleeding from underlying shadow;
+ *   - Hollow mask with SNAP_BLEED (clipAlpha = clamp(d + 0.5 + 0.8, 0.0, 1.0)):
+ *     SNAP_BLEED = 0.8 (injected by tools/gen-shader.mjs, aligning with GTK4 GSK_RECT_SNAP_GROW philosophy)
+ *     extends shadow cutout 0.8px beneath window frame, eliminating fractional-scaling seam light-leak.
+ *     Non-strictly complementary to RoundedClipEffect (conservative overlap);
  *   - blur=0 layer: 1px anti-aliased border outline.
  *
  * Premultiplied output format (rgb = 0 <= a).

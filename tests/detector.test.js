@@ -6,7 +6,7 @@
 import {
     shouldDecorate, computeInsets, WindowType, isFractionalScale,
     shouldClipWindow, RuleMode, resolveRule, evaluateWindowActions,
-    parseRuleKey,
+    parseRuleKey, isDialogWindow, sanitizeWindowRules,
 } from '../src/lib/detector.js';
 
 describe('computeInsets', () => {
@@ -209,6 +209,17 @@ describe('resolveRule', () => {
         // When only base rule exists, dialog inherits base rule
         expect(resolveRule('wechat', compositeRules, {isDialog: true})).toBe(RuleMode.DISABLE_CLIP);
     });
+
+    it('bidirectional case-insensitive match (uppercase rule key matches lowercase wmClass)', () => {
+        const uppercaseRules = {
+            'WeChat': RuleMode.DISABLE_CLIP,
+            'Steam:dialog': RuleMode.DISABLE_ALL,
+            'Discord:title=Voice Channel': RuleMode.DISABLE_SHADOW,
+        };
+        expect(resolveRule('wechat', uppercaseRules)).toBe(RuleMode.DISABLE_CLIP);
+        expect(resolveRule('steam', uppercaseRules, {isDialog: true})).toBe(RuleMode.DISABLE_ALL);
+        expect(resolveRule('discord', uppercaseRules, {title: 'Voice Channel'})).toBe(RuleMode.DISABLE_SHADOW);
+    });
 });
 
 describe('parseRuleKey', () => {
@@ -228,6 +239,91 @@ describe('parseRuleKey', () => {
     it('empty or null', () => {
         expect(parseRuleKey('')).toEqual({baseWmClass: '', specifier: null});
         expect(parseRuleKey(null)).toEqual({baseWmClass: '', specifier: null});
+    });
+});
+
+describe('rule key contract & round-trip', () => {
+    it('round-trip: parseRuleKey with composite keys', () => {
+        const keys = ['wechat', 'wechat:dialog', 'wechat:title=Exit'];
+        for (const key of keys) {
+            const parsed = parseRuleKey(key);
+            const reconstructed = parsed.specifier
+                ? `${parsed.baseWmClass}:${parsed.specifier}`
+                : parsed.baseWmClass;
+            expect(reconstructed).toBe(key);
+        }
+    });
+
+    it('prefs rule keys match resolveRule candidate structure', () => {
+        const prefsGeneratedRules = {
+            'code:dialog': RuleMode.DISABLE_ALL,
+            'code:title=Preferences': RuleMode.DISABLE_CLIP,
+        };
+        expect(resolveRule('code', prefsGeneratedRules, {isDialog: true})).toBe(RuleMode.DISABLE_ALL);
+        expect(resolveRule('code', prefsGeneratedRules, {title: 'Preferences'})).toBe(RuleMode.DISABLE_CLIP);
+    });
+});
+
+describe('sanitizeWindowRules', () => {
+    it('passes valid rule keys unchanged', () => {
+        const input = {
+            'wechat': RuleMode.DISABLE_CLIP,
+            'steam:dialog': RuleMode.DISABLE_ALL,
+            'discord:title=Voice Channel': RuleMode.DISABLE_SHADOW,
+        };
+        expect(sanitizeWindowRules(input)).toEqual(input);
+    });
+
+    it('drops invalid rule keys and non-string entries', () => {
+        const input = {
+            'wechat': RuleMode.DISABLE_CLIP,
+            'invalid:key:too:many:colons': RuleMode.DISABLE_ALL,
+            'has space': RuleMode.DISABLE_CLIP,
+            'valid_app': 123,
+        };
+        expect(sanitizeWindowRules(input)).toEqual({
+            'wechat': RuleMode.DISABLE_CLIP,
+        });
+    });
+
+    it('rejects case-colliding duplicate keys deterministically', () => {
+        const input = {
+            'wechat': RuleMode.DISABLE_CLIP,
+            'WeChat': RuleMode.DISABLE_ALL,
+        };
+        expect(sanitizeWindowRules(input)).toEqual({
+            'wechat': RuleMode.DISABLE_CLIP,
+        });
+    });
+
+    it('handles null, undefined, or non-object input gracefully', () => {
+        expect(sanitizeWindowRules(null)).toEqual({});
+        expect(sanitizeWindowRules(undefined)).toEqual({});
+        expect(sanitizeWindowRules('string')).toEqual({});
+    });
+});
+
+describe('isDialogWindow', () => {
+    it('detects dialog by windowType DIALOG or MODAL_DIALOG', () => {
+        expect(isDialogWindow({windowType: WindowType.DIALOG})).toBe(true);
+        expect(isDialogWindow({windowType: WindowType.MODAL_DIALOG})).toBe(true);
+        expect(isDialogWindow({windowType: WindowType.NORMAL})).toBe(false);
+    });
+
+    it('detects dialog when hasParent is true', () => {
+        expect(isDialogWindow({windowType: WindowType.NORMAL, hasParent: true})).toBe(true);
+    });
+
+    it('detects dialog when isAttachedDialog is true', () => {
+        expect(isDialogWindow({windowType: WindowType.NORMAL, isAttachedDialog: true})).toBe(true);
+    });
+
+    it('returns false for normal standalone window', () => {
+        expect(isDialogWindow({
+            windowType: WindowType.NORMAL,
+            hasParent: false,
+            isAttachedDialog: false,
+        })).toBe(false);
     });
 });
 

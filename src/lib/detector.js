@@ -142,6 +142,66 @@ export const INSPECTOR_DBUS_NAME = 'org.gnome.Shell.Extensions.CsdFixer';
 export const INSPECTOR_DBUS_PATH = '/org/gnome/Shell/Extensions/CsdFixer';
 
 /**
+ * Determines whether a window acts as a dialog/transient window.
+ * Benchmarked against Mutter's default_shadow_classes categorization.
+ *
+ * @param {object} [params={}]
+ * @param {number} [params.windowType=WindowType.NORMAL] - Meta.WindowType
+ * @param {boolean} [params.hasParent=false] - whether transient for another window
+ * @param {boolean} [params.isAttachedDialog=false] - whether modal dialog attached to parent
+ * @returns {boolean}
+ */
+export function isDialogWindow({
+    windowType = WindowType.NORMAL,
+    hasParent = false,
+    isAttachedDialog = false,
+} = {}) {
+    return windowType === WindowType.DIALOG ||
+           windowType === WindowType.MODAL_DIALOG ||
+           hasParent ||
+           isAttachedDialog;
+}
+
+export const VALID_RULE_KEY_PATTERN = /^[^\s:]+(?::(?:dialog|title=.+))?$/;
+
+/**
+ * Validates and sanitizes a window rules dictionary from settings.
+ * Discards malformed keys and drops case-colliding duplicate keys to ensure determinism.
+ *
+ * @param {Record<string, string>} [rawRules={}]
+ * @returns {Record<string, string>}
+ */
+export function sanitizeWindowRules(rawRules = {}) {
+    if (!rawRules || typeof rawRules !== 'object')
+        return {};
+
+    const clean = {};
+    const seenLowerKeys = new Map();
+
+    for (const [key, val] of Object.entries(rawRules)) {
+        if (typeof key !== 'string' || typeof val !== 'string')
+            continue;
+
+        if (!VALID_RULE_KEY_PATTERN.test(key)) {
+            console.warn(`[csd-fixer] Dropping invalid window rule key: "${key}"`);
+            continue;
+        }
+
+        const lowerKey = key.toLowerCase();
+        if (seenLowerKeys.has(lowerKey)) {
+            const existingKey = seenLowerKeys.get(lowerKey);
+            console.warn(`[csd-fixer] Dropping case-colliding window rule key "${key}" (conflicts with "${existingKey}")`);
+            continue;
+        }
+
+        seenLowerKeys.set(lowerKey, key);
+        clean[key] = val;
+    }
+
+    return clean;
+}
+
+/**
  * Splits a rule key into base application wmClass and optional specifier.
  * E.g. "wechat:dialog" -> { baseWmClass: "wechat", specifier: "dialog" }
  *      "wechat" -> { baseWmClass: "wechat", specifier: null }
@@ -167,8 +227,16 @@ export function parseRuleKey(key) {
  * 2. Window type rule: `${wmClass}:dialog` (if window is a dialog or transient child)
  * 3. Base application rule: `${wmClass}`
  *
- * Case-insensitive fallback is performed for each specificity level.
- * Returns null if no rule matched.
+ * Bidirectional case-insensitive matching:
+ * Matches if either candidate or stored rule key differs only in casing
+ * (e.g. wmClass 'WeChat' matches rule 'wechat', and wmClass 'wechat' matches rule 'WeChat:dialog').
+ *
+ * @param {string} wmClass - Window WM_CLASS identifier
+ * @param {Record<string, string>} [windowRules={}] - Active rules dictionary
+ * @param {object} [options={}]
+ * @param {boolean} [options.isDialog=false] - Whether window acts as dialog/transient
+ * @param {string|null} [options.title=null] - Window title
+ * @returns {string|null} RuleMode or null if no rule matched
  */
 export function resolveRule(wmClass, windowRules = {}, options = {}) {
     if (!wmClass)
@@ -198,15 +266,33 @@ export function resolveRule(wmClass, windowRules = {}, options = {}) {
 }
 
 /**
+ * @typedef {object} WindowEvaluationParams
+ * @property {number} bufferWidth - Physical buffer width
+ * @property {number} bufferHeight - Physical buffer height
+ * @property {number} frameWidth - Logical frame width
+ * @property {number} frameHeight - Logical frame height
+ * @property {number} [scale=1] - Geometry scale factor
+ * @property {number} [geometryScale=scale] - Window buffer geometry scale
+ * @property {number} [monitorScale=scale] - Display physical scale factor
+ * @property {boolean} [isMaximized=false] - Whether window is maximized
+ * @property {boolean} [isFullscreen=false] - Whether window is fullscreen
+ * @property {boolean} [hasSsd=false] - Whether native server-side decorations exist
+ * @property {boolean} [isX11=false] - Whether client is X11 / XWayland
+ * @property {number} [windowType=WindowType.NORMAL] - Wayland/Meta window type
+ * @property {boolean} [isDialog=false] - Whether window is a dialog
+ * @property {boolean} [hasParent=false] - Whether window has transient parent
+ * @property {string|null} [title=null] - Window title
+ * @property {string} [wmClass] - Window WM_CLASS / app ID
+ * @property {Record<string, string>} [windowRules={}] - Exclusion rules
+ * @property {boolean} [preferCrispText=false] - Subpixel crisp text setting
+ * @property {number} [insetThreshold] - Mutter CSD minimum margin threshold
+ */
+
+/**
  * Evaluates decoration actions based on geometric criteria and exclusion rules.
  *
- * Parameters:
- *   geometryScale: window buffer geometry scale (actor.get_geometry_scale, default 1)
- *   monitorScale: display physical scale factor (global.display.get_monitor_scale, e.g. 1.25, 1.333)
- *   isDialog / hasParent: whether the window is a modal/dialog or child of another window
- *   title: window title
- *   isX11: whether window connects via X11 / XWayland
- * Returns: { applyShadow: boolean, applyClip: boolean, reason: string }
+ * @param {WindowEvaluationParams} params
+ * @returns {{ applyShadow: boolean, applyClip: boolean, reason: string }}
  */
 export function evaluateWindowActions({
     bufferWidth, bufferHeight, frameWidth, frameHeight,
@@ -226,6 +312,11 @@ export function evaluateWindowActions({
     insetThreshold = MUTTER_CSD_MIN_INSET_THRESHOLD,
 }) {
     // 1. Base geometric criteria (whether window lacks CSD)
+    // Note on X11 / XWayland precedence:
+    // Step 1 inside shouldDecorate unconditionally rejects X11 windows (x11-mutter-native-shadow)
+    // because Mutter's C core natively renders shadows for X11 frames.
+    // Rule matching is intentionally executed AFTER base criteria: custom rules cannot and
+    // should not force decorations onto X11 windows, preventing duplicate shadow rendering.
     const base = shouldDecorate({
         bufferWidth, bufferHeight, frameWidth, frameHeight,
         scale: geometryScale,
@@ -245,8 +336,10 @@ export function evaluateWindowActions({
     }
 
     // 2. Rule evaluation (composite fingerprint matching)
-    const isWinDialog = Boolean(isDialog || hasParent ||
-        windowType === WindowType.DIALOG || windowType === WindowType.MODAL_DIALOG);
+    const isWinDialog = isDialogWindow({
+        windowType,
+        hasParent: Boolean(isDialog || hasParent),
+    });
     const rule = resolveRule(wmClass, windowRules, {isDialog: isWinDialog, title});
 
     if (rule === RuleMode.DISABLE_ALL) {
