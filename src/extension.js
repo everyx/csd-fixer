@@ -1,5 +1,5 @@
 /**
- * CSD Fixer - restores GNOME native decorations to non-CSD windows on GNOME Wayland.
+ * CSD Fixer - restores GNOME native rounded corners and drop shadows to non-CSD applications.
  *
  * Architecture (module responsibilities):
  *   detector  determines whether a window needs decoration (geometry criteria)

@@ -2,15 +2,15 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-Seamlessly bring native GNOME rounded corners, subtle inner highlights, and soft drop shadows to non-CSD applications (such as Qt apps, WeChat Linux, Electron, and borderless utility windows) under GNOME Wayland.
+Seamlessly bring native GNOME rounded corners, subtle inner highlights, and soft drop shadows to non-CSD applications (covering both native Wayland and XWayland/X11 windows such as WeChat Linux, Qt apps, and Electron).
 
 ---
 
 ## ✨ Features
 
-- **🎨 Native Look & Feel**: Pixel-perfect visual parity with official GNOME / libadwaita windows. Automatically adapts to active, backdrop, tiled, maximized, and high-contrast desktop states.
+- **🎨 Native Look & Feel**: Pixel-perfect visual parity with official GNOME / libadwaita windows. Automatically adapts to active, backdrop, tiled, maximized, and high-contrast desktop states across both Wayland native and XWayland/X11 applications.
 - **⚡ Seamless Animations**: Shadows and inner highlights smoothly fade in and out alongside window open, close, and minimize animations with zero visual lag or edge popping.
-- **🛠️ Granular App Rules**: Search installed applications directly in preferences and configure rules per window — disable all decorations, keep shadow only, or keep rounded corners only.
+- **🛠️ Granular App Rules**: Search installed applications directly in preferences and configure rules per window - disable all decorations, keep shadow only, or keep rounded corners only.
 - **🔍 Crisp Text on Fractional Scaling**: Built-in option to prioritize font clarity on fractional scale displays by omitting corner clipping while preserving native shadows.
 - **🌐 Full Multilingual Support**: Built with standard gettext (i18n), automatically matching your system language (English, Simplified Chinese, Traditional Chinese).
 

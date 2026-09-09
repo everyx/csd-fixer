@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "GNOME Shell extension: restores GNOME native rounded corners and shadows to non-CSD windows on Wayland",
+  "description": "GNOME Shell extension: restores GNOME native rounded corners and drop shadows to non-CSD applications",
   "license": "GPL-2.0-or-later",
   "repository": {
     "type": "git",
