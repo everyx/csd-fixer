@@ -4,6 +4,11 @@
     "description": "Native GNOME rounded corners and drop shadows for non-CSD applications.",
     "url": "https://github.com/everyx/csd-fixer",
     "shell-version": [
+        "45",
+        "46",
+        "47",
+        "48",
+        "49",
         "50"
     ],
     "settings-schema": "org.gnome.shell.extensions.csd-fixer",

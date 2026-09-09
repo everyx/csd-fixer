@@ -206,7 +206,7 @@ export class Manager {
         if (wantShadow !== hasShadow) {
             if (wantShadow) {
                 state.shadowFx = new SdfShadowEffect();
-                state.shadow = new ShadowActor(actor, global.windowGroup);
+                state.shadow = new ShadowActor(actor, this._windowGroup);
                 state.shadow.actor.add_effect(state.shadowFx);
                 state.shadow.onRelayout((w, h) => {
                     const style = this._styleOf(win);
@@ -244,6 +244,10 @@ export class Manager {
             this._reconcileWindow(win);
     }
 
+    get _windowGroup() {
+        return global.window_group ?? global.windowGroup;
+    }
+
     /** Re-orders all shadow actors below corresponding windows after restack */
     _restackShadows() {
         for (const [win, state] of this._windows) {
@@ -252,7 +256,7 @@ export class Manager {
             const actor = win.get_compositor_private();
             if (!actor)
                 continue;
-            global.windowGroup.set_child_below_sibling(state.shadow.actor, actor);
+            this._windowGroup.set_child_below_sibling(state.shadow.actor, actor);
         }
     }
 
