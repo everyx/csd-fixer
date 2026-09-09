@@ -189,10 +189,15 @@ const code = `
     cogl_color_out = vec4(vec3(0.0), min(a, 1.0) * cogl_color_in.a);
 `;
 
-const outputContent = `${header}
-export const DECLARATIONS = ${JSON.stringify(declarations)};
+function toTemplateLiteral(str) {
+    const escaped = str.replace(/[`]|\$\{/g, match => (match === '`' ? '\\`' : '\\${'));
+    return `\`${escaped}\``;
+}
 
-export const CODE = ${JSON.stringify(code)};
+const outputContent = `${header}
+export const DECLARATIONS = ${toTemplateLiteral(declarations)};
+
+export const CODE = ${toTemplateLiteral(code)};
 `;
 
 if (CHECK) {
