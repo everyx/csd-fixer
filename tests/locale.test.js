@@ -42,10 +42,10 @@ describe('i18n multilingual support', () => {
         const potContent = readFile(potFile);
         expect(potContent).toContain('Prioritize Crisp Text');
         expect(potContent).toContain('Application Exclusion Rules');
-        expect(potContent).toContain('Add Application Exclusion Rule');
-        expect(potContent).toContain('Disable all (no shadow, no rounded corners)');
-        expect(potContent).toContain('Shadow only (disable rounded corners)');
-        expect(potContent).toContain('Rounded corners only (disable shadow)');
+        expect(potContent).toContain('Inspect Window…');
+        expect(potContent).toContain('Disable all');
+        expect(potContent).toContain('Disable corners');
+        expect(potContent).toContain('Disable shadow');
     });
 
     it('zh_CN.po contains complete Simplified Chinese translations', () => {
@@ -55,10 +55,11 @@ describe('i18n multilingual support', () => {
         const poContent = readFile(poFile);
         expect(poContent).toContain('优先保证文字清晰');
         expect(poContent).toContain('应用排除规则');
-        expect(poContent).toContain('添加应用排除规则');
-        expect(poContent).toContain('全部禁用（不加阴影，不裁圆角）');
-        expect(poContent).toContain('仅阴影（禁用圆角裁切）');
-        expect(poContent).toContain('仅圆角（禁用阴影添加）');
+        expect(poContent).toContain('拾取窗口…');
+        expect(poContent).toContain('全部排除');
+        expect(poContent).toContain('排除圆角');
+        expect(poContent).toContain('排除阴影');
+        expect(poContent).toContain('弹窗与对话框');
     });
 
     it('zh_TW.po contains complete Traditional Chinese translations', () => {
@@ -66,9 +67,11 @@ describe('i18n multilingual support', () => {
         expect(fileExists(poFile)).toBeTrue();
 
         const poContent = readFile(poFile);
-        expect(poContent).toContain('全部停用（不加陰影，不修圓角）');
-        expect(poContent).toContain('僅陰影（停用圓角修邊）');
-        expect(poContent).toContain('僅圓角（停用陰影效果）');
+        expect(poContent).toContain('全部排除');
+        expect(poContent).toContain('排除圓角');
+        expect(poContent).toContain('排除陰影');
+        expect(poContent).toContain('選取視窗…');
+        expect(poContent).toContain('彈出視窗與對話框');
     });
 
     it('compiled .mo binary catalogs are valid and non-empty', () => {

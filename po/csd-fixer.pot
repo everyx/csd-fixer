@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-08 22:50+0800\n"
+"POT-Creation-Date: 2026-09-09 15:48+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,104 +17,109 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: src/prefs.js:13
-msgid "Disable all (no shadow, no rounded corners)"
-msgstr ""
-
-#: src/prefs.js:14
+#: src/prefs.js:16
 msgid "Disable all"
 msgstr ""
 
+#: src/prefs.js:17
+msgid "Disable corners"
+msgstr ""
+
 #: src/prefs.js:18
-msgid "Shadow only (disable rounded corners)"
+msgid "Disable shadow"
 msgstr ""
 
-#: src/prefs.js:19
-msgid "Shadow only"
+#: src/prefs.js:122 src/prefs.js:130
+msgid "OK"
 msgstr ""
 
-#: src/prefs.js:23
-msgid "Rounded corners only (disable shadow)"
-msgstr ""
-
-#: src/prefs.js:24
-msgid "Corners only"
-msgstr ""
-
-#: src/prefs.js:103
-msgid "Add Application Exclusion Rule"
-msgstr ""
-
-#: src/prefs.js:130
-msgid "Search installed applications…"
-msgstr ""
-
-#: src/prefs.js:190
-msgid "Rule Parameters"
-msgstr ""
-
-#: src/prefs.js:195
-msgid "Window Identifier (wm_class)"
-msgstr ""
-
-#: src/prefs.js:209
-msgid "Exclusion Behavior"
-msgstr ""
-
-#: src/prefs.js:217
-msgid "Add Rule"
-msgstr ""
-
-#: src/prefs.js:247
+#: src/prefs.js:142
 msgid "General"
 msgstr ""
 
-#: src/prefs.js:254
+#: src/prefs.js:149
 msgid "Display & Rendering"
 msgstr ""
 
-#: src/prefs.js:255
+#: src/prefs.js:150
 msgid "Control window decoration behavior across screen scales"
 msgstr ""
 
-#: src/prefs.js:260
+#: src/prefs.js:155
 msgid "Prioritize Crisp Text"
 msgstr ""
 
-#: src/prefs.js:261
+#: src/prefs.js:156
 msgid ""
 "Skip rounded corners on fractional scale monitors (retaining shadow) to "
 "avoid text blur and resampling overhead"
 msgstr ""
 
-#: src/prefs.js:268
-msgid "Add Rule…"
+#: src/prefs.js:163
+msgid "Inspect Window…"
 msgstr ""
 
-#: src/prefs.js:274
+#: src/prefs.js:165
+msgid ""
+"Click an on-screen window to automatically detect and add exclusion rule"
+msgstr ""
+
+#: src/prefs.js:169
 msgid "Application Exclusion Rules"
 msgstr ""
 
-#: src/prefs.js:275
+#: src/prefs.js:170
 msgid ""
 "Configure individual exclusions for specific windows (disable all, skip "
 "corners, or skip shadow)"
 msgstr ""
 
-#: src/prefs.js:293
+#: src/prefs.js:190
 msgid "No Special Rules"
 msgstr ""
 
-#: src/prefs.js:294
+#: src/prefs.js:191
 msgid ""
 "All normal windows without server-side decorations will have native shadow "
 "and rounded corners applied by default"
 msgstr ""
 
-#: src/prefs.js:305
+#: src/prefs.js:204
 msgid "Custom Identifier"
 msgstr ""
 
-#: src/prefs.js:351
+#: src/prefs.js:208 src/prefs.js:209
+msgid "Dialogs & Popups"
+msgstr ""
+
+#: src/prefs.js:210
+msgid "Child dialogs and transient windows"
+msgstr ""
+
+#: src/prefs.js:214
+msgid "Specific window title"
+msgstr ""
+
+#: src/prefs.js:259
 msgid "Remove Rule"
+msgstr ""
+
+#: src/prefs.js:284
+msgid "Window Inspection Failed"
+msgstr ""
+
+#: src/prefs.js:285
+msgid ""
+"Could not connect to CSD Fixer extension. Please ensure the extension is "
+"enabled."
+msgstr ""
+
+#: src/prefs.js:299
+#, javascript-format
+msgid "Rule for \"%s\" already exists"
+msgstr ""
+
+#: src/prefs.js:310
+#, javascript-format
+msgid "Added rule for \"%s\""
 msgstr ""

@@ -4,25 +4,18 @@ import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk';
 
 import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
-import {RuleMode} from './lib/detector.js';
+import {
+    RuleMode,
+    parseRuleKey,
+    INSPECTOR_DBUS_NAME,
+    INSPECTOR_DBUS_PATH,
+} from './lib/detector.js';
 
 function getRuleModes() {
     return [
-        {
-            id: RuleMode.DISABLE_ALL,
-            label: _('Disable all (no shadow, no rounded corners)'),
-            shortLabel: _('Disable all'),
-        },
-        {
-            id: RuleMode.DISABLE_CLIP,
-            label: _('Shadow only (disable rounded corners)'),
-            shortLabel: _('Shadow only'),
-        },
-        {
-            id: RuleMode.DISABLE_SHADOW,
-            label: _('Rounded corners only (disable shadow)'),
-            shortLabel: _('Corners only'),
-        },
+        {id: RuleMode.DISABLE_ALL, label: _('Disable all')},
+        {id: RuleMode.DISABLE_CLIP, label: _('Disable corners')},
+        {id: RuleMode.DISABLE_SHADOW, label: _('Disable shadow')},
     ];
 }
 
@@ -56,7 +49,6 @@ function getInstalledApps() {
             icon,
         });
     }
-    result.sort((a, b) => a.name.localeCompare(b.name));
     return result;
 }
 
@@ -96,147 +88,50 @@ function setWindowRules(settings, rules) {
 }
 
 /**
- * Show dialog to add application exclusion rule
+ * D-Bus inspection helper to pick a window
  */
-function showAddRuleDialog(parentWindow, settings, installedApps, onRuleAdded) {
-    const dialog = new Adw.Window({
-        title: _('Add Application Exclusion Rule'),
-        modal: true,
-        transient_for: parentWindow,
-        default_width: 460,
-        default_height: 560,
-    });
-
-    const toolbarView = new Adw.ToolbarView();
-    dialog.set_content(toolbarView);
-
-    const headerBar = new Adw.HeaderBar({
-        show_end_title_buttons: true,
-    });
-    toolbarView.add_top_bar(headerBar);
-
-    const mainBox = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 12,
-        margin_top: 12,
-        margin_bottom: 12,
-        margin_start: 12,
-        margin_end: 12,
-    });
-    toolbarView.set_content(mainBox);
-
-    // 1. Search entry
-    const searchEntry = new Gtk.SearchEntry({
-        placeholder_text: _('Search installed applications…'),
-    });
-    mainBox.append(searchEntry);
-
-    // 2. Application selection list (scrollable)
-    const scrolled = new Gtk.ScrolledWindow({
-        hscrollbar_policy: Gtk.PolicyType.NEVER,
-        vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
-        min_content_height: 200,
-        vexpand: true,
-    });
-    const listBox = new Gtk.ListBox({
-        selection_mode: Gtk.SelectionMode.SINGLE,
-        css_classes: ['boxed-list'],
-    });
-    scrolled.set_child(listBox);
-    mainBox.append(scrolled);
-
-    // Populate application items
-    for (const app of installedApps) {
-        const row = new Adw.ActionRow({
-            title: app.name,
-            subtitle: app.wmClass,
-            activatable: true,
-        });
-        if (app.icon) {
-            const img = new Gtk.Image({
-                gicon: app.icon,
-                pixel_size: 32,
-            });
-            row.add_prefix(img);
-        } else {
-            const img = new Gtk.Image({
-                icon_name: 'application-x-executable-symbolic',
-                pixel_size: 24,
-            });
-            row.add_prefix(img);
+function inspectWindow(callback) {
+    Gio.DBus.session.call(
+        INSPECTOR_DBUS_NAME,
+        INSPECTOR_DBUS_PATH,
+        INSPECTOR_DBUS_NAME,
+        'PickWindow',
+        null,
+        null,
+        Gio.DBusCallFlags.NONE,
+        -1,
+        null,
+        (conn, res) => {
+            try {
+                const reply = conn.call_finish(res);
+                const [props] = reply.deep_unpack();
+                callback(null, props);
+            } catch (e) {
+                callback(e, null);
+            }
         }
-        row._appData = app;
-        listBox.append(row);
-    }
-
-    // Search filter logic
-    listBox.set_filter_func(row => {
-        const query = searchEntry.text.trim().toLowerCase();
-        if (!query)
-            return true;
-        const app = row._appData;
-        if (!app)
-            return true;
-        return (
-            app.name.toLowerCase().includes(query) ||
-            app.wmClass.toLowerCase().includes(query) ||
-            app.id.toLowerCase().includes(query)
-        );
-    });
-    searchEntry.connect('search-changed', () => listBox.invalidate_filter());
-
-    // 3. Form fields
-    const formGroup = new Adw.PreferencesGroup({
-        title: _('Rule Parameters'),
-    });
-    mainBox.append(formGroup);
-
-    const entryRow = new Adw.EntryRow({
-        title: _('Window Identifier (wm_class)'),
-        show_apply_button: false,
-    });
-    formGroup.add(entryRow);
-
-    // Auto-fill wmClass on row selection
-    listBox.connect('row-activated', (_box, row) => {
-        if (row._appData?.wmClass)
-            entryRow.text = row._appData.wmClass;
-    });
-
-    const ruleModes = getRuleModes();
-    const modeList = Gtk.StringList.new(ruleModes.map(m => m.label));
-    const modeRow = new Adw.ComboRow({
-        title: _('Exclusion Behavior'),
-        model: modeList,
-        selected: 0,
-    });
-    formGroup.add(modeRow);
-
-    // 4. Add button
-    const addButton = new Gtk.Button({
-        label: _('Add Rule'),
-        css_classes: ['suggested-action', 'pill'],
-        margin_top: 6,
-    });
-    addButton.connect('clicked', () => {
-        const wmClass = entryRow.text.trim();
-        if (!wmClass)
-            return;
-
-        const selectedIndex = modeRow.selected;
-        const selectedMode = ruleModes[selectedIndex]?.id || RuleMode.DISABLE_ALL;
-
-        const currentRules = getWindowRules(settings);
-        currentRules[wmClass] = selectedMode;
-        setWindowRules(settings, currentRules);
-
-        onRuleAdded();
-        dialog.close();
-    });
-    mainBox.append(addButton);
-
-    dialog.present();
+    );
 }
+
+function showError(parentWindow, heading, body) {
+    if (Adw.AlertDialog) {
+        const dialog = new Adw.AlertDialog({
+            heading,
+            body,
+        });
+        dialog.add_response('ok', _('OK'));
+        dialog.present(parentWindow);
+    } else {
+        const dialog = new Adw.MessageDialog({
+            heading,
+            body,
+            transient_for: parentWindow,
+        });
+        dialog.add_response('ok', _('OK'));
+        dialog.present();
+    }
+}
+
 
 export default class CsdFixerPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
@@ -264,16 +159,16 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
         renderGroup.add(crispRow);
 
         // Group 2: Application exclusion rules
-        const addRuleButton = new Gtk.Button({
-            label: _('Add Rule…'),
-            icon_name: 'list-add-symbolic',
-            css_classes: ['flat'],
+        const inspectButton = new Gtk.Button({
+            label: _('Inspect Window…'),
+            icon_name: 'find-location-symbolic',
+            tooltip_text: _('Click an on-screen window to automatically detect and add exclusion rule'),
         });
 
         const rulesGroup = new Adw.PreferencesGroup({
             title: _('Application Exclusion Rules'),
             description: _('Configure individual exclusions for specific windows (disable all, skip corners, or skip shadow)'),
-            header_suffix: addRuleButton,
+            header_suffix: inspectButton,
         });
         page.add(rulesGroup);
 
@@ -287,6 +182,8 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
 
             const rules = getWindowRules(settings);
             const entries = Object.entries(rules);
+            const ruleModes = getRuleModes();
+            const modeLabels = ruleModes.map(m => m.label);
 
             if (entries.length === 0) {
                 const emptyRow = new Adw.ActionRow({
@@ -299,10 +196,23 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
                 return;
             }
 
-            for (const [wmClass, mode] of entries) {
-                const appInfo = findAppInfoByWmClass(wmClass, installedApps);
-                const title = appInfo ? appInfo.name : wmClass;
-                const subtitle = appInfo ? `${wmClass}` : _('Custom Identifier');
+            for (const [ruleKey, mode] of entries) {
+                const {baseWmClass, specifier} = parseRuleKey(ruleKey);
+                const appInfo = findAppInfoByWmClass(baseWmClass, installedApps);
+
+                let title = appInfo ? appInfo.name : baseWmClass;
+                let subtitle = appInfo ? `${ruleKey}` : _('Custom Identifier');
+
+                if (specifier === 'dialog') {
+                    title = appInfo
+                        ? `${appInfo.name} (${_('Dialogs & Popups')})`
+                        : `${baseWmClass} (${_('Dialogs & Popups')})`;
+                    subtitle = `[${ruleKey}] · ${_('Child dialogs and transient windows')}`;
+                } else if (specifier?.startsWith('title=')) {
+                    const t = specifier.slice(6);
+                    title = `${appInfo ? appInfo.name : baseWmClass} ("${t}")`;
+                    subtitle = `[${ruleKey}] · ${_('Specific window title')}`;
+                }
 
                 const row = new Adw.ActionRow({
                     title,
@@ -317,15 +227,13 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
                     }));
                 } else {
                     row.add_prefix(new Gtk.Image({
-                        icon_name: 'window-new-symbolic',
+                        icon_name: specifier === 'dialog' ? 'window-duplicate-symbolic' : 'window-new-symbolic',
                         pixel_size: 24,
                     }));
                 }
 
                 // Mode dropdown
-                const ruleModes = getRuleModes();
-                const shortLabels = ruleModes.map(m => m.shortLabel);
-                const modeModel = Gtk.StringList.new(shortLabels);
+                const modeModel = Gtk.StringList.new(modeLabels);
                 let initialIndex = ruleModes.findIndex(m => m.id === mode);
                 if (initialIndex < 0)
                     initialIndex = 0;
@@ -338,7 +246,7 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
                 dropDown.connect('notify::selected', () => {
                     const newMode = ruleModes[dropDown.selected]?.id || RuleMode.DISABLE_ALL;
                     const updated = getWindowRules(settings);
-                    updated[wmClass] = newMode;
+                    updated[ruleKey] = newMode;
                     setWindowRules(settings, updated);
                 });
                 row.add_suffix(dropDown);
@@ -352,7 +260,7 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
                 });
                 deleteButton.connect('clicked', () => {
                     const updated = getWindowRules(settings);
-                    delete updated[wmClass];
+                    delete updated[ruleKey];
                     setWindowRules(settings, updated);
                     refreshRulesList();
                 });
@@ -363,8 +271,45 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
             }
         };
 
-        addRuleButton.connect('clicked', () => {
-            showAddRuleDialog(window, settings, installedApps, refreshRulesList);
+        inspectButton.connect('clicked', () => {
+            window.set_visible(false);
+
+            inspectWindow((err, props) => {
+                window.set_visible(true);
+                window.present();
+
+                if (err) {
+                    showError(
+                        window,
+                        _('Window Inspection Failed'),
+                        _('Could not connect to CSD Fixer extension. Please ensure the extension is enabled.')
+                    );
+                    return;
+                }
+
+                if (!props || !props.wmClass)
+                    return;
+
+                const isDialog = props.isDialog === 'true';
+                const ruleKey = isDialog ? `${props.wmClass}:dialog` : props.wmClass;
+
+                const currentRules = getWindowRules(settings);
+                if (currentRules[ruleKey]) {
+                    window.add_toast(new Adw.Toast({
+                        title: _('Rule for "%s" already exists').replace('%s', ruleKey),
+                    }));
+                    return;
+                }
+
+                currentRules[ruleKey] = RuleMode.DISABLE_ALL;
+                setWindowRules(settings, currentRules);
+
+                refreshRulesList();
+
+                window.add_toast(new Adw.Toast({
+                    title: _('Added rule for "%s"').replace('%s', ruleKey),
+                }));
+            });
         });
 
         // Initial render of rule list
