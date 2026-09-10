@@ -53,8 +53,21 @@ describe('shouldDecorate', () => {
         expect(r.reason).toContain('no-csd');
     });
 
-    it('Wayland window with small resize grip (Chromium 4px resize grip) single side < 8px -> detected as lacking CSD, decorate', () => {
+    it('WeChat article / browser window (XWayland, Chromium 4px resize grip) single side < 8px -> Mutter skips native shadow, decorate', () => {
         // Captured real-world data: buf=[1156, 852], frame=[1148, 844], 4px per edge
+        const r = shouldDecorate({
+            ...base,
+            isX11: true,
+            wmClass: null,
+            bufferWidth: 1156, bufferHeight: 852,
+            frameWidth: 1148, frameHeight: 844,
+        });
+        expect(r.apply).toBeTrue();
+        expect(r.reason).toContain('no-csd');
+        expect(r.reason).toContain('4.0x4.0 < 8');
+    });
+
+    it('Wayland window with small resize grip (Chromium 4px resize grip) single side < 8px -> detected as lacking CSD, decorate', () => {
         const r = shouldDecorate({
             ...base,
             isX11: false,
@@ -67,7 +80,7 @@ describe('shouldDecorate', () => {
         expect(r.reason).toContain('4.0x4.0 < 8');
     });
 
-    it('X11 / XWayland windows (WPS Office, Dida) -> Mutter C core manages native shadow, skip', () => {
+    it('X11 / XWayland windows without frame extents (WPS Office, Dida) -> Mutter C core manages native shadow, skip', () => {
         const r = shouldDecorate({
             ...base,
             isX11: true,
@@ -397,7 +410,7 @@ describe('evaluateWindowActions', () => {
         expect(res.reason).toContain('no-csd');
     });
 
-    it('X11 window (WPS, dida): skips both shadow and clip due to native Mutter shadow', () => {
+    it('X11 window without frame extents (WPS, dida): skips both shadow and clip due to native Mutter shadow', () => {
         const res = evaluateWindowActions({
             ...baseWin,
             isX11: true,
@@ -406,6 +419,19 @@ describe('evaluateWindowActions', () => {
         expect(res.applyShadow).toBeFalse();
         expect(res.applyClip).toBeFalse();
         expect(res.reason).toBe('x11-mutter-native-shadow');
+    });
+
+    it('X11 window with small frame extents (WeChat 4px resize grip): decorates with shadow and clip', () => {
+        const res = evaluateWindowActions({
+            ...baseWin,
+            isX11: true,
+            wmClass: 'wechat',
+            bufferWidth: 1156, bufferHeight: 852,
+            frameWidth: 1148, frameHeight: 844,
+        });
+        expect(res.applyShadow).toBeTrue();
+        expect(res.applyClip).toBeTrue();
+        expect(res.reason).toContain('no-csd');
     });
 
     it('disable-all rule: both shadow and clip disabled', () => {

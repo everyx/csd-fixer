@@ -67,22 +67,26 @@ export function shouldDecorate({
     if (hasSsd)
         return {apply: false, reason: 'has-ssd-frame'};
 
-    // 4. X11 / XWayland windows: Mutter C core natively renders box shadows
-    // (meta-window-actor-x11.c:has_shadow). Decorating causes duplicate shadows and breaks offscreen clip geometry.
-    if (isX11)
-        return {apply: false, reason: 'x11-mutter-native-shadow'};
-
-    // 5. Core geometric criteria: matches Mutter shadow threshold
+    // 4. Core geometric criteria: matches Mutter shadow threshold
     // Single-side margin = (physical buffer / scale - logical frame) / 2
     const {w, h} = computeInsets(bufferWidth, bufferHeight,
         frameWidth, frameHeight, scale);
     const sideW = w / 2;
     const sideH = h / 2;
 
-    if (sideW < insetThreshold && sideH < insetThreshold)
-        return {apply: true, reason: `no-csd(insets=${sideW.toFixed(1)}x${sideH.toFixed(1)} < ${insetThreshold})`};
+    if (sideW >= insetThreshold || sideH >= insetThreshold)
+        return {apply: false, reason: `has-csd(insets=${sideW.toFixed(1)}x${sideH.toFixed(1)} >= ${insetThreshold})`};
 
-    return {apply: false, reason: `has-csd(insets=${sideW.toFixed(1)}x${sideH.toFixed(1)} >= ${insetThreshold})`};
+    // 5. X11 / XWayland windows without custom frame extents (insets === 0, e.g. WPS Office, Dida):
+    // Mutter C core natively renders box shadows (meta-window-actor-x11.c:has_shadow).
+    // Decorating causes duplicate shadows and breaks offscreen clip geometry.
+    // Note: X11 windows that DO declare custom frame extents (e.g. WeChat 4px resize grip, sideW > 0)
+    // cause Mutter to disable its native shadow (priv->has_custom_frame_extents == TRUE).
+    // Those windows lack shadows entirely and MUST be decorated.
+    if (isX11 && sideW <= 0 && sideH <= 0)
+        return {apply: false, reason: 'x11-mutter-native-shadow'};
+
+    return {apply: true, reason: `no-csd(insets=${sideW.toFixed(1)}x${sideH.toFixed(1)} < ${insetThreshold})`};
 }
 
 /**
