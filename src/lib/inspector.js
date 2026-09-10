@@ -186,6 +186,7 @@ export class InspectorService {
         const title = win.get_title?.() ?? '';
         const windowType = win.get_window_type?.() ?? Meta.WindowType.NORMAL;
         const hasParent = Boolean(win.get_transient_for?.());
+        const allowsResize = Boolean(win.allows_resize?.());
         const isAttachedDialog = Boolean(win.is_attached_dialog?.());
         const isDialog = isDialogWindow({windowType, hasParent, isAttachedDialog});
 
@@ -194,6 +195,7 @@ export class InspectorService {
             title,
             'isDialog': isDialog ? 'true' : 'false',
             'hasParent': hasParent ? 'true' : 'false',
+            'allowsResize': allowsResize ? 'true' : 'false',
             'windowType': String(windowType),
         };
 

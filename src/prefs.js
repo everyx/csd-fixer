@@ -6,6 +6,7 @@ import Gtk from 'gi://Gtk';
 import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 import {
     ExclusionTarget,
+    buildRuleKey,
     parseRuleKey,
     sanitizeWindowRules,
     INSPECTOR_DBUS_NAME,
@@ -199,22 +200,12 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
             }
 
             for (const [ruleKey, mode] of entries) {
-                const {baseWmClass, specifier} = parseRuleKey(ruleKey);
+                const {baseWmClass} = parseRuleKey(ruleKey);
                 const appInfo = findAppInfoByWmClass(baseWmClass, installedApps);
 
-                let title = appInfo ? appInfo.name : baseWmClass;
-                let subtitle = appInfo ? `${ruleKey}` : _('Custom Identifier');
-
-                if (specifier === 'dialog') {
-                    title = appInfo
-                        ? `${appInfo.name} (${_('Dialogs & Popups')})`
-                        : `${baseWmClass} (${_('Dialogs & Popups')})`;
-                    subtitle = `[${ruleKey}] · ${_('Child dialogs and transient windows')}`;
-                } else if (specifier?.startsWith('title=')) {
-                    const t = specifier.slice(6);
-                    title = `${appInfo ? appInfo.name : baseWmClass} ("${t}")`;
-                    subtitle = `[${ruleKey}] · ${_('Specific window title')}`;
-                }
+                const appName = appInfo?.name;
+                const title = appName || baseWmClass;
+                const subtitle = ruleKey;
 
                 const row = new Adw.ActionRow({
                     title,
@@ -228,8 +219,9 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
                         pixel_size: 32,
                     }));
                 } else {
+                    const isSubWindow = ruleKey.includes(':');
                     row.add_prefix(new Gtk.Image({
-                        icon_name: specifier === 'dialog' ? 'window-duplicate-symbolic' : 'window-new-symbolic',
+                        icon_name: isSubWindow ? 'window-duplicate-symbolic' : 'window-new-symbolic',
                         pixel_size: 24,
                     }));
                 }
@@ -292,8 +284,9 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
                 if (!props || !props.wmClass)
                     return;
 
-                const isDialog = props.isDialog === 'true';
-                const ruleKey = isDialog ? `${props.wmClass}:dialog` : props.wmClass;
+                const hasParent = props.hasParent === 'true';
+                const allowsResize = props.allowsResize !== 'false';
+                const ruleKey = buildRuleKey(props.wmClass, {hasParent, allowsResize});
 
                 const currentRules = getWindowRules(settings);
                 if (currentRules[ruleKey]) {

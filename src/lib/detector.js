@@ -243,7 +243,28 @@ export function isDialogWindow({
            isAttachedDialog;
 }
 
-export const VALID_RULE_KEY_PATTERN = /^[^\s:]+(?::(?:dialog|title=.+))?$/;
+export const VALID_RULE_KEY_PATTERN = /^[^\s:]+(?::(?:dialog|title=.+|[a-z_]+=[^,\s:]+(?:,[a-z_]+=[^,\s:]+)*))?$/;
+
+/**
+ * Builds a deterministic canonical rule key from window properties.
+ * If window has no parent, returns the base wmClass.
+ * If window has parent, returns `${wmClass}:has_parent=true,allows_resize=${allowsResize}`.
+ *
+ * @param {string} wmClass - Base window class
+ * @param {object} [props={}]
+ * @param {boolean} [props.hasParent=false]
+ * @param {boolean} [props.allowsResize=true]
+ * @returns {string} Canonical rule key
+ */
+export function buildRuleKey(wmClass, {hasParent = false, allowsResize = true} = {}) {
+    if (!wmClass)
+        return '';
+
+    if (!hasParent)
+        return wmClass;
+
+    return `${wmClass}:has_parent=true,allows_resize=${Boolean(allowsResize)}`;
+}
 
 /**
  * Validates and sanitizes a window rules dictionary from settings.
@@ -289,19 +310,45 @@ export function sanitizeWindowRules(rawRules = {}) {
 }
 
 /**
- * Splits a rule key into base application wmClass and optional specifier.
- * E.g. "wechat:dialog" -> { baseWmClass: "wechat", specifier: "dialog" }
- *      "wechat" -> { baseWmClass: "wechat", specifier: null }
+ * Splits a rule key into base application wmClass, optional specifier, and parsed properties.
+ * E.g. "wechat:has_parent=true,allows_resize=false" -> { baseWmClass: "wechat", specifier: "...", properties: { has_parent: true, allows_resize: false } }
+ *      "wechat:dialog" -> { baseWmClass: "wechat", specifier: "dialog", properties: null }
+ *      "wechat" -> { baseWmClass: "wechat", specifier: null, properties: null }
  */
 export function parseRuleKey(key) {
-    if (!key)
-        return {baseWmClass: '', specifier: null};
+    if (!key || typeof key !== 'string')
+        return {baseWmClass: '', specifier: null, properties: null};
+
     const colonIdx = key.indexOf(':');
     if (colonIdx === -1)
-        return {baseWmClass: key, specifier: null};
+        return {baseWmClass: key, specifier: null, properties: null};
+
+    const baseWmClass = key.slice(0, colonIdx);
+    const specifier = key.slice(colonIdx + 1);
+
+    let properties = null;
+    if (specifier !== 'dialog' && !specifier.startsWith('title=')) {
+        properties = {};
+        const pairs = specifier.split(',');
+        for (const pair of pairs) {
+            const eqIdx = pair.indexOf('=');
+            if (eqIdx !== -1) {
+                const pKey = pair.slice(0, eqIdx);
+                const pVal = pair.slice(eqIdx + 1);
+                let parsedVal = pVal;
+                if (pVal === 'true')
+                    parsedVal = true;
+                else if (pVal === 'false')
+                    parsedVal = false;
+                properties[pKey] = parsedVal;
+            }
+        }
+    }
+
     return {
-        baseWmClass: key.slice(0, colonIdx),
-        specifier: key.slice(colonIdx + 1),
+        baseWmClass,
+        specifier,
+        properties,
     };
 }
 
@@ -310,17 +357,20 @@ export function parseRuleKey(key) {
  * Benchmarked against KWin's multi-criteria matching hierarchy (src/rules.cpp).
  *
  * Specificity precedence (most specific to least specific):
- * 1. Exact title rule: `${wmClass}:title=${title}`
- * 2. Window type rule: `${wmClass}:dialog` (if window is a dialog or transient child)
- * 3. Base application rule: `${wmClass}`
+ * 1. Native property rule: `${wmClass}:has_parent=true,allows_resize=${allowsResize}`
+ * 2. Exact title rule: `${wmClass}:title=${title}`
+ * 3. Legacy dialog rule: `${wmClass}:dialog` (if window has parent or is dialog)
+ * 4. Base application rule: `${wmClass}`
  *
  * Bidirectional case-insensitive matching:
  * Matches if either candidate or stored rule key differs only in casing
- * (e.g. wmClass 'WeChat' matches rule 'wechat', and wmClass 'wechat' matches rule 'WeChat:dialog').
+ * (e.g. wmClass 'WeChat' matches rule 'wechat', and wmClass 'wechat' matches rule 'WeChat:has_parent=true,allows_resize=false').
  *
  * @param {string} wmClass - Window WM_CLASS identifier
  * @param {Record<string, string>} [windowRules={}] - Active rules dictionary
  * @param {object} [options={}]
+ * @param {boolean} [options.hasParent=false] - Whether window has parent (transient)
+ * @param {boolean} [options.allowsResize=true] - Whether window allows resizing
  * @param {boolean} [options.isDialog=false] - Whether window acts as dialog/transient
  * @param {string|null} [options.title=null] - Window title
  * @returns {string|null} ExclusionTarget mode or null if no rule matched
@@ -329,13 +379,28 @@ export function resolveRule(wmClass, windowRules = {}, options = {}) {
     if (!wmClass)
         return null;
 
-    const {isDialog = false, title = null} = options;
+    const {
+        hasParent = false,
+        allowsResize = true,
+        isDialog = false,
+        title = null,
+    } = options;
 
     const candidates = [];
+
+    // 1. Native property-based exact match for child windows
+    if (hasParent)
+        candidates.push(`${wmClass}:has_parent=true,allows_resize=${Boolean(allowsResize)}`);
+
+    // 2. Exact title rule (legacy / escape-hatch support)
     if (title && typeof title === 'string' && title.trim().length > 0)
         candidates.push(`${wmClass}:title=${title.trim()}`);
-    if (isDialog)
+
+    // 3. Dialog rule (backward compatibility with legacy :dialog rules)
+    if (isDialog || hasParent)
         candidates.push(`${wmClass}:dialog`);
+
+    // 4. Base application rule (fallback)
     candidates.push(wmClass);
 
     for (const cand of candidates) {
@@ -393,6 +458,7 @@ export function evaluateWindowActions({
     windowType = WindowType.NORMAL,
     isDialog = false,
     hasParent = false,
+    allowsResize = true,
     hasTileMatch = false,
     title = null,
     wmClass,
@@ -424,12 +490,17 @@ export function evaluateWindowActions({
         };
     }
 
-    // 2. Rule evaluation (composite fingerprint matching)
+    // 2. Rule evaluation (native properties & composite fingerprint matching)
     const isWinDialog = isDialogWindow({
         windowType,
         hasParent: Boolean(isDialog || hasParent),
     });
-    const rule = resolveRule(wmClass, windowRules, {isDialog: isWinDialog, title});
+    const rule = resolveRule(wmClass, windowRules, {
+        hasParent: Boolean(hasParent || isDialog),
+        allowsResize,
+        isDialog: isWinDialog,
+        title,
+    });
     const canonicalRule = normalizeRuleMode(rule);
 
     if (canonicalRule === ExclusionTarget.ALL) {

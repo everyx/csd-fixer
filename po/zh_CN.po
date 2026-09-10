@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: csd-fixer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-09 23:18+0800\n"
+"POT-Creation-Date: 2026-09-10 16:32+0800\n"
 "PO-Revision-Date: 2026-09-08 22:50+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Simplified) <i18n-zh@googlegroups.com>\n"
@@ -16,113 +16,124 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: src/prefs.js:17
+#: src/prefs.js:18
 msgid "Disable all"
 msgstr "全部排除"
 
-#: src/prefs.js:18
+#: src/prefs.js:19
 msgid "Disable corners"
 msgstr "排除圆角"
 
-#: src/prefs.js:19
+#: src/prefs.js:20
 msgid "Disable shadow"
 msgstr "排除阴影"
 
-#: src/prefs.js:124 src/prefs.js:132
+#: src/prefs.js:125 src/prefs.js:133
 msgid "OK"
 msgstr "确定"
 
-#: src/prefs.js:144
+#: src/prefs.js:145
 msgid "General"
 msgstr "常规"
 
-#: src/prefs.js:151
+#: src/prefs.js:152
 msgid "Display & Rendering"
 msgstr "显示与渲染"
 
-#: src/prefs.js:152
+#: src/prefs.js:153
 msgid "Control window decoration behavior across screen scales"
 msgstr "控制窗口装饰在不同屏幕缩放下的渲染行为"
 
-#: src/prefs.js:157
+#: src/prefs.js:158
 msgid "Prioritize Crisp Text"
 msgstr "优先保证文字清晰"
 
-#: src/prefs.js:158
+#: src/prefs.js:159
 msgid ""
 "Skip rounded corners on fractional scale monitors (retaining shadow) to "
 "avoid text blur and resampling overhead"
 msgstr ""
 "在分数缩放屏幕上免除圆角（保留阴影），消除重采样带来的字体模糊与性能损耗"
 
-#: src/prefs.js:165
+#: src/prefs.js:166
 msgid "Inspect Window…"
 msgstr "拾取窗口…"
 
-#: src/prefs.js:167
+#: src/prefs.js:168
 msgid ""
 "Click an on-screen window to automatically detect and add exclusion rule"
 msgstr "点击屏幕上的窗口以自动识别并添加排除规则"
 
-#: src/prefs.js:171
+#: src/prefs.js:172
 msgid "Application Exclusion Rules"
 msgstr "应用排除规则"
 
-#: src/prefs.js:172
+#: src/prefs.js:173
 msgid ""
 "Configure individual exclusions for specific windows (disable all, skip "
 "corners, or skip shadow)"
 msgstr "为特定窗口单独配置禁用项（禁用全部、禁用圆角或禁用阴影）"
 
-#: src/prefs.js:192
+#: src/prefs.js:193
 msgid "No Special Rules"
 msgstr "暂无特殊规则"
 
-#: src/prefs.js:193
+#: src/prefs.js:194
 msgid ""
 "All normal windows without server-side decorations will have native shadow "
 "and rounded corners applied by default"
 msgstr "所有未包含服务端边框的普通窗口将默认添加原生阴影与圆角剪裁"
 
-#: src/prefs.js:206
-msgid "Custom Identifier"
-msgstr "自定义识别码"
-
-#: src/prefs.js:210 src/prefs.js:211
-msgid "Dialogs & Popups"
-msgstr "弹窗与对话框"
-
-#: src/prefs.js:212
-msgid "Child dialogs and transient windows"
-msgstr "子对话框与附属瞬态窗口"
-
-#: src/prefs.js:216
-msgid "Specific window title"
-msgstr "特定窗口标题"
-
-#: src/prefs.js:261
+#: src/prefs.js:253
 msgid "Remove Rule"
 msgstr "删除规则"
 
-#: src/prefs.js:286
+#: src/prefs.js:278
 msgid "Window Inspection Failed"
 msgstr "窗口拾取失败"
 
-#: src/prefs.js:287
+#: src/prefs.js:279
 msgid ""
 "Could not connect to CSD Fixer extension. Please ensure the extension is "
 "enabled."
 msgstr "无法连接到 CSD Fixer 扩展，请确认该扩展已在 GNOME 扩展中启用。"
 
-#: src/prefs.js:301
+#: src/prefs.js:294
 #, javascript-format
 msgid "Rule for \"%s\" already exists"
 msgstr "“%s”的规则已存在"
 
-#: src/prefs.js:312
+#: src/prefs.js:305
 #, javascript-format
 msgid "Added rule for \"%s\""
 msgstr "已为“%s”添加排除规则"
+
+#~ msgid "Custom Identifier"
+#~ msgstr "自定义识别码"
+
+#~ msgid "Fixed Dialogs"
+#~ msgstr "固定弹窗"
+
+#~ msgid "Non-resizable dialogs and popups"
+#~ msgstr "不可调整大小的对话框与弹窗"
+
+#~ msgid "Child Windows"
+#~ msgstr "独立子窗口"
+
+#~ msgid "Resizable child windows and views"
+#~ msgstr "可调整大小的子窗口与视图"
+
+#~ msgid "Dialogs & Popups"
+#~ msgstr "弹窗与对话框"
+
+#~ msgid "Child dialogs and transient windows"
+#~ msgstr "子对话框与附属瞬态窗口"
+
+#~ msgid "Specific window title"
+#~ msgstr "特定窗口标题"
+
+#~ msgid "Main Application Window"
+#~ msgstr "应用程序主窗口"
 
 #~ msgid "Disable all (no shadow, no rounded corners)"
 #~ msgstr "全部排除（无阴影、无圆角）"

@@ -291,6 +291,7 @@ export class Manager {
         const geometryScale = actor.get_geometry_scale?.() ?? 1;
         const monitorScale = this._getMonitorScale(win);
         const hasParent = Boolean(win.get_transient_for?.());
+        const allowsResize = Boolean(win.allows_resize?.());
         const isAttachedDialog = Boolean(win.is_attached_dialog?.());
         const windowType = win.get_window_type();
         const isDialog = isDialogWindow({windowType, hasParent, isAttachedDialog});
@@ -313,6 +314,7 @@ export class Manager {
             windowType,
             isDialog,
             hasParent,
+            allowsResize,
             hasTileMatch,
             title,
             wmClass,

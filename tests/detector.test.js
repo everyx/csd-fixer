@@ -8,7 +8,7 @@ import {
     shouldClipWindow, ExclusionTarget, normalizeRuleMode,
     isWindowMaximized, isWindowTiled,
     resolveRule, evaluateWindowActions,
-    parseRuleKey, isDialogWindow, sanitizeWindowRules,
+    parseRuleKey, buildRuleKey, isDialogWindow, sanitizeWindowRules,
 } from '../src/lib/detector.js';
 
 describe('computeInsets', () => {
@@ -235,31 +235,100 @@ describe('resolveRule', () => {
         expect(resolveRule('steam', uppercaseRules, {isDialog: true})).toBe(ExclusionTarget.ALL);
         expect(resolveRule('discord', uppercaseRules, {title: 'Voice Channel'})).toBe(ExclusionTarget.SHADOW);
     });
+
+    it('native property rules: fixed dialog matches specifically without affecting resizable child window', () => {
+        const rules = {
+            'com.tencent.wechat': ExclusionTarget.CLIP,
+            'com.tencent.wechat:has_parent=true,allows_resize=false': ExclusionTarget.ALL,
+        };
+
+        // Main window (no parent) -> matches base rule (CLIP)
+        expect(resolveRule('com.tencent.wechat', rules, {hasParent: false, allowsResize: true})).toBe(ExclusionTarget.CLIP);
+
+        // Fixed exit dialog (hasParent=true, allowsResize=false) -> matches specific rule (ALL)
+        expect(resolveRule('com.tencent.wechat', rules, {hasParent: true, allowsResize: false})).toBe(ExclusionTarget.ALL);
+
+        // Article browser (hasParent=true, allowsResize=true) -> does NOT match exit dialog rule, falls back to base rule (CLIP)
+        expect(resolveRule('com.tencent.wechat', rules, {hasParent: true, allowsResize: true})).toBe(ExclusionTarget.CLIP);
+
+        // When specific article browser rule is added, it matches specifically
+        const rulesWithArticle = {
+            ...rules,
+            'com.tencent.wechat:has_parent=true,allows_resize=true': ExclusionTarget.SHADOW,
+        };
+        expect(resolveRule('com.tencent.wechat', rulesWithArticle, {hasParent: true, allowsResize: true})).toBe(ExclusionTarget.SHADOW);
+    });
+});
+
+describe('buildRuleKey', () => {
+    it('main window without parent returns plain wmClass', () => {
+        expect(buildRuleKey('wechat')).toBe('wechat');
+        expect(buildRuleKey('wechat', {hasParent: false, allowsResize: true})).toBe('wechat');
+        expect(buildRuleKey('wechat', {hasParent: false, allowsResize: false})).toBe('wechat');
+    });
+
+    it('fixed child window returns has_parent=true,allows_resize=false', () => {
+        expect(buildRuleKey('wechat', {hasParent: true, allowsResize: false})).toBe('wechat:has_parent=true,allows_resize=false');
+    });
+
+    it('resizable child window returns has_parent=true,allows_resize=true', () => {
+        expect(buildRuleKey('wechat', {hasParent: true, allowsResize: true})).toBe('wechat:has_parent=true,allows_resize=true');
+    });
+
+    it('empty wmClass returns empty string', () => {
+        expect(buildRuleKey('')).toBe('');
+        expect(buildRuleKey(null)).toBe('');
+    });
 });
 
 describe('parseRuleKey', () => {
     it('plain wmClass without specifier', () => {
-        expect(parseRuleKey('wechat')).toEqual({baseWmClass: 'wechat', specifier: null});
-        expect(parseRuleKey('steam')).toEqual({baseWmClass: 'steam', specifier: null});
+        expect(parseRuleKey('wechat')).toEqual({baseWmClass: 'wechat', specifier: null, properties: null});
+        expect(parseRuleKey('steam')).toEqual({baseWmClass: 'steam', specifier: null, properties: null});
+    });
+
+    it('native property specifier', () => {
+        expect(parseRuleKey('wechat:has_parent=true,allows_resize=false')).toEqual({
+            baseWmClass: 'wechat',
+            specifier: 'has_parent=true,allows_resize=false',
+            properties: {
+                has_parent: true,
+                allows_resize: false,
+            },
+        });
+        expect(parseRuleKey('wechat:has_parent=true,allows_resize=true')).toEqual({
+            baseWmClass: 'wechat',
+            specifier: 'has_parent=true,allows_resize=true',
+            properties: {
+                has_parent: true,
+                allows_resize: true,
+            },
+        });
     });
 
     it('dialog specifier', () => {
-        expect(parseRuleKey('wechat:dialog')).toEqual({baseWmClass: 'wechat', specifier: 'dialog'});
+        expect(parseRuleKey('wechat:dialog')).toEqual({baseWmClass: 'wechat', specifier: 'dialog', properties: null});
     });
 
     it('title specifier', () => {
-        expect(parseRuleKey('wechat:title=Exit')).toEqual({baseWmClass: 'wechat', specifier: 'title=Exit'});
+        expect(parseRuleKey('wechat:title=Exit')).toEqual({baseWmClass: 'wechat', specifier: 'title=Exit', properties: null});
     });
 
     it('empty or null', () => {
-        expect(parseRuleKey('')).toEqual({baseWmClass: '', specifier: null});
-        expect(parseRuleKey(null)).toEqual({baseWmClass: '', specifier: null});
+        expect(parseRuleKey('')).toEqual({baseWmClass: '', specifier: null, properties: null});
+        expect(parseRuleKey(null)).toEqual({baseWmClass: '', specifier: null, properties: null});
     });
 });
 
 describe('rule key contract & round-trip', () => {
     it('round-trip: parseRuleKey with composite keys', () => {
-        const keys = ['wechat', 'wechat:dialog', 'wechat:title=Exit'];
+        const keys = [
+            'wechat',
+            'wechat:has_parent=true,allows_resize=false',
+            'wechat:has_parent=true,allows_resize=true',
+            'wechat:dialog',
+            'wechat:title=Exit',
+        ];
         for (const key of keys) {
             const parsed = parseRuleKey(key);
             const reconstructed = parsed.specifier
@@ -271,10 +340,10 @@ describe('rule key contract & round-trip', () => {
 
     it('prefs rule keys match resolveRule candidate structure', () => {
         const prefsGeneratedRules = {
-            'code:dialog': ExclusionTarget.ALL,
+            [buildRuleKey('code', {hasParent: true, allowsResize: false})]: ExclusionTarget.ALL,
             'code:title=Preferences': ExclusionTarget.CLIP,
         };
-        expect(resolveRule('code', prefsGeneratedRules, {isDialog: true})).toBe(ExclusionTarget.ALL);
+        expect(resolveRule('code', prefsGeneratedRules, {hasParent: true, allowsResize: false})).toBe(ExclusionTarget.ALL);
         expect(resolveRule('code', prefsGeneratedRules, {title: 'Preferences'})).toBe(ExclusionTarget.CLIP);
     });
 });
@@ -283,6 +352,8 @@ describe('sanitizeWindowRules', () => {
     it('passes valid rule keys unchanged', () => {
         const input = {
             'wechat': ExclusionTarget.CLIP,
+            'wechat:has_parent=true,allows_resize=false': ExclusionTarget.ALL,
+            'wechat:has_parent=true,allows_resize=true': ExclusionTarget.SHADOW,
             'steam:dialog': ExclusionTarget.ALL,
             'discord:title=Voice Channel': ExclusionTarget.SHADOW,
         };
@@ -570,6 +641,46 @@ describe('evaluateWindowActions', () => {
         });
         expect(transientWin.applyShadow).toBeFalse();
         expect(transientWin.applyClip).toBeFalse();
+    });
+
+    it('WeChat real-world isolation: fixed exit dialog excluded without affecting resizable article browser or main window', () => {
+        const rules = {
+            'com.tencent.wechat:has_parent=true,allows_resize=false': ExclusionTarget.ALL,
+        };
+
+        // 1. WeChat main window (NORMAL, no parent, resizable) -> decorated normally
+        const mainWin = evaluateWindowActions({
+            ...baseWin,
+            wmClass: 'com.tencent.wechat',
+            hasParent: false,
+            allowsResize: true,
+            windowRules: rules,
+        });
+        expect(mainWin.applyShadow).toBeTrue();
+        expect(mainWin.applyClip).toBeTrue();
+
+        // 2. WeChat exit dialog (transient, non-resizable) -> excluded by rule
+        const exitDialog = evaluateWindowActions({
+            ...baseWin,
+            wmClass: 'com.tencent.wechat',
+            hasParent: true,
+            allowsResize: false,
+            windowRules: rules,
+        });
+        expect(exitDialog.applyShadow).toBeFalse();
+        expect(exitDialog.applyClip).toBeFalse();
+        expect(exitDialog.reason).toContain('disabled-by-rule(com.tencent.wechat:all)');
+
+        // 3. WeChat article browser (transient, resizable) -> NOT affected by exit dialog rule!
+        const articleBrowser = evaluateWindowActions({
+            ...baseWin,
+            wmClass: 'com.tencent.wechat',
+            hasParent: true,
+            allowsResize: true,
+            windowRules: rules,
+        });
+        expect(articleBrowser.applyShadow).toBeTrue();
+        expect(articleBrowser.applyClip).toBeTrue();
     });
 
     it('GNOME tiling alignment: hasTileMatch suppresses shadow to prevent adjacent window obstruction', () => {

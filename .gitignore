@@ -14,3 +14,4 @@ gschemas.compiled
 src/locale/
 dist/
 *.zip
+*.tgz
