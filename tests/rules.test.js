@@ -97,7 +97,7 @@ describe('resolveRule', () => {
         expect(resolveRule('wechat', rules, {windowType: WindowType.DIALOG, hasParent: true, allowsResize: false})).toBeNull();
     });
 
-    it('case-insensitive wmClass match in both directions', () => {
+    it('matches an identity whatever case the window spells it in', () => {
         const upperRule = buildRuleKey('WeChat', {hasParent: true, allowsResize: false});
         expect(resolved(resolveRule('wechat', {suppress: {[upperRule]: 'shadow,corners'}}, {hasParent: true, allowsResize: false})))
             .toEqual({direction: RuleDirection.SUPPRESS, axes: ['corners', 'shadow']});
@@ -215,9 +215,9 @@ describe('rule key contract & round-trip', () => {
         expect(parseRuleKey(spacedKey).baseWmClass).toBe('my app');
     });
 
-    it('leaves ordinary identities byte-for-byte', () => {
+    it('lowercases an identity but changes nothing else about it', () => {
         expect(buildRuleKey('wechat').startsWith('wechat:')).toBeTrue();
-        expect(buildRuleKey('org.gnome.Nautilus').startsWith('org.gnome.Nautilus:')).toBeTrue();
+        expect(buildRuleKey('org.gnome.Nautilus').startsWith('org.gnome.nautilus:')).toBeTrue();
     });
 
     it('prefs-generated keys match resolveRule for the picked kind only', () => {
@@ -288,15 +288,28 @@ describe('sanitizeWindowRules', () => {
         });
     });
 
+    it('canonicalises the identity to lowercase when storing it', () => {
+        const canonical = buildRuleKey('wechat');
+        const asSpelled = `WeChat:${canonical.slice(canonical.indexOf(':') + 1)}`;
+
+        expect(buildRuleKey('WeChat')).toBe(canonical);
+        expect(sanitizeWindowRules({suppress: {[asSpelled]: 'corners'}})).toEqual({
+            suppress: {[canonical]: 'corners'},
+            force: {},
+        });
+    });
+
     it('rejects case-colliding duplicate keys deterministically', () => {
+        const canonical = buildRuleKey('wechat');
+        const asSpelled = `WeChat:${canonical.slice(canonical.indexOf(':') + 1)}`;
         const input = {
             suppress: {
-                [buildRuleKey('wechat')]: 'corners',
-                [buildRuleKey('WeChat')]: 'shadow,corners',
+                [asSpelled]: 'corners',
+                [canonical]: 'shadow,corners',
             },
         };
         expect(sanitizeWindowRules(input)).toEqual({
-            suppress: {[buildRuleKey('wechat')]: 'corners'},
+            suppress: {[canonical]: 'corners'},
             force: {},
         });
     });
@@ -320,13 +333,15 @@ describe('sanitizeWindowRules', () => {
         });
     });
 
-    it('mutual exclusion is case-insensitive across groups', () => {
+    it('mutual exclusion holds across spellings of one identity', () => {
+        const canonical = buildRuleKey('wechat');
+        const asSpelled = `WeChat:${canonical.slice(canonical.indexOf(':') + 1)}`;
         const input = {
-            suppress: {[buildRuleKey('wechat')]: 'shadow'},
-            force: {[buildRuleKey('WeChat')]: 'corners'},
+            suppress: {[canonical]: 'shadow'},
+            force: {[asSpelled]: 'corners'},
         };
         expect(sanitizeWindowRules(input)).toEqual({
-            suppress: {[buildRuleKey('wechat')]: 'shadow'},
+            suppress: {[canonical]: 'shadow'},
             force: {},
         });
     });

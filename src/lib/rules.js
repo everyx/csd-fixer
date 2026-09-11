@@ -67,6 +67,25 @@ function decodeIdentity(token) {
         return token;
     }
 }
+/**
+ * Encodes an identity for key storage: lowercased, then percent-encoded. The rest of
+ * a key is already canonical (lowercase tokens, numbers, true/false), so case is not
+ * part of a key's identity - one application may report "WeChat" from one window and
+ * "wechat" from the next, and those are the same kind.
+ */
+function encodeIdentity(identity) {
+    return encodeURIComponent(identity.toLowerCase());
+}
+/**
+ * Canonical spelling of a key, so a lookup is an exact one. Keys written before the
+ * identity was lowercased are canonicalised here, as they are read.
+ */
+function normalizeRuleKey(key) {
+    const colonIdx = key.indexOf(':');
+    if (colonIdx < 0)
+        return key;
+    return `${encodeIdentity(decodeIdentity(key.slice(0, colonIdx)))}:${key.slice(colonIdx + 1)}`;
+}
 /** Shell wraps windows it cannot attribute to an app in a per-window app object. */
 const WINDOW_BACKED_APP_ID_PATTERN = /^window:\d+$/;
 /**
@@ -155,12 +174,13 @@ export function buildRuleKey(wmClass, {
 
     // ':' and whitespace are delimiters in the key grammar, so the identity is
     // encoded rather than assumed key-safe; parseRuleKey() decodes it back.
-    return `${encodeURIComponent(wmClass)}:${specifier}`;
+    return `${encodeIdentity(wmClass)}:${specifier}`;
 }
 /**
  * Validates and sanitizes both rule groups read from settings: malformed keys and
- * values are dropped, case-colliding duplicates collapse, and a kind found in both
- * groups keeps its suppression (docs/rule-model.md).
+ * values are dropped, identities are lowercased so two spellings of one application
+ * collapse onto one kind, and a kind found in both groups keeps its suppression
+ * (docs/rule-model.md).
  *
  * @param {{suppress?: Record<string, string>, force?: Record<string, string>}} [raw={}]
  * @returns {{suppress: Record<string, string>, force: Record<string, string>}}
@@ -186,7 +206,7 @@ function sanitizeRuleGroup(rawRules, direction) {
         return {};
 
     const clean = {};
-    const seenLowerKeys = new Map();
+    const seenKeys = new Map();
 
     for (const [key, value] of Object.entries(rawRules)) {
         if (!VALID_RULE_KEY_PATTERN.test(key)) {
@@ -200,31 +220,26 @@ function sanitizeRuleGroup(rawRules, direction) {
             continue;
         }
 
-        const lowerKey = key.toLowerCase();
-        if (seenLowerKeys.has(lowerKey)) {
-            const existingKey = seenLowerKeys.get(lowerKey);
+        const canonicalKey = normalizeRuleKey(key);
+        if (seenKeys.has(canonicalKey)) {
+            const existingKey = seenKeys.get(canonicalKey);
             console.warn(`[csd-fixer] Dropping case-colliding ${direction} rule key "${key}" (conflicts with "${existingKey}")`);
             continue;
         }
 
-        seenLowerKeys.set(lowerKey, key);
-        clean[key] = buildRuleValue(axes);
+        seenKeys.set(canonicalKey, key);
+        clean[canonicalKey] = buildRuleValue(axes);
     }
 
     return clean;
 }
 /**
- * Finds the key a rule group actually stores for `key`, ignoring case: the same
- * application can report its identity with different casing from one window to
- * the next, and the settings layer already collapses those onto one kind.
- * Returns null when the group holds no rule for it.
+ * Finds the key a rule group stores for `key`. Groups are stored canonicalised, so
+ * one application always lands on one key and this is an exact lookup. Returns null
+ * when the group holds no rule for it.
  */
 export function lookupRuleKey(group, key) {
-    if (Object.prototype.hasOwnProperty.call(group, key))
-        return key;
-
-    const lowerKey = key.toLowerCase();
-    return Object.keys(group).find(storedKey => storedKey.toLowerCase() === lowerKey) ?? null;
+    return Object.prototype.hasOwnProperty.call(group, key) ? key : null;
 }
 /**
  * Returns the rules with `key` moved into `direction`, naming `axes`. A kind lives in

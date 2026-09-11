@@ -61,9 +61,10 @@ A rule is only as stable as the identity in its key. Resolution order:
 4. `pid-<pid>` as a last resort. It is session-scoped, so a rule keyed on it stops
    matching after a restart.
 
-Identity matches case-insensitively in both directions, because one application can
-report its identity with different casing from one window to the next; the fingerprint
-has to match exactly.
+The identity is stored lowercased, so case is not part of what a key identifies: one
+application can report itself as `WeChat` from one window and `wechat` from the next,
+and those are one kind. Keys written before that was true are lowercased as they are
+read, and the fingerprint has to match exactly.
 
 The picker and the runtime must resolve identity through the same path
 (`window.js` + `chooseWindowIdentity`), otherwise a rule created for a picked window
