@@ -58,6 +58,9 @@ export class Manager {
         // Focus change (active <-> backdrop shadow depth transition)
         this._connect(this._signals, global.display, 'notify::focus-window', () => this._reconcileDebounced());
 
+        // Accessibility style (high contrast swaps the shadow set and deepens the outline)
+        this._connect(this._signals, St.Settings.get(), 'notify::high-contrast', () => this._reconcile());
+
         // Monitor changes (scale changes, plugging/unplugging displays, etc.)
         const monitorManager = global.backend?.get_monitor_manager?.();
         if (monitorManager)
