@@ -784,50 +784,22 @@ describe('evaluateWindowActions', () => {
 });
 
 describe('isWindowMaximized', () => {
-    it('uses win.is_maximized() when method is present', () => {
+    it('uses win.is_maximized() canonical method', () => {
         const winTrue = {
             is_maximized: () => true,
-            maximized_horizontally: false,
-            maximized_vertically: false,
         };
         expect(isWindowMaximized(winTrue)).toBeTrue();
 
         const winFalse = {
             is_maximized: () => false,
-            maximized_horizontally: true,
-            maximized_vertically: true,
         };
         expect(isWindowMaximized(winFalse)).toBeFalse();
-    });
-
-    it('falls back to maximized_horizontally && maximized_vertically when is_maximized is absent', () => {
-        expect(isWindowMaximized({
-            maximized_horizontally: true,
-            maximized_vertically: true,
-        })).toBeTrue();
-
-        expect(isWindowMaximized({
-            maximized_horizontally: true,
-            maximized_vertically: false,
-        })).toBeFalse();
-
-        expect(isWindowMaximized({
-            maximized_horizontally: false,
-            maximized_vertically: true,
-        })).toBeFalse();
-    });
-
-    it('handles GObject property getters returning booleans on instances', () => {
-        const mockGObjectWin = {
-            get maximized_horizontally() { return true; },
-            get maximized_vertically() { return true; },
-        };
-        expect(isWindowMaximized(mockGObjectWin)).toBeTrue();
     });
 
     it('handles null/undefined gracefully', () => {
         expect(isWindowMaximized(null)).toBeFalse();
         expect(isWindowMaximized(undefined)).toBeFalse();
+        expect(isWindowMaximized({})).toBeFalse();
     });
 });
 

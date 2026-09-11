@@ -154,18 +154,13 @@ export function normalizeRuleMode(mode) {
 }
 
 /**
- * Checks whether a window is maximized (horizontally and vertically).
- * Supports both Mutter method API (win.is_maximized()) and property fallback.
+ * Checks whether a window is maximized.
  *
  * @param {object} win - Meta.Window instance
  * @returns {boolean}
  */
 export function isWindowMaximized(win) {
-    if (!win)
-        return false;
-    if (typeof win.is_maximized === 'function')
-        return Boolean(win.is_maximized());
-    return Boolean(win.maximized_horizontally && win.maximized_vertically);
+    return Boolean(win?.is_maximized?.());
 }
 
 /**
