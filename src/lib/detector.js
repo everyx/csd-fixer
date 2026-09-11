@@ -13,35 +13,18 @@ import {
 import {buildRuleKeyFromProperties} from './pick.js';
 
 /**
- * Window decoration detection and the window-rule model.
- *
- * Decoration is decided per axis (shadow, corners), in four layers:
- * 1. Structural eligibility - window type, maximized/fullscreen, server-side
- *    decorations: facts about the window that no rule may override.
- * 2. Inferred baseline - whether the client already draws a shadow (content
- *    margins) or, for X11, whether Mutter draws one itself. Both axes answer
- *    alike, because every case is about the window as a whole.
- * 3. User rules - 'suppress-rules' / 'force-rules' move the axes they name and
- *    leave the rest to the baseline. The only layer that may turn an axis on.
- * 4. State modifiers - snap-tiled windows lose the shadow (matching Mutter, so
- *    it cannot obstruct the neighbour); corner clipping is skipped under
- *    fractional scaling when the user prefers crisp text.
- *
- * Pure logic module: no shell globals, unit-testable.
+ * Decoration detection: what we would draw for a window, and whether a rule would
+ * change it. The four-layer model behind that, and where it diverges from Mutter
+ * on purpose, are in docs/decoration-model.md. Pure logic module, unit-testable.
  */
 /**
- * Computes window content margins: how far the buffer extends past the frame on
- * each side pair.
+ * Computes window content margins - how far the buffer extends past the frame on
+ * each side pair - as {w, h} two-sided totals, each >= 0.
  *
- * MetaWindow scales both rectangles by the same geometry scale, so the difference
- * is a margin. That scale is 1 whenever the logical monitor layout is LOGICAL,
- * which the native backend always reports (meta-monitor-manager-native.c), so on
- * Wayland the margin is in logical pixels and compares against a logical
- * threshold. A backend that lays monitors out physically uses the integer monitor
- * scale instead, which GJS cannot read; leaving it unconverted makes a margin
- * look larger, never smaller, so the error stays on the side of drawing nothing.
- *
- * Returns {w, h}, each >= 0, holding the two-sided total difference.
+ * Both rectangles carry the window's geometry scale, so the difference is the
+ * margin the client declared: logical pixels on Wayland, and scaled by a factor
+ * GJS cannot read on a backend that lays monitors out physically. See
+ * docs/decoration-model.md.
  */
 export function computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight) {
     return {
@@ -50,11 +33,8 @@ export function computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight
     };
 }
 /**
- * Whether the extension is allowed to decorate this window at all.
- *
- * These are structural facts, not guesses: a menu is never a window we decorate,
- * a maximized window has no decoration to add, and a server-decorated window
- * already has one. A user rule must never override them.
+ * Whether the extension is allowed to decorate this window at all. Structural
+ * facts, not guesses - no rule may override them.
  *
  * @param {object} [params={}]
  * @param {number} [params.windowType=WindowType.NORMAL] - Meta.WindowType
@@ -86,15 +66,10 @@ export function checkDecorationEligibility({
 /**
  * The decoration we would apply with no user rule, answered per axis.
  *
- * Both axes answer the same today, because each reason below is about the window
- * as a whole. They are returned separately because a `force` rule may flip one
- * axis while leaving the other to this baseline.
- *
- * The X11 case also covers corners, not only the shadow: Mutter's generated
- * shadow follows the window's square frame and cannot be removed from JS, so
- * rounding the contents alone would leave square shadow corners poking out past
- * the rounded content. That is a visual-consistency call rather than a hard
- * fact, which is exactly why a `force` rule is allowed to override it.
+ * Both axes answer the same, because each reason below is about the window as a
+ * whole; they are returned separately so a `force` rule may flip one and leave the
+ * other here. The X11 case covers corners too, and is a consistency call rather
+ * than a fact - see docs/decoration-model.md.
  *
  * @param {object} params
  * @param {boolean} [params.isX11=false]
@@ -113,20 +88,17 @@ export function inferDecorationBaseline({
     if (sideW >= insetThreshold && sideH >= insetThreshold)
         return {shadow: false, corners: false, reason: `has-csd(insets=${sideW.toFixed(1)}x${sideH.toFixed(1)} >= ${insetThreshold})`};
 
-    // X11 / XWayland without custom frame extents (e.g. WPS Office, Dida):
-    // Mutter C core renders box shadows itself (meta-window-actor-x11.c:has_shadow).
-    // Decorating causes duplicate shadows and breaks offscreen clip geometry.
-    // X11 windows that DO declare custom frame extents (e.g. the WeChat 4px resize
-    // grip) make Mutter drop its native shadow (has_custom_frame_extents), so those
-    // lack any shadow and must be decorated.
+    // X11 / XWayland without custom frame extents (e.g. WPS Office, Dida): Mutter
+    // draws the box shadow itself (meta-window-actor-x11.c:has_shadow), and ours
+    // would duplicate it. A declared extent makes Mutter drop its own, so those
+    // windows are decorated like any other.
     if (isX11 && sideW <= 0 && sideH <= 0)
         return {shadow: false, corners: false, reason: 'x11-mutter-native-shadow'};
 
     return {shadow: true, corners: true, reason: `no-csd(insets=${sideW.toFixed(1)}x${sideH.toFixed(1)} < ${insetThreshold})`};
 }
 /**
- * Checks whether the scaling factor is fractional (non-integer).
- * Treats invalid scale or scale <= 0 as non-fractional (false).
+ * Checks whether the scaling factor is fractional. Invalid or <= 0 counts as no.
  */
 export function isFractionalScale(scale) {
     if (scale === null || scale === undefined || !Number.isFinite(scale) || scale <= 0)
@@ -134,13 +106,8 @@ export function isFractionalScale(scale) {
     return Math.abs(scale - Math.round(scale)) > 0.001;
 }
 /**
- * Determines whether a window should have rounded corner clipping applied.
- *
- * Rules:
- *   - If preferCrispText is false (default), always returns true (full rounded clipping).
- *   - If preferCrispText is true:
- *     - Fractional scale displays (1.25x, 1.33x, 1.5x, etc.) return false (bypasses FBO clipping for native sharpness).
- *     - Integer scale displays (1.0x, 2.0x, etc.) return true (FBO does not blur under integer scaling).
+ * Whether to clip the window to its rounded corners: always, unless the user
+ * prefers crisp text on a fractional-scale display, where clipping is what blurs.
  */
 export function shouldClipWindow({preferCrispText = false, scale = 1}) {
     if (!preferCrispText)
@@ -148,22 +115,17 @@ export function shouldClipWindow({preferCrispText = false, scale = 1}) {
     return !isFractionalScale(scale);
 }
 /**
- * Checks whether a window is maximized.
- *
  * @param {object} win - Meta.Window instance
- * @returns {boolean}
+ * @returns {boolean} Whether the window is maximized
  */
 export function isWindowMaximized(win) {
     return Boolean(win?.is_maximized?.());
 }
 /**
- * Checks whether a window is in a snap-tiled state.
- *
- * Geometry and compositor read different answers from the same fact. Any
- * snap-tiled window flattens its corners, so the background cannot leak past a
- * flat screen edge or the split between two neighbours (libadwaita aligns with
- * that); only a window with an adjacent match loses its shadow, so a lone
- * half-tiled window keeps the shadow on its outer edge.
+ * Checks whether a window is in a snap-tiled state: half-tiled on one axis, or
+ * matched with a neighbour. Both flatten their corners, so the background cannot
+ * leak past a flat screen edge or the split between two windows; only the matched
+ * one also loses its shadow - see docs/decoration-model.md.
  *
  * @param {object} win - Meta.Window instance
  * @param {object} [options={}]
@@ -225,19 +187,19 @@ export function evaluateWindowActions({
     preferCrispText = false,
     insetThreshold = MUTTER_CSD_MIN_INSET_THRESHOLD,
 }) {
-    // 1. Structural eligibility. No rule may override these.
+    // 1. Structural eligibility - no rule may override it.
+    // 2. Inferred baseline - what we would do with no rule at all.
+    // 3. User rule - moves the axes it names; the only layer that can turn one on.
+    // 4. State modifiers - policies, not inferences (docs/decoration-model.md).
     const eligibility = checkDecorationEligibility({windowType, isMaximized, isFullscreen, hasSsd});
     if (!eligibility.eligible)
         return {applyShadow: false, applyClip: false, reason: eligibility.reason};
 
-    // 2. Inferred baseline: what we would do with no rule at all.
     const {w, h} = computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight);
     const baseline = inferDecorationBaseline({
         isX11, sideW: w / 2, sideH: h / 2, insetThreshold,
     });
 
-    // 3. User rule: moves every axis it names in one direction, leaving the rest
-    //    to the baseline. This is the one place a rule may turn an axis back ON.
     const rule = resolveRule(wmClass, rules, {
         clientType: isX11 ? CLIENT_TYPE_TOKEN_X11 : CLIENT_TYPE_TOKEN_WAYLAND,
         windowType,
@@ -256,13 +218,8 @@ export function evaluateWindowActions({
             corners = forced;
     }
 
-    // 4. State modifiers are applied last, on top of both the baseline and any
-    //    rule, because they are visual policies rather than inferences about who
-    //    already paints what:
-    //      - a snap-tiled neighbour would be obstructed by our shadow
-    //        (meta-window-actor-x11.c: "If we have two snap-tiled windows, we
-    //        don't want the shadow to obstruct the other window.")
-    //      - corner clipping is what blurs text under fractional scaling
+    // 4. State modifiers, applied last: policies, not inferences about who already
+    //    paints what (docs/decoration-model.md).
     const shadowBeforeTiling = shadow;
     shadow = shadow && !hasTileMatch;
     corners = corners && shouldClipWindow({preferCrispText, scale: monitorScale});
@@ -279,11 +236,9 @@ export function evaluateWindowActions({
  * Whether a rule would change the actions we take for a window.
  *
  * A rule that changes nothing is a row that misrepresents what it does, so the
- * picker refuses to add one. Running the runtime's own evaluator twice - with and
- * without the rule - covers every reason a rule can be inert: the kind is never
- * decorated, its baseline already answers the way the rule asks, or a policy
- * overrides it again.
- *
+ * picker refuses to add one. Running the runtime's evaluator twice - with and
+ * without the rule - covers every way a rule can be inert: an ineligible kind, a
+ * baseline that already answers as asked, a policy that overrides it again. *
  * @param {WindowEvaluationParams} params - The window, evaluated without the rule
  * @param {{direction: string, key: string, axes: Iterable<string>}} rule
  * @returns {boolean}
@@ -302,12 +257,10 @@ export function ruleWouldChangeActions(params, {direction, key, axes}) {
  * Whether the rule a pick would add for `properties`' window kind would change
  * what we draw for the window `params` describes.
  *
- * A fresh pick names every axis (RULE_AXIS_ORDER), and the user narrows it down
- * from there. The state that comes and goes - maximized, fullscreen, snapped,
- * currently server-decorated - must not decide this: a rule worth creating for a
- * restored window is worth creating while it is maximized. What is left is the
- * kind's own attributes plus the margins it declares, which travel with it.
- *
+ * A fresh pick names every axis (RULE_AXIS_ORDER) and the user narrows it down
+ * from there. State that comes and goes must not decide this: a rule worth
+ * creating for a restored window is worth creating while it is maximized, so the
+ * kind's attributes and the margins it declares are what count. *
  * @param {Record<string, string>} properties - extractWindowProperties() output
  * @param {WindowEvaluationParams} params - The window as the runtime sees it
  * @param {string} direction - RuleDirection
