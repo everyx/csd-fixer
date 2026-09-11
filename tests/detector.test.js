@@ -21,8 +21,8 @@ import {
 } from '../src/lib/settings.js';
 
 /** Per-side margins from a buffer/frame rectangle pair (matches runtime math). */
-function marginsFromRects(bufferWidth, bufferHeight, frameWidth, frameHeight, scale = 1) {
-    const {w, h} = computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight, scale);
+function marginsFromRects(bufferWidth, bufferHeight, frameWidth, frameHeight) {
+    const {w, h} = computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight);
     return {sideW: w / 2, sideH: h / 2};
 }
 
@@ -32,26 +32,22 @@ function resolved(result) {
 }
 
 describe('computeInsets', () => {
-    it('buffer == frame (scale = 1) -> zero insets', () => {
-        const {w, h} = computeInsets(400, 300, 400, 300, 1);
+    it('buffer == frame -> zero insets', () => {
+        const {w, h} = computeInsets(400, 300, 400, 300);
         expect(w).toBe(0);
         expect(h).toBe(0);
     });
 
-    it('buffer > frame (scale = 1) -> positive insets', () => {
-        const {w, h} = computeInsets(400, 300, 360, 260, 1);
+    it('buffer > frame -> positive insets', () => {
+        const {w, h} = computeInsets(400, 300, 360, 260);
         expect(w).toBe(40);
         expect(h).toBe(40);
     });
 
-    it('fractional scaling: compares after dividing physical buffer by scale', () => {
-        // 2x HiDPI: non-CSD window buffer=800x600, frame=400x300
-        const {w, h} = computeInsets(800, 600, 400, 300, 2);
+    it('frame > buffer -> clamps to zero rather than going negative', () => {
+        const {w, h} = computeInsets(400, 300, 440, 340);
         expect(w).toBe(0);
         expect(h).toBe(0);
-        // 2x + CSD 20px insets
-        const {w: w2} = computeInsets(840, 640, 400, 300, 2);
-        expect(w2).toBe(20);
     });
 });
 
@@ -624,7 +620,6 @@ describe('evaluateWindowActions', () => {
     const baseWin = {
         bufferWidth: 400, bufferHeight: 300,
         frameWidth: 400, frameHeight: 300,
-        geometryScale: 1,
         monitorScale: 1,
         isX11: false,
         windowType: WindowType.NORMAL,
@@ -850,7 +845,6 @@ describe('evaluateWindowActions', () => {
         for (const fracScale of [1.25, 1.333333, 1.5, 1.75]) {
             const res = evaluateWindowActions({
                 ...baseWin,
-                geometryScale: 1, // actor geometry scale is typically 1
                 monitorScale: fracScale, // monitor physical scale
                 preferCrispText: true,
             });
@@ -862,7 +856,6 @@ describe('evaluateWindowActions', () => {
     it('preferCrispText disabled retains rounded corners on fractional scale displays', () => {
         const res = evaluateWindowActions({
             ...baseWin,
-            geometryScale: 1,
             monitorScale: 1.333333,
             preferCrispText: false,
         });

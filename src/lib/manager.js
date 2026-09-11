@@ -331,7 +331,6 @@ export class Manager {
         const clientType = win.get_client_type?.();
         const isX11 = clientType === CLIENT_TYPE_X11;
         const wmClass = resolveWindowIdentity(win);
-        const geometryScale = actor.get_geometry_scale?.() ?? 1;
         const monitorScale = this._getMonitorScale(win);
         const hasParent = Boolean(win.get_transient_for?.());
         const allowsResize = Boolean(win.allows_resize?.());
@@ -344,7 +343,6 @@ export class Manager {
             // Geometry & scale
             bufferWidth: b.width, bufferHeight: b.height,
             frameWidth: f.width, frameHeight: f.height,
-            geometryScale,
             monitorScale,
 
             // Window state & type

@@ -39,18 +39,24 @@ export const CLIENT_TYPE_TOKEN_X11 = 'x11';
  */
 
 /**
- * Computes window content margins (logical pixels) based on buffer and frame rectangles.
+ * Computes window content margins: how far the buffer extends past the frame on
+ * each side pair.
  *
- * bufferWidth/bufferHeight are physical pixels (buffer_rect),
- * frameWidth/frameHeight are logical pixels (frame_rect),
- * scale is the actor's geometry scale (buffer -> logical conversion).
- * Returns {w, h} (logical pixels, >= 0, representing two-sided total difference).
+ * MetaWindow scales both rectangles by the window's geometry scale, so they are
+ * always in the same space and the difference is a margin. That scale is 1
+ * whenever the logical monitor layout is LOGICAL, which the native backend
+ * always reports (meta-monitor-manager-native.c) - so on Wayland the margin is
+ * in logical pixels and compares directly against a logical threshold. A backend
+ * that lays monitors out physically uses the integer monitor scale instead,
+ * which GJS cannot read; leaving that margin unconverted makes it look larger,
+ * never smaller, so the error stays on the side of drawing nothing.
+ *
+ * Returns {w, h}, each >= 0, holding the two-sided total difference.
  */
-export function computeInsets(bufferWidth, bufferHeight,
-    frameWidth, frameHeight, scale) {
+export function computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight) {
     return {
-        w: Math.max(0, bufferWidth / scale - frameWidth),
-        h: Math.max(0, bufferHeight / scale - frameHeight),
+        w: Math.max(0, bufferWidth - frameWidth),
+        h: Math.max(0, bufferHeight - frameHeight),
     };
 }
 
@@ -576,13 +582,11 @@ export function resolveRule(wmClass, {suppress = {}, force = {}} = {}, options =
 
 /**
  * @typedef {object} WindowEvaluationParams
- * @property {number} bufferWidth - Physical buffer width
- * @property {number} bufferHeight - Physical buffer height
- * @property {number} frameWidth - Logical frame width
- * @property {number} frameHeight - Logical frame height
- * @property {number} [scale=1] - Geometry scale factor
- * @property {number} [geometryScale=scale] - Window buffer geometry scale
- * @property {number} [monitorScale=scale] - Display physical scale factor
+ * @property {number} bufferWidth - Buffer rectangle width
+ * @property {number} bufferHeight - Buffer rectangle height
+ * @property {number} frameWidth - Frame rectangle width
+ * @property {number} frameHeight - Frame rectangle height
+ * @property {number} [monitorScale=1] - Display scale factor
  * @property {boolean} [isMaximized=false] - Whether window is maximized
  * @property {boolean} [isFullscreen=false] - Whether window is fullscreen
  * @property {boolean} [hasSsd=false] - Whether native server-side decorations exist
@@ -606,9 +610,7 @@ export function resolveRule(wmClass, {suppress = {}, force = {}} = {}, options =
  */
 export function evaluateWindowActions({
     bufferWidth, bufferHeight, frameWidth, frameHeight,
-    scale = 1,
-    geometryScale = scale,
-    monitorScale = scale,
+    monitorScale = 1,
     isMaximized = false, isFullscreen = false,
     hasSsd = false,
     isX11 = false,
@@ -628,7 +630,7 @@ export function evaluateWindowActions({
         return {applyShadow: false, applyClip: false, reason: eligibility.reason};
 
     // 2. Inferred baseline: what we would do with no rule at all.
-    const {w, h} = computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight, geometryScale);
+    const {w, h} = computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight);
     const baseline = inferDecorationBaseline({
         isX11, sideW: w / 2, sideH: h / 2, insetThreshold,
     });
