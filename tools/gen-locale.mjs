@@ -70,7 +70,10 @@ if (isExtract) {
     const poFiles = getPoFiles();
     for (const poFile of poFiles) {
         console.log(`[gen-locale] Merging updates for ${path.basename(poFile)}...`);
-        execFileSync('msgmerge', ['--update', poFile, potFile]);
+        // The catalogues are tracked in git, which is the backup. msgmerge keeps
+        // its own copy as <file>~, which only ever adds untracked clutter for a
+        // broad `git add po` to pick up by accident.
+        execFileSync('msgmerge', ['--update', '--backup=none', poFile, potFile]);
         execFileSync('msgattrib', ['--no-obsolete', '-o', poFile, poFile]);
     }
     console.log('[gen-locale] Extraction and merge completed');
