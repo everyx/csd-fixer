@@ -270,11 +270,17 @@ export class Manager {
             return;
 
         const actions = this._evaluateActions(win);
-        this._syncClip(win, actions.applyClip);
+        const style = this._styleOf(win);
+
+        // The clip effect only earns its offscreen pass when there is something to
+        // draw: a corner to round or an outline to paint. Tiled and maximized states
+        // set radius 0 and no outline, so attaching it there is pure waste.
+        const wantClip = actions.applyClip && (style.radius > 0 || Boolean(style.outline));
+        this._syncClip(win, wantClip);
         this._syncShadow(win, actions.applyShadow);
 
         if (state.clip || state.shadow)
-            this._updateStyle(win);
+            this._applyStyle(win, style);
     }
 
     /** Full idempotent re-evaluation: synchronizes clip and shadow for each tracked window */
@@ -381,9 +387,5 @@ export class Manager {
             const shadowRadius = state.clip ? style.radius : 0;
             state.shadowFx.setParams(w, h, shadowRadius, SHADOW_PAD, style.shadows);
         }
-    }
-
-    _updateStyle(win) {
-        this._applyStyle(win, this._styleOf(win));
     }
 }
