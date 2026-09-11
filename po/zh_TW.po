@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: csd-fixer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-10 16:32+0800\n"
+"POT-Creation-Date: 2026-09-10 19:25+0800\n"
 "PO-Revision-Date: 2026-09-08 22:50+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Traditional) <zh-l10n@lists.linux.org.tw>\n"
@@ -16,177 +16,95 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: src/prefs.js:18
+#: src/prefs.js:20
 msgid "Disable all"
 msgstr "全部排除"
 
-#: src/prefs.js:19
+#: src/prefs.js:21
 msgid "Disable corners"
 msgstr "排除圓角"
 
-#: src/prefs.js:20
+#: src/prefs.js:22
 msgid "Disable shadow"
 msgstr "排除陰影"
 
-#: src/prefs.js:125 src/prefs.js:133
+#: src/prefs.js:106 src/prefs.js:114
 msgid "OK"
 msgstr "確定"
 
-#: src/prefs.js:145
+#: src/prefs.js:126
 msgid "General"
 msgstr "一般"
 
-#: src/prefs.js:152
+#: src/prefs.js:133
 msgid "Display & Rendering"
 msgstr "顯示與渲染"
 
-#: src/prefs.js:153
+#: src/prefs.js:134
 msgid "Control window decoration behavior across screen scales"
 msgstr "控制視窗裝飾在不同螢幕縮放下的渲染行為"
 
-#: src/prefs.js:158
+#: src/prefs.js:139
 msgid "Prioritize Crisp Text"
 msgstr "優先保證文字清晰"
 
-#: src/prefs.js:159
+#: src/prefs.js:140
 msgid ""
 "Skip rounded corners on fractional scale monitors (retaining shadow) to "
 "avoid text blur and resampling overhead"
 msgstr ""
 "在分數縮放螢幕上免除圓角（保留陰影），消除重新取樣帶來的字體模糊與效能損耗"
 
-#: src/prefs.js:166
+#: src/prefs.js:147
 msgid "Inspect Window…"
 msgstr "選取視窗…"
 
-#: src/prefs.js:168
+#: src/prefs.js:149
 msgid ""
 "Click an on-screen window to automatically detect and add exclusion rule"
 msgstr "在螢幕上點選視窗以自動識別並新增排除規則"
 
-#: src/prefs.js:172
+#: src/prefs.js:153
 msgid "Application Exclusion Rules"
 msgstr "應用程式排除規則"
 
-#: src/prefs.js:173
+#: src/prefs.js:154
 msgid ""
 "Configure individual exclusions for specific windows (disable all, skip "
 "corners, or skip shadow)"
 msgstr "為特定視窗單獨設定排除項（全部停用、免除圓角或免除陰影）"
 
-#: src/prefs.js:193
+#: src/prefs.js:174
 msgid "No Special Rules"
 msgstr "尚無特殊規則"
 
-#: src/prefs.js:194
+#: src/prefs.js:175
 msgid ""
 "All normal windows without server-side decorations will have native shadow "
 "and rounded corners applied by default"
 msgstr "所有未包含伺服器端邊框的標準視窗預設將套用原生陰影與圓角裁切"
 
-#: src/prefs.js:253
+#: src/prefs.js:234
 msgid "Remove Rule"
 msgstr "刪除規則"
 
-#: src/prefs.js:278
+#: src/prefs.js:259
 msgid "Window Inspection Failed"
 msgstr "視窗選取失敗"
 
-#: src/prefs.js:279
+#: src/prefs.js:260
 msgid ""
 "Could not connect to CSD Fixer extension. Please ensure the extension is "
 "enabled."
 msgstr ""
 "無法連線至 CSD Fixer 擴充套件，請確認該擴充套件已在 GNOME 擴充套件中啟用。"
 
-#: src/prefs.js:294
+#: src/prefs.js:275
 #, javascript-format
 msgid "Rule for \"%s\" already exists"
 msgstr "「%s」的規則已存在"
 
-#: src/prefs.js:305
+#: src/prefs.js:286
 #, javascript-format
 msgid "Added rule for \"%s\""
 msgstr "已為「%s」新增排除規則"
-
-#~ msgid "Custom Identifier"
-#~ msgstr "自訂識別碼"
-
-#~ msgid "Fixed Dialogs"
-#~ msgstr "固定彈窗"
-
-#~ msgid "Non-resizable dialogs and popups"
-#~ msgstr "不可調整大小的對話框與彈窗"
-
-#~ msgid "Child Windows"
-#~ msgstr "獨立子視窗"
-
-#~ msgid "Resizable child windows and views"
-#~ msgstr "可調整大小的子視窗與檢視"
-
-#~ msgid "Dialogs & Popups"
-#~ msgstr "彈出視窗與對話框"
-
-#~ msgid "Child dialogs and transient windows"
-#~ msgstr "子對話框與附屬視窗"
-
-#~ msgid "Specific window title"
-#~ msgstr "特定視窗標題"
-
-#~ msgid "Main Application Window"
-#~ msgstr "應用程式主視窗"
-
-#~ msgid "Disable all (no shadow, no rounded corners)"
-#~ msgstr "全部排除（不加陰影，不修圓角）"
-
-#~ msgid "Disable corners (retain shadow)"
-#~ msgstr "排除圓角（保留陰影）"
-
-#~ msgid "Disable shadow (retain rounded corners)"
-#~ msgstr "排除陰影（保留圓角）"
-
-#~ msgid "Shadow only (disable rounded corners)"
-#~ msgstr "僅陰影（停用圓角修邊）"
-
-#~ msgid "Shadow only"
-#~ msgstr "僅陰影"
-
-#~ msgid "Rounded corners only (disable shadow)"
-#~ msgstr "僅圓角（停用陰影效果）"
-
-#~ msgid "Corners only"
-#~ msgstr "僅圓角"
-
-#~ msgid "Add Application Exclusion Rule"
-#~ msgstr "新增應用程式排除規則"
-
-#~ msgid ""
-#~ "Detected child dialog/popup window. Rule target configured for popups."
-#~ msgstr "偵測到子對話框/彈出視窗。規則目標已自動設定為該應用的彈出視窗。"
-
-#~ msgid "Detected window:"
-#~ msgstr "已偵測到視窗："
-
-#~ msgid "Search installed applications…"
-#~ msgstr "搜尋已安裝的應用程式…"
-
-#~ msgid "Rule Parameters"
-#~ msgstr "規則參數"
-
-#~ msgid "Window Identifier (wm_class)"
-#~ msgstr "視窗識別碼 (wm_class)"
-
-#~ msgid "Exclusion Behavior"
-#~ msgstr "排除行為"
-
-#~ msgid "Add Rule"
-#~ msgstr "新增規則"
-
-#~ msgid "Add…"
-#~ msgstr "新增…"
-
-#~ msgid "Add rule manually"
-#~ msgstr "手動新增規則"
-
-#~ msgid "Add Rule…"
-#~ msgstr "新增規則…"

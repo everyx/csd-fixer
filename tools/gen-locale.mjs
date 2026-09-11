@@ -48,28 +48,30 @@ function compilePo(poFile) {
     return { lang, moFile };
 }
 
+const potFilesList = path.join(poDir, 'POTFILES.in');
+const XGETTEXT_ARGS = [
+    `--default-domain=${domain}`,
+    '--language=JavaScript',
+    '--keyword=_',
+    '--keyword=N_',
+    '--from-code=UTF-8',
+    '--files-from=' + potFilesList,
+    '--add-comments',
+];
+
 if (isExtract) {
     const potFile = path.join(poDir, `${domain}.pot`);
-    const potFilesList = path.join(poDir, 'POTFILES.in');
 
     fs.mkdirSync(poDir, { recursive: true });
 
     console.log(`[gen-locale] Extracting source strings to ${potFile}...`);
-    execFileSync('xgettext', [
-        `--default-domain=${domain}`,
-        '--output=' + potFile,
-        '--language=JavaScript',
-        '--keyword=_',
-        '--keyword=N_',
-        '--from-code=UTF-8',
-        '--files-from=' + potFilesList,
-        '--add-comments',
-    ], { cwd: rootDir });
+    execFileSync('xgettext', [...XGETTEXT_ARGS, '--output=' + potFile], { cwd: rootDir });
 
     const poFiles = getPoFiles();
     for (const poFile of poFiles) {
         console.log(`[gen-locale] Merging updates for ${path.basename(poFile)}...`);
         execFileSync('msgmerge', ['--update', poFile, potFile]);
+        execFileSync('msgattrib', ['--no-obsolete', '-o', poFile, poFile]);
     }
     console.log('[gen-locale] Extraction and merge completed');
     process.exit(0);
@@ -77,7 +79,6 @@ if (isExtract) {
 
 if (isCheck) {
     const potFile = path.join(poDir, `${domain}.pot`);
-    const potFilesList = path.join(poDir, 'POTFILES.in');
 
     if (!fs.existsSync(potFile)) {
         console.error(`[gen-locale] --check failed: template file ${potFile} not found`);
@@ -88,16 +89,7 @@ if (isCheck) {
     const diskPot = fs.readFileSync(potFile, 'utf8');
     let freshPot = '';
     try {
-        freshPot = execFileSync('xgettext', [
-            `--default-domain=${domain}`,
-            '--output=-',
-            '--language=JavaScript',
-            '--keyword=_',
-            '--keyword=N_',
-            '--from-code=UTF-8',
-            '--files-from=' + potFilesList,
-            '--add-comments',
-        ], { cwd: rootDir, encoding: 'utf8' });
+        freshPot = execFileSync('xgettext', [...XGETTEXT_ARGS, '--output=-'], { cwd: rootDir, encoding: 'utf8' });
     } catch (e) {
         console.error('[gen-locale] --check failed: error extracting strings with xgettext:', e.message);
         process.exit(1);

@@ -59,7 +59,7 @@ describe('i18n multilingual support', () => {
         expect(poContent).toContain('全部排除');
         expect(poContent).toContain('排除圆角');
         expect(poContent).toContain('排除阴影');
-        expect(poContent).toContain('弹窗与对话框');
+        expect(poContent).toContain('暂无特殊规则');
     });
 
     it('zh_TW.po contains complete Traditional Chinese translations', () => {
@@ -71,7 +71,7 @@ describe('i18n multilingual support', () => {
         expect(poContent).toContain('排除圓角');
         expect(poContent).toContain('排除陰影');
         expect(poContent).toContain('選取視窗…');
-        expect(poContent).toContain('彈出視窗與對話框');
+        expect(poContent).toContain('尚無特殊規則');
     });
 
     it('compiled .mo binary catalogs are valid and non-empty', () => {
