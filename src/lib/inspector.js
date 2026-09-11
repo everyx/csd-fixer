@@ -25,6 +25,7 @@ import {
     INSPECTOR_DBUS_PATH,
     extractWindowProperties,
 } from './detector.js';
+import {getEffectiveWmClass} from './window.js';
 
 const INSPECTOR_DBUS_IFACE_XML = `
 <node>
@@ -192,7 +193,7 @@ export class InspectorService {
             return;
         }
 
-        const properties = extractWindowProperties(win);
+        const properties = extractWindowProperties(win, getEffectiveWmClass(win));
         invocation.return_value(new GLib.Variant('(a{ss})', [properties]));
     }
 
