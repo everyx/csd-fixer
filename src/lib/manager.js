@@ -34,6 +34,8 @@ import {RoundedClipEffect} from '../effects/clipEffect.js';
 import {SdfShadowEffect} from '../effects/shadowEffect.js';
 import {ShadowActor, SHADOW_PAD} from '../effects/shadowActor.js';
 
+const CLIENT_TYPE_X11 = Meta.WindowClientType.X11;
+
 export class Manager {
     /** @param {import('../extension.js').default} ext */
     constructor(ext) {
@@ -282,7 +284,7 @@ export class Manager {
     }
 
     get _windowGroup() {
-        return global.window_group ?? global.windowGroup;
+        return global.window_group;
     }
 
     /** Re-orders all shadow actors below corresponding windows after restack */
@@ -306,8 +308,8 @@ export class Manager {
         const b = win.get_buffer_rect();
         const f = win.get_frame_rect();
         const hasSsd = Boolean(win.decorated);
-        const isX11 = win.get_client_type?.() === 1 ||
-                      (Meta?.WindowClientType && win.get_client_type?.() === Meta.WindowClientType.X11);
+        const clientType = win.get_client_type?.();
+        const isX11 = clientType === CLIENT_TYPE_X11;
         const wmClass = win.get_wm_class();
         const geometryScale = actor.get_geometry_scale?.() ?? 1;
         const monitorScale = this._getMonitorScale(win);
