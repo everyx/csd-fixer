@@ -46,18 +46,18 @@ export class Manager {
     enable() {
         // Display-level events (global)
         const wm = global.windowManager;
-        this._connect(wm, 'switch-workspace', () => this._reconcile());
-        this._connect(global.display, 'window-created', (_, win) => this._trackWindow(win));
-        this._connect(global.display, 'grab-op-end', () => this._reconcile());
+        this._connect(this._signals, wm, 'switch-workspace', () => this._reconcile());
+        this._connect(this._signals, global.display, 'window-created', (_, win) => this._trackWindow(win));
+        this._connect(this._signals, global.display, 'grab-op-end', () => this._reconcile());
         // Window restacking (focus/raise/lower) -> shadow actor must be placed below window
-        this._connect(global.display, 'restacked', () => this._restackShadows());
+        this._connect(this._signals, global.display, 'restacked', () => this._restackShadows());
         // Focus change (active <-> backdrop shadow depth transition)
-        this._connect(global.display, 'notify::focus-window', () => this._reconcileDebounced());
+        this._connect(this._signals, global.display, 'notify::focus-window', () => this._reconcileDebounced());
 
         // Monitor changes (scale changes, plugging/unplugging displays, etc.)
         const monitorManager = global.backend?.get_monitor_manager?.();
         if (monitorManager)
-            this._connect(monitorManager, 'monitors-changed', () => this._reconcile());
+            this._connect(this._signals, monitorManager, 'monitors-changed', () => this._reconcile());
 
         // GSettings changes -> full re-evaluation (only relevant core keys)
         this._settingsHandlerIds = [];
@@ -82,26 +82,63 @@ export class Manager {
                 GLib.Source.remove(state.idleId);
                 state.idleId = null;
             }
+            this._disconnectSignals(state.signals);
             this._undecorate(win);
         }
         this._windows.clear();
-        for (const [obj, id] of this._signals)
-            obj.disconnect(id);
-        this._signals = [];
+        this._disconnectSignals(this._signals);
         this._settingsHandlerIds?.forEach(id => this._settings.disconnect(id));
         this._settingsHandlerIds = [];
     }
 
     // ---------- Internal ----------
 
-    _connect(obj, signal, handler) {
-        this._signals.push([obj, obj.connect(signal, handler)]);
+    _disconnectSignals(signalsList) {
+        if (!Array.isArray(signalsList))
+            return;
+        for (const [obj, id] of signalsList) {
+            try {
+                obj.disconnect(id);
+            } catch {
+                // Silently ignore if object is already destroyed
+            }
+        }
+        signalsList.length = 0;
+    }
+
+    /**
+     * Connects a signal and records the [object, id] handle in the specified array.
+     *
+     * Semantics & Error Handling:
+     * - Global / Extension-level signals (safe = false, default):
+     *   Core signals (e.g. global.display, wm) must succeed. Any failure indicates a fatal API
+     *   mismatch and should bubble up immediately.
+     * - Window / Actor-level signals (safe = true):
+     *   Certain signals (e.g. highest-scale-monitor-changed) vary across Mutter versions (45-50),
+     *   or the window/actor may unmanage concurrently during connection. Safe mode silently
+     *   ignores failures to guarantee stability across different Mutter releases.
+     *
+     * @param {Array<[object, number]>} list - Target signal registration list
+     * @param {object} obj - Object emitting signal
+     * @param {string} signal - Signal name
+     * @param {Function} handler - Signal callback
+     * @param {boolean} [safe=false] - Whether to silently swallow connection errors
+     */
+    _connect(list, obj, signal, handler, safe = false) {
+        try {
+            list.push([obj, obj.connect(signal, handler)]);
+        } catch (e) {
+            if (!safe)
+                throw e;
+        }
     }
 
     _trackWindow(win) {
         if (this._windows.has(win))
             return;
-        this._windows.set(win, {clip: null, shadow: null, shadowFx: null, idleId: null, signals: []});
+        const state = {clip: null, shadow: null, shadowFx: null, idleId: null, signals: []};
+        this._windows.set(win, state);
+
         // Window-level signals (position/size/focus/monitor changes -> idempotent re-evaluation)
         const windowSignals = [
             'position-changed', 'size-changed', 'notify::appears-focused',
@@ -109,21 +146,17 @@ export class Manager {
             'notify::fullscreen', 'notify::main-monitor', 'highest-scale-monitor-changed',
             'notify::title',
         ];
-        for (const sig of windowSignals) {
-            try {
-                this._windows.get(win).signals.push([win, win.connect(sig, () => this._reconcileDebounced())]);
-            } catch {
-                // Silently ignore if Mutter version lacks certain signals
-            }
-        }
-        this._windows.get(win).signals.push([win, win.connect('unmanaging', () => this._forgetWindow(win))]);
+        for (const sig of windowSignals)
+            this._connect(state.signals, win, sig, () => this._reconcileDebounced(), true);
+
+        this._connect(state.signals, win, 'unmanaging', () => this._forgetWindow(win), true);
+
         // Actor allocation changes (initial frame size 0 -> ready re-evaluation + size tracking)
         const actor = win.get_compositor_private();
         if (actor) {
-            this._windows.get(win).signals.push([actor, actor.connect('notify::allocation', () => {
-                const state = this._windows.get(win);
+            this._connect(state.signals, actor, 'notify::allocation', () => {
                 // First frame ready: defer to idle so we don't mutate actor hierarchy during allocation pass
-                if (state && (!state.clip && !state.shadow) && actor.width > 0 && actor.height > 0) {
+                if ((!state.clip && !state.shadow) && actor.width > 0 && actor.height > 0) {
                     if (state.idleId)
                         GLib.Source.remove(state.idleId);
                     state.idleId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
@@ -134,7 +167,7 @@ export class Manager {
                 } else {
                     this._reconcileDebounced();
                 }
-            })]);
+            }, true);
         }
         if (actor && actor.width > 0 && actor.height > 0)
             this._reconcileWindow(win);
@@ -149,8 +182,7 @@ export class Manager {
                 GLib.Source.remove(state.idleId);
                 state.idleId = null;
             }
-            for (const [obj, id] of state.signals)
-                obj.disconnect(id);
+            this._disconnectSignals(state.signals);
             // Retain clipEffect and shadowActor to fade naturally with windowActor on close
         }
         this._windows.delete(win);
