@@ -21,10 +21,19 @@ import {getWindowRules, SETTINGS_KEY_SUPPRESS_RULES, SETTINGS_KEY_FORCE_RULES} f
 import {resolveWindowIdentity} from './window.js';
 import {styleForWindow} from './style.js';
 import {RoundedClipEffect} from '../effects/clipEffect.js';
-import {SdfShadowEffect} from '../effects/shadowEffect.js';
-import {ShadowActor, SHADOW_PAD} from '../effects/shadowActor.js';
+import {ShadowActor} from '../effects/shadowActor.js';
 
 const CLIENT_TYPE_X11 = Meta.WindowClientType.X11;
+
+/**
+ * How long a window's focus has to hold before its shadow follows it.
+ *
+ * A window switch changes focus several times before it settles (the switcher's
+ * preview, animation frames), and the focused and backdrop shadow sets differ enough
+ * that following each one makes the shadow flicker. Waiting for the focus to hold
+ * still collapses that into the single change the user meant to see.
+ */
+const SHADOW_SETTLE_MS = 250;
 
 export class Manager {
     /** @param {import('../extension.js').default} ext */
@@ -105,6 +114,10 @@ export class Manager {
             GLib.Source.remove(state.reconcileTimeout);
             state.reconcileTimeout = null;
         }
+        if (state.settleId) {
+            GLib.Source.remove(state.settleId);
+            state.settleId = null;
+        }
     }
 
     // ---------- Internal ----------
@@ -146,8 +159,10 @@ export class Manager {
         if (this._windows.has(win))
             return;
         const state = {
-            clip: null, shadow: null, shadowFx: null,
-            idleId: null, reconcileTimeout: null, firstFrameDone: false, signals: [],
+            clip: null, shadow: null,
+            idleId: null, reconcileTimeout: null, settleId: null,
+            shadowStyle: null, pendingStyle: null,
+            firstFrameDone: false, signals: [],
         };
         this._windows.set(win, state);
 
@@ -271,17 +286,15 @@ export class Manager {
         const hasShadow = Boolean(state.shadow);
         if (wantShadow !== hasShadow) {
             if (wantShadow) {
-                state.shadowFx = new SdfShadowEffect();
                 state.shadow = new ShadowActor(actor, global.window_group);
-                state.shadow.actor.add_effect(state.shadowFx);
-                state.shadow.onRelayout((w, h) => {
-                    this._applyStyle(win, this._styleFrom(this._decorationInputs(win)), w, h);
-                });
-                state.shadow.relayout();
             } else {
                 state.shadow.destroy();
                 state.shadow = null;
-                state.shadowFx = null;
+                state.shadowStyle = null;
+                if (state.settleId) {
+                    GLib.Source.remove(state.settleId);
+                    state.settleId = null;
+                }
             }
         }
     }
@@ -334,7 +347,7 @@ export class Manager {
             const actor = win.get_compositor_private();
             if (!actor)
                 continue;
-            global.window_group.set_child_below_sibling(state.shadow.actor, actor);
+            global.window_group.set_child_below_sibling(state.shadow, actor);
         }
     }
 
@@ -404,21 +417,53 @@ export class Manager {
         });
     }
 
-    /** Applies style -> shader uniforms; optionally accepts new w/h on size change */
-    _applyStyle(win, style, wOverride, hOverride) {
+    /** Applies style -> shader uniforms and the shadow's baked texture */
+    _applyStyle(win, style) {
         const state = this._windows.get(win);
         const actor = win.get_compositor_private();
         if (!state || !actor)
             return;
 
-        const w = wOverride ?? actor.width;
-        const h = hOverride ?? actor.height;
         if (state.clip)
-            state.clip.setParams(w, h, style.radius, style.outline);
-        if (state.shadowFx) {
-            // If corner clipping is skipped (square corners), sync shadow radius to 0 to fit square outline
-            const shadowRadius = state.clip ? style.radius : 0;
-            state.shadowFx.setParams(w, h, shadowRadius, SHADOW_PAD, style.shadows);
+            state.clip.setParams(actor.width, actor.height, style.radius, style.outline);
+        if (!state.shadow)
+            return;
+
+        // If corner clipping is skipped (square corners), the shadow fits a square
+        // outline instead.
+        const wanted = {
+            radius: state.clip ? style.radius : 0,
+            shadows: style.shadows,
+        };
+
+        if (!state.shadowStyle) {
+            this._settleShadow(win, state, wanted);
+            return;
         }
+        if (state.shadowStyle.shadows === wanted.shadows &&
+            state.shadowStyle.radius === wanted.radius)
+            return;
+
+        state.pendingStyle = wanted;
+        if (state.settleId)
+            GLib.Source.remove(state.settleId);
+        state.settleId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, SHADOW_SETTLE_MS, () => {
+            state.settleId = null;
+            this._settleShadow(win, state, state.pendingStyle);
+            state.pendingStyle = null;
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    /** Applies a shadow style, unless the actor is already drawing exactly that one. */
+    _settleShadow(win, state, style) {
+        const actor = win.get_compositor_private();
+        if (!state.shadow || !actor || !style)
+            return;
+        const applied = state.shadowStyle;
+        if (applied && applied.shadows === style.shadows && applied.radius === style.radius)
+            return;
+        state.shadowStyle = style;
+        state.shadow.setShadowStyle(style);
     }
 }

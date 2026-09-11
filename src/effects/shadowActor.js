@@ -1,150 +1,125 @@
 /**
- * ShadowActor: shadow container underneath the window actor.
+ * ShadowActor: the shadow of one window, drawn from a baked texture.
  *
- * Why a separate actor is needed: GLSL fragment shaders only execute within the actor's
- * own bounding box and cannot render outside its borders. The drawable shadow margin
- * must be allocated by this actor's size (window size + SHADOW_PAD * 2).
+ * Geometry is the compositor's job. Four Clutter.BindConstraint sync the padded rect
+ * with the window actor and seven property bindings carry opacity, visibility, pivot,
+ * scale and translation through the map, close and minimize animations, so neither a
+ * frame nor a resize costs any JavaScript.
  *
- * Tracking mechanisms:
- *   - Geometry tracking (position and size): X/Y/WIDTH/HEIGHT dimensions are synchronized
- *     atomically by Clutter.BindConstraint inside the compositor core with zero JS frame overhead,
- *     avoiding needs_allocation warnings.
- *   - Animation tracking (open, close, minimize): bound via GObject.bind_property
- *     (scale-x/y, pivot-point, translation-x/y, opacity, visible), ensuring shadow follows
- *     window animations seamlessly.
- *   - Z-order (restacking): maintained via display 'restacked' signal in manager
- *     (set_child_below_sibling).
- *
- * Lifecycle: destroys cleanly upon windowActor 'destroy' signal with zero memory leaks.
+ * Painting is eight texture rectangles out of one baked buffer (shadowTexture.js):
+ * four corners, four edges stretched from a one-pixel strip, and no middle, because
+ * the shader's hollow mask leaves the window's interior transparent.
  */
 
 import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
 
-/** Shadow padding: max blur 14 (sigma=7) + spread 5 = 26px (3*sigma), +2 safety margin */
-export const SHADOW_PAD = 28;
+import {shadowGeometry, shadowPipeline, shadowSlices, SHADOW_PAD} from './shadowTexture.js';
 
-export class ShadowActor {
+export {SHADOW_PAD};
+
+/** Properties that carry the shadow through the window's own animations. */
+const SYNCED_PROPERTIES = [
+    'opacity', 'visible', 'pivot-point', 'scale-x', 'scale-y', 'translation-x', 'translation-y',
+];
+
+export const ShadowActor = GObject.registerClass({
+    GTypeName: 'CsdFixerShadowActor',
+}, class ShadowActor extends Clutter.Actor {
     /**
-     * @param {Clutter.Actor} windowActor Actor of the window being decorated
-     * @param {Clutter.Actor} container   Container actor (windowGroup),
-     *                                    shadow is inserted below windowActor
+     * @param {Clutter.Actor} windowActor - Actor of the window being decorated
+     * @param {Clutter.Actor} container - Container actor (windowGroup), which the
+     *   shadow is inserted below
      */
-    constructor(windowActor, container) {
+    _init(windowActor, container) {
+        super._init({name: 'CsdFixerShadowActor', reactive: false, opacity: 255});
+
         this._windowActor = windowActor;
         this._container = container;
-        this._destroyed = false;
+        this._style = null;
+        this._pipeline = null;
+        this._laidOutWidth = -1;
+        this._laidOutHeight = -1;
+        this._slices = [];
+        this._boxes = [];
 
-        this._actor = new Clutter.Actor({
-            name: 'CsdFixerShadowActor',
-            reactive: false,
-            opacity: 255,
-        });
+        for (const [coordinate, offset] of [
+            [Clutter.BindCoordinate.X, -SHADOW_PAD],
+            [Clutter.BindCoordinate.Y, -SHADOW_PAD],
+            [Clutter.BindCoordinate.WIDTH, SHADOW_PAD * 2],
+            [Clutter.BindCoordinate.HEIGHT, SHADOW_PAD * 2],
+        ])
+            this.add_constraint(new Clutter.BindConstraint({source: windowActor, coordinate, offset}));
 
-        // Position and size tracking: X/Y/WIDTH/HEIGHT 4D constraints synchronized natively by Clutter C core
-        // Avoids calling set_size in notify::allocation callback which breaks layout order and triggers
-        // "Can't update stage views actor unnamed [StBin] is on because it needs an allocation" warnings.
-        this._actor.add_constraint(new Clutter.BindConstraint({
-            source: windowActor,
-            coordinate: Clutter.BindCoordinate.X,
-            offset: -SHADOW_PAD,
-        }));
-        this._actor.add_constraint(new Clutter.BindConstraint({
-            source: windowActor,
-            coordinate: Clutter.BindCoordinate.Y,
-            offset: -SHADOW_PAD,
-        }));
-        this._actor.add_constraint(new Clutter.BindConstraint({
-            source: windowActor,
-            coordinate: Clutter.BindCoordinate.WIDTH,
-            offset: SHADOW_PAD * 2,
-        }));
-        this._actor.add_constraint(new Clutter.BindConstraint({
-            source: windowActor,
-            coordinate: Clutter.BindCoordinate.HEIGHT,
-            offset: SHADOW_PAD * 2,
-        }));
+        this._bindings = SYNCED_PROPERTIES.map(property => windowActor.bind_property(
+            property, this, property, GObject.BindingFlags.SYNC_CREATE));
 
-        // Property and animation tracking: sync opacity, visibility, scale, pivot, translation with window
-        // Ensures shadow smoothly tracks window scaling and fade during map, destroy, and minimize animations
-        const syncProps = [
-            'opacity',
-            'visible',
-            'pivot-point',
-            'scale-x',
-            'scale-y',
-            'translation-x',
-            'translation-y',
-        ];
-        this._bindings = [];
-        for (const prop of syncProps) {
-            this._bindings.push(windowActor.bind_property(
-                prop, this._actor, prop, GObject.BindingFlags.SYNC_CREATE));
-        }
-
-        // Size tracking: drives shader uniform updates once allocation is ready without interfering with actor size
-        this._lastW = 0;
-        this._lastH = 0;
-        this._allocId = windowActor.connect('notify::allocation',
-            () => this._notifySizeChange());
-        // Window actor destruction: fallback cleanup (manager normal path calls destroy first)
         this._destroyId = windowActor.connect('destroy', () => this.destroy());
 
-        container.insert_child_below(this._actor, windowActor);
-
-        this._relayoutCallbacks = [];
+        container.insert_child_below(this, windowActor);
     }
 
-    get actor() {
-        return this._actor;
+    /**
+     * Draw this shadow: corner radius and shadow layers, already resolved for the
+     * window's state. The bake happens at the first paint after this, because the
+     * Cogl context does not exist outside one.
+     *
+     * @param {{radius: number, shadows: Array<object>}} style
+     */
+    setShadowStyle(style) {
+        this._style = style;
+        this._pipeline = null;
     }
 
-    /** Size change callback (registered by manager to drive effect uniform updates) */
-    onRelayout(cb) {
-        this._relayoutCallbacks.push(cb);
-    }
-
-    /** Refresh uniforms with current window actor dimensions */
-    relayout() {
-        this._notifySizeChange(true);
-    }
-
-    _notifySizeChange(force = false) {
-        if (this._destroyed)
+    vfunc_paint_node(node, paintContext) {
+        if (!this._style)
             return;
-        const w = this._windowActor.width;
-        const h = this._windowActor.height;
-        if (w === 0 || h === 0)
-            return;  // Not yet mapped, waiting for allocation signal
-        if (!force && w === this._lastW && h === this._lastH)
+
+        if (!this._pipeline) {
+            this._pipeline = shadowPipeline(paintContext.get_framebuffer().get_context(),
+                this._style.radius, this._style.shadows);
+        }
+        if (!this._pipeline)
             return;
-        this._lastW = w;
-        this._lastH = h;
-        for (const cb of this._relayoutCallbacks)
-            cb(w, h);
+
+        if (this._laidOutWidth !== this.width || this._laidOutHeight !== this.height)
+            this._relayout();
+
+        const pipelineNode = new Clutter.PipelineNode(this._pipeline);
+        node.add_child(pipelineNode);
+        for (let i = 0; i < this._slices.length; i++) {
+            const slice = this._slices[i];
+            const box = this._boxes[i];
+            box.set_origin(slice.x1, slice.y1);
+            box.set_size(slice.x2 - slice.x1, slice.y2 - slice.y1);
+            pipelineNode.add_texture_rectangle(box, slice.s1, slice.t1, slice.s2, slice.t2);
+        }
+    }
+
+    /** Destination boxes follow the actor's size; the sources never change. */
+    _relayout() {
+        this._slices = shadowSlices(shadowGeometry(this._style.radius), this.width, this.height);
+        this._boxes = this._slices.map(() => new Clutter.ActorBox());
+        this._laidOutWidth = this.width;
+        this._laidOutHeight = this.height;
     }
 
     destroy() {
-        if (this._destroyed)
-            return;
-        this._destroyed = true;
-        this._relayoutCallbacks = [];
-        for (const b of this._bindings)
-            b.unbind();
+        for (const binding of this._bindings)
+            binding.unbind();
         this._bindings = [];
-        // Window actor may already be destroyed, disconnect may throw
         try {
-            this._windowActor.disconnect(this._allocId);
             this._windowActor.disconnect(this._destroyId);
         } catch {
-            // Actor destroyed: signals released automatically
+            // Window actor already destroyed: its signals went with it
         }
+        this._pipeline = null;
         try {
-            this._container.remove_child(this._actor);
+            this._container?.remove_child(this);
         } catch {
             // Container may already be destroyed
         }
-        this._actor.destroy();
-        this._actor = null;
+        this._container = null;
+        super.destroy();
     }
-}
+});

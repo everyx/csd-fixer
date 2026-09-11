@@ -86,34 +86,29 @@ and deepens the outline from 7% to 30%.
 
 ## What the decoration costs
 
-Two offscreen passes, both per decorated window rather than per session:
+One offscreen per decorated window, plus one baked buffer per shadow style for the whole
+session:
 
-| Effect | Attached to | Buffer | At 1920x1080 |
-|---|---|---|---|
-| `clipEffect.js` | the window actor | window size + 3px | ~8.3 MB |
-| `shadowEffect.js` | the padded shadow actor | window size + 2x28px | ~8.5 MB |
+| Part | Where | Size |
+|---|---|---|
+| clip | `clipEffect.js`, on the window actor | window size + 3px, ~8.3 MB at 1920x1080 |
+| shadow | `shadowTexture.js`, baked once per style | 145x145, ~82 KB, shared by every window |
 
-The clip pass is skipped when there is nothing to clip (radius 0 and no outline) and
-the shadow pass exists only while a shadow is drawn.
+The clip pass is skipped when there is nothing to clip (radius 0, or no outline) and a
+window with no shadow never touches a baked buffer.
 
-Mutter pays far less for its own window shadows, and the difference is structural:
-`MetaShadow` (`src/x11/meta-shadow-factory.c`) is a `CoglTexture` rendered once into
-memory and painted as a nine-slice, borders unscaled and middle stretched, so it
-costs kilobytes and no per-frame shader work. Our shadow is an SDF evaluated over the
-padded rectangle every frame. Its fragment shader does return before the shadow maths
-for the pixels the hollow mask discards, which is the ~98% of the rectangle that is
-window interior, so what remains is the fill rate and the buffer itself.
+The shadow's buffer is small because a shadow is a blurred rounded rectangle: its pixels
+depend on the window's size only through the length of its straight edges, so four corners
+and a one-pixel strip from each edge describe the whole shape and the strips stretch. That
+is Mutter's approach as well: `MetaShadow` (`src/x11/meta-shadow-factory.c`) is a
+`CoglTexture` rendered once and painted as a nine-slice. The bake draws the same GLSL the
+generator takes from GTK4, so this stays the upstream shadow, computed once instead of
+every frame.
 
-Moving the shadow to a nine-slice would bring it back to Mutter's footprint. It is
-not done because it trades statelessness for a cache that has to be invalidated on
-every size, radius, shadow-set and high-contrast change. Nothing in the design blocks
-it.
-
-There is no equivalent shortcut for the clip pass. Shell 45-50 ships no rounded-clip
-effect (the typelib has `BlurEffect` and nothing else), and Mutter never needs one: a
-window that decorates itself also rounds itself and arrives with alpha, so the
-compositor has nothing left to clip. Decorating windows that do not round themselves
-is what makes an offscreen pass inherent to this extension.
+Mutter never needs the clip pass, and Shell 45-50 ships no rounded-clip effect (the
+typelib has `BlurEffect` and nothing else): a window that decorates itself also rounds
+itself and arrives with alpha, so the compositor has nothing left to clip. Decorating
+windows that do not round themselves is what makes an offscreen pass inherent here.
 
 ## What is not introspectable at all
 

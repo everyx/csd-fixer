@@ -60,14 +60,22 @@ Four things about it cost time to find:
   fixes it.
 - **`Eval` takes one line.** GVariant decodes a `\n` in the argument into a real
   newline before the shell evals the string, so a multi-line script fails with
-  `SyntaxError: "" string literal contains an unescaped line break`. Join with a
-  separator and split the answer afterwards, and use double quotes throughout: a file
-  or a heredoc cannot see how the wrapper quotes what it is given.
-- **The framebuffer it allocates is readable.**
-  `Clutter.OffscreenEffect.get_texture()` returns the real offscreen: the actor's
-  allocation plus 3px, in `RGBA8888_PREMULTIPLIED`, so 4 bytes per pixel. That is
-  where the footprint in [decoration-model.md](decoration-model.md) comes from;
-  measured sizes match the derived ones to the byte.
+  `SyntaxError: "" string literal contains an unescaped line break`. The same decoding
+  eats a single backslash, so a regular expression has to be written as `[0-9]` rather
+  than `\d`. Join statements with a separator and split the answer afterwards, and use
+  double quotes throughout: a file or a heredoc cannot see how the wrapper quotes what
+  it is given.
+- **This session does not reproduce the rendering.** Compiling, allocating and painting
+  all succeed, and the offscreen sizes are right, but what reaches the screen is not
+  what a real session shows: a shadow can be missing here and correct in the developer's
+  session. Use it for geometry, state and framebuffer sizes, and use
+  `gnome-shell --devkit --wayland --unsafe-mode` (a nested shell with a real GL path,
+  where `Eval` and `Screenshot` both work) for anything visual.
+- **Screenshots are in physical pixels, rects are logical.**
+  `Meta.Window.get_frame_rect()` answers in logical pixels while the screenshot is
+  `logical x global.display.get_monitor_scale(monitor)`. On a fractional-scale display
+  that is a 4/3 difference here, enough to sample the wrong place entirely and conclude
+  that nothing is drawn.
 - **Per-frame cost is measurable without a profiler.** `ClutterStage` emits
   `before-paint` and `after-paint`; a `GLib.timeout_add(..., 16, ...)` that calls
   `global.stage.queue_redraw()` keeps frames coming, and enabling or disabling the
@@ -84,6 +92,12 @@ so two screenshots of one session are comparable.
 ```sh
 ./tools/dev.sh app gjs tools/probe-window.js
 ```
+
+With `CSD_FIXER_BACKDROP=1` the same script becomes a uniform white surface to measure a
+shadow against, under a separate application id so it can run beside the subject, and
+meant to be maximized: a maximized window is one the detector never decorates, so it is
+background rather than subject. That beats changing the desktop background, which alters
+something outside the session under test.
 
 Prototype actors must be destroyed and any `GLib` sources removed before
 `tools/dev.sh stop`, otherwise the next run inherits them.
