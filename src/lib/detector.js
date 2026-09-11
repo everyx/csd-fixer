@@ -70,14 +70,17 @@ export function shouldDecorate({
     if (hasSsd)
         return {apply: false, reason: 'has-ssd-frame'};
 
-    // 4. Core geometric criteria: matches Mutter shadow threshold
+    // 4. Core geometric criteria: matches Mutter shadow threshold.
+    // A genuine client-side shadow reserves margin on every side; an oversized
+    // margin on a single axis is instead a resize grip / partial decoration.
+    // Require both axes to clear the threshold rather than either one.
     // Single-side margin = (physical buffer / scale - logical frame) / 2
     const {w, h} = computeInsets(bufferWidth, bufferHeight,
         frameWidth, frameHeight, scale);
     const sideW = w / 2;
     const sideH = h / 2;
 
-    if (sideW >= insetThreshold || sideH >= insetThreshold)
+    if (sideW >= insetThreshold && sideH >= insetThreshold)
         return {apply: false, reason: `has-csd(insets=${sideW.toFixed(1)}x${sideH.toFixed(1)} >= ${insetThreshold})`};
 
     // 5. X11 / XWayland windows without custom frame extents (insets === 0, e.g. WPS Office, Dida):

@@ -108,6 +108,16 @@ describe('shouldDecorate', () => {
         expect(r.reason).toContain('20.0x20.0 >= 8');
     });
 
+    it('oversized margin on a single axis (asymmetric) is not treated as a CSD shadow -> decorate', () => {
+        const r = shouldDecorate({
+            ...base,
+            bufferWidth: 440, bufferHeight: 300,
+            frameWidth: 400, frameHeight: 300,
+        });
+        expect(r.apply).toBeTrue();
+        expect(r.reason).toContain('no-csd');
+    });
+
     it('server-side decorations (SSD, traditional X11 app with system titlebar) -> skip', () => {
         const r = shouldDecorate({...base, hasSsd: true});
         expect(r.apply).toBeFalse();
