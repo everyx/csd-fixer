@@ -1,0 +1,30 @@
+#!/bin/sh
+#
+# A push is the last moment a failure is still cheap, so run the commit checks too
+# - a commit made with --no-verify, or one made before these hooks were installed,
+# would otherwise go straight to CI - and then pack the extension, which is the one
+# check CI runs that a commit hook cannot.
+#
+# Bypass with `git push --no-verify` when that is what you mean.
+
+set -e
+
+"$(dirname "$0")/pre-commit"
+
+if ! command -v gnome-extensions >/dev/null 2>&1; then
+    echo "pre-push: gnome-extensions is not installed, skipping the pack check" >&2
+    exit 0
+fi
+
+log=$(mktemp)
+trap 'rm -f "$log"' EXIT INT TERM
+
+printf '%-12s' pack
+if pnpm run --silent pack >"$log" 2>&1; then
+    printf 'ok\n'
+else
+    printf 'FAILED\n\n'
+    cat "$log"
+    printf '\npre-push: packing the extension failed. Fix it, or push with --no-verify.\n'
+    exit 1
+fi

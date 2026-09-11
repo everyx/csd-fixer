@@ -1,0 +1,28 @@
+#!/bin/sh
+#
+# Runs what CI runs, on the commit rather than after the push.
+#
+# Each check here guards something a commit is meant to leave intact: the code
+# lints, the generated files and catalogues match their sources, the unit tests
+# pass, and the review tool has nothing to say. Catching them here means the commit
+# that broke one is the commit that fixes it, instead of a follow-up that has to
+# explain itself.
+#
+# Bypass with `git commit --no-verify` when that is what you mean.
+
+set -e
+
+log=$(mktemp)
+trap 'rm -f "$log"' EXIT INT TERM
+
+for check in lint check-style test ego-lint; do
+    printf '%-12s' "$check"
+    if pnpm run --silent "$check" >"$log" 2>&1; then
+        printf 'ok\n'
+    else
+        printf 'FAILED\n\n'
+        cat "$log"
+        printf '\npre-commit: %s failed. Fix it, or commit with --no-verify.\n' "$check"
+        exit 1
+    fi
+done

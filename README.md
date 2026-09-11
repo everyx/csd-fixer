@@ -57,6 +57,12 @@ pnpm run pack
 pnpm run shexli
 ```
 
+`pnpm install` points git at `.githooks/`, so a commit runs the checks CI runs —
+lint, generated-file and catalogue consistency, the unit tests, and ego-lint — and
+a push additionally packs the extension. A commit that would fail CI therefore
+cannot be made, and each one stays valid on its own. Either hook can be skipped
+with `--no-verify` when that is what you mean.
+
 ---
 
 ## License
