@@ -8,8 +8,8 @@ import {
     shouldClipWindow, ExclusionTarget, normalizeRuleMode,
     isWindowMaximized, isWindowTiled,
     resolveRule, evaluateWindowActions,
-    parseRuleKey, buildRuleKey, isDialogWindow, sanitizeWindowRules,
-    extractWindowProperties,
+    parseRuleKey, buildRuleKey, sanitizeWindowRules,
+    extractWindowProperties, WindowClientType,
 } from '../src/lib/detector.js';
 import {
     getWindowRules,
@@ -178,116 +178,75 @@ describe('shouldClipWindow', () => {
 });
 
 describe('resolveRule', () => {
-    const rules = {
-        'wechat': ExclusionTarget.CLIP,
-        'steam': ExclusionTarget.ALL,
-        'my-game': ExclusionTarget.SHADOW,
-    };
+    const mainKey = buildRuleKey('wechat');
+    const fixedChildKey = buildRuleKey('wechat', {hasParent: true, allowsResize: false});
 
-    it('exact match in windowRules', () => {
+    it('exact fingerprint match', () => {
+        const rules = {
+            [mainKey]: ExclusionTarget.CLIP,
+            [fixedChildKey]: ExclusionTarget.ALL,
+        };
         expect(resolveRule('wechat', rules)).toBe(ExclusionTarget.CLIP);
-        expect(resolveRule('steam', rules)).toBe(ExclusionTarget.ALL);
-        expect(resolveRule('my-game', rules)).toBe(ExclusionTarget.SHADOW);
+        expect(resolveRule('wechat', rules, {hasParent: true, allowsResize: false})).toBe(ExclusionTarget.ALL);
     });
 
-    it('case-insensitive match in windowRules', () => {
-        expect(resolveRule('WeChat', rules)).toBe(ExclusionTarget.CLIP);
-        expect(resolveRule('STEAM', rules)).toBe(ExclusionTarget.ALL);
+    it('does not fall back to the application: a different window kind of the same app does not match', () => {
+        const rules = {[fixedChildKey]: ExclusionTarget.ALL};
+
+        expect(resolveRule('wechat', rules)).toBeNull();
+        expect(resolveRule('wechat', rules, {hasParent: true, allowsResize: true})).toBeNull();
+        expect(resolveRule('wechat', rules, {clientType: 'x11', hasParent: true, allowsResize: false})).toBeNull();
+        expect(resolveRule('wechat', rules, {windowType: WindowType.DIALOG, hasParent: true, allowsResize: false})).toBeNull();
+    });
+
+    it('case-insensitive wmClass match in both directions', () => {
+        const upperRule = buildRuleKey('WeChat', {hasParent: true, allowsResize: false});
+        expect(resolveRule('wechat', {[upperRule]: ExclusionTarget.ALL}, {hasParent: true, allowsResize: false})).toBe(ExclusionTarget.ALL);
+
+        const lowerRule = buildRuleKey('wechat', {hasParent: true, allowsResize: false});
+        expect(resolveRule('WeChat', {[lowerRule]: ExclusionTarget.ALL}, {hasParent: true, allowsResize: false})).toBe(ExclusionTarget.ALL);
     });
 
     it('no match returns null', () => {
-        expect(resolveRule('unknown-app', rules)).toBeNull();
-        expect(resolveRule(null, rules)).toBeNull();
-        expect(resolveRule('', rules)).toBeNull();
+        expect(resolveRule('unknown-app', {[mainKey]: ExclusionTarget.ALL})).toBeNull();
+        expect(resolveRule(null, {[mainKey]: ExclusionTarget.ALL})).toBeNull();
+        expect(resolveRule('', {[mainKey]: ExclusionTarget.ALL})).toBeNull();
     });
 
-    it('composite rules: dialog window matches wmClass:dialog with highest precedence over base wmClass', () => {
-        const compositeRules = {
-            'wechat': ExclusionTarget.CLIP,
-            'wechat:dialog': ExclusionTarget.ALL,
-        };
+    it('every fingerprint field participates in matching', () => {
+        const base = buildRuleKey('app', {
+            clientType: 'wayland', windowType: WindowType.NORMAL,
+            hasParent: true, allowsResize: false, isAttachedDialog: false,
+        });
+        const rules = {[base]: ExclusionTarget.ALL};
 
-        // Main normal window: matches base wmClass
-        expect(resolveRule('wechat', compositeRules, {isDialog: false})).toBe(ExclusionTarget.CLIP);
-
-        // Dialog popup window: matches wechat:dialog (disable-all)
-        expect(resolveRule('wechat', compositeRules, {isDialog: true})).toBe(ExclusionTarget.ALL);
-
-        // Case-insensitive dialog match
-        expect(resolveRule('WeChat', compositeRules, {isDialog: true})).toBe(ExclusionTarget.ALL);
-    });
-
-    it('composite rules: title rule matches with highest precedence over dialog and base', () => {
-        const compositeRules = {
-            'wechat': ExclusionTarget.CLIP,
-            'wechat:dialog': ExclusionTarget.ALL,
-            'wechat:title=Special': ExclusionTarget.SHADOW,
-        };
-
-        // Title matches specifically
-        expect(resolveRule('wechat', compositeRules, {isDialog: true, title: 'Special'})).toBe(ExclusionTarget.SHADOW);
-
-        // Other dialog matches wechat:dialog
-        expect(resolveRule('wechat', compositeRules, {isDialog: true, title: 'Logout'})).toBe(ExclusionTarget.ALL);
-    });
-
-    it('composite rules: fallback to base wmClass when no dialog or title rule exists', () => {
-        const compositeRules = {
-            'wechat': ExclusionTarget.CLIP,
-        };
-
-        // When only base rule exists, dialog inherits base rule
-        expect(resolveRule('wechat', compositeRules, {isDialog: true})).toBe(ExclusionTarget.CLIP);
-    });
-
-    it('bidirectional case-insensitive match (uppercase rule key matches lowercase wmClass)', () => {
-        const uppercaseRules = {
-            'WeChat': ExclusionTarget.CLIP,
-            'Steam:dialog': ExclusionTarget.ALL,
-            'Discord:title=Voice Channel': ExclusionTarget.SHADOW,
-        };
-        expect(resolveRule('wechat', uppercaseRules)).toBe(ExclusionTarget.CLIP);
-        expect(resolveRule('steam', uppercaseRules, {isDialog: true})).toBe(ExclusionTarget.ALL);
-        expect(resolveRule('discord', uppercaseRules, {title: 'Voice Channel'})).toBe(ExclusionTarget.SHADOW);
-    });
-
-    it('native property rules: fixed dialog matches specifically without affecting resizable child window', () => {
-        const rules = {
-            'com.tencent.wechat': ExclusionTarget.CLIP,
-            'com.tencent.wechat:has_parent=true,allows_resize=false': ExclusionTarget.ALL,
-        };
-
-        // Main window (no parent) -> matches base rule (CLIP)
-        expect(resolveRule('com.tencent.wechat', rules, {hasParent: false, allowsResize: true})).toBe(ExclusionTarget.CLIP);
-
-        // Fixed exit dialog (hasParent=true, allowsResize=false) -> matches specific rule (ALL)
-        expect(resolveRule('com.tencent.wechat', rules, {hasParent: true, allowsResize: false})).toBe(ExclusionTarget.ALL);
-
-        // Article browser (hasParent=true, allowsResize=true) -> does NOT match exit dialog rule, falls back to base rule (CLIP)
-        expect(resolveRule('com.tencent.wechat', rules, {hasParent: true, allowsResize: true})).toBe(ExclusionTarget.CLIP);
-
-        // When specific article browser rule is added, it matches specifically
-        const rulesWithArticle = {
-            ...rules,
-            'com.tencent.wechat:has_parent=true,allows_resize=true': ExclusionTarget.SHADOW,
-        };
-        expect(resolveRule('com.tencent.wechat', rulesWithArticle, {hasParent: true, allowsResize: true})).toBe(ExclusionTarget.SHADOW);
+        expect(resolveRule('app', rules, {hasParent: true, allowsResize: false})).toBe(ExclusionTarget.ALL);
+        expect(resolveRule('app', rules, {clientType: 'x11', windowType: WindowType.NORMAL, hasParent: true, allowsResize: false, isAttachedDialog: false})).toBeNull();
+        expect(resolveRule('app', rules, {windowType: WindowType.DIALOG, hasParent: true, allowsResize: false, isAttachedDialog: false})).toBeNull();
+        expect(resolveRule('app', rules, {hasParent: true, allowsResize: true, isAttachedDialog: false})).toBeNull();
+        expect(resolveRule('app', rules, {hasParent: true, allowsResize: false, isAttachedDialog: true})).toBeNull();
     });
 });
 
 describe('buildRuleKey', () => {
-    it('main window without parent returns plain wmClass', () => {
-        expect(buildRuleKey('wechat')).toBe('wechat');
-        expect(buildRuleKey('wechat', {hasParent: false, allowsResize: true})).toBe('wechat');
-        expect(buildRuleKey('wechat', {hasParent: false, allowsResize: false})).toBe('wechat');
+    it('always emits the full window-kind fingerprint', () => {
+        expect(buildRuleKey('wechat')).toBe(
+            'wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false');
     });
 
-    it('fixed child window returns has_parent=true,allows_resize=false', () => {
-        expect(buildRuleKey('wechat', {hasParent: true, allowsResize: false})).toBe('wechat:has_parent=true,allows_resize=false');
+    it('encodes every structural field', () => {
+        expect(buildRuleKey('wechat', {
+            clientType: 'x11',
+            windowType: 3,
+            hasParent: true,
+            allowsResize: false,
+            isAttachedDialog: true,
+        })).toBe('wechat:client_type=x11,window_type=3,has_parent=true,allows_resize=false,attached_dialog=true');
     });
 
-    it('resizable child window returns has_parent=true,allows_resize=true', () => {
-        expect(buildRuleKey('wechat', {hasParent: true, allowsResize: true})).toBe('wechat:has_parent=true,allows_resize=true');
+    it('never collapses to a bare application key', () => {
+        expect(buildRuleKey('wechat', {hasParent: false})).not.toBe('wechat');
+        expect(buildRuleKey('wechat', {hasParent: true, allowsResize: false})).not.toBe('wechat');
     });
 
     it('empty wmClass returns empty string', () => {
@@ -297,36 +256,20 @@ describe('buildRuleKey', () => {
 });
 
 describe('parseRuleKey', () => {
-    it('plain wmClass without specifier', () => {
-        expect(parseRuleKey('wechat')).toEqual({baseWmClass: 'wechat', specifier: null, properties: null});
-        expect(parseRuleKey('steam')).toEqual({baseWmClass: 'steam', specifier: null, properties: null});
-    });
+    const key = 'wechat:client_type=wayland,window_type=0,has_parent=true,allows_resize=false,attached_dialog=false';
 
-    it('native property specifier', () => {
-        expect(parseRuleKey('wechat:has_parent=true,allows_resize=false')).toEqual({
+    it('parses base wmClass, specifier and typed properties', () => {
+        expect(parseRuleKey(key)).toEqual({
             baseWmClass: 'wechat',
-            specifier: 'has_parent=true,allows_resize=false',
+            specifier: 'client_type=wayland,window_type=0,has_parent=true,allows_resize=false,attached_dialog=false',
             properties: {
+                client_type: 'wayland',
+                window_type: 0,
                 has_parent: true,
                 allows_resize: false,
+                attached_dialog: false,
             },
         });
-        expect(parseRuleKey('wechat:has_parent=true,allows_resize=true')).toEqual({
-            baseWmClass: 'wechat',
-            specifier: 'has_parent=true,allows_resize=true',
-            properties: {
-                has_parent: true,
-                allows_resize: true,
-            },
-        });
-    });
-
-    it('dialog specifier', () => {
-        expect(parseRuleKey('wechat:dialog')).toEqual({baseWmClass: 'wechat', specifier: 'dialog', properties: null});
-    });
-
-    it('title specifier', () => {
-        expect(parseRuleKey('wechat:title=Exit')).toEqual({baseWmClass: 'wechat', specifier: 'title=Exit', properties: null});
     });
 
     it('empty or null', () => {
@@ -334,101 +277,99 @@ describe('parseRuleKey', () => {
         expect(parseRuleKey(null)).toEqual({baseWmClass: '', specifier: null, properties: null});
     });
 
-    it('returns empty result for invalid keys', () => {
-        expect(parseRuleKey('wechat:foo=bar')).toEqual({baseWmClass: '', specifier: null, properties: null});
-        expect(parseRuleKey('wechat:has_parent=false,allows_resize=true')).toEqual({baseWmClass: '', specifier: null, properties: null});
-        expect(parseRuleKey('wechat:has_parent=false,allows_resize=false')).toEqual({baseWmClass: '', specifier: null, properties: null});
-        expect(parseRuleKey('wechat:allows_resize=true,has_parent=true')).toEqual({baseWmClass: '', specifier: null, properties: null});
+    it('rejects bare app keys and legacy specifiers', () => {
+        const invalid = [
+            'wechat',
+            'wechat:dialog',
+            'wechat:title=Exit',
+            'wechat:has_parent=true,allows_resize=false',
+            'wechat:foo=bar',
+            'wechat:client_type=macos,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false',
+        ];
+        for (const bad of invalid)
+            expect(parseRuleKey(bad)).toEqual({baseWmClass: '', specifier: null, properties: null});
     });
 });
 
 describe('rule key contract & round-trip', () => {
-    it('round-trip: parseRuleKey with composite keys', () => {
+    it('round-trip: buildRuleKey -> parseRuleKey', () => {
         const keys = [
-            'wechat',
-            'wechat:has_parent=true,allows_resize=false',
-            'wechat:has_parent=true,allows_resize=true',
-            'wechat:dialog',
-            'wechat:title=Exit',
+            buildRuleKey('wechat'),
+            buildRuleKey('wechat', {hasParent: true, allowsResize: false}),
+            buildRuleKey('steam', {clientType: 'x11', windowType: WindowType.MODAL_DIALOG, isAttachedDialog: true}),
         ];
         for (const key of keys) {
             const parsed = parseRuleKey(key);
-            const reconstructed = parsed.specifier
-                ? `${parsed.baseWmClass}:${parsed.specifier}`
-                : parsed.baseWmClass;
-            expect(reconstructed).toBe(key);
+            expect(`${parsed.baseWmClass}:${parsed.specifier}`).toBe(key);
         }
     });
 
-    it('prefs rule keys match resolveRule candidate structure', () => {
+    it('prefs-generated keys match resolveRule for the picked kind only', () => {
+        const picked = {hasParent: true, allowsResize: false};
         const prefsGeneratedRules = {
-            [buildRuleKey('code', {hasParent: true, allowsResize: false})]: ExclusionTarget.ALL,
-            'code:title=Preferences': ExclusionTarget.CLIP,
+            [buildRuleKey('code', picked)]: ExclusionTarget.ALL,
         };
-        expect(resolveRule('code', prefsGeneratedRules, {hasParent: true, allowsResize: false})).toBe(ExclusionTarget.ALL);
-        expect(resolveRule('code', prefsGeneratedRules, {title: 'Preferences'})).toBe(ExclusionTarget.CLIP);
+        expect(resolveRule('code', prefsGeneratedRules, picked)).toBe(ExclusionTarget.ALL);
+        expect(resolveRule('code', prefsGeneratedRules, {hasParent: true, allowsResize: true})).toBeNull();
+        expect(resolveRule('code', prefsGeneratedRules)).toBeNull();
     });
 });
 
 describe('sanitizeWindowRules', () => {
-    it('passes valid rule keys unchanged', () => {
+    const mainKey = buildRuleKey('wechat');
+    const childKey = buildRuleKey('wechat', {hasParent: true, allowsResize: false});
+
+    it('passes valid fingerprint keys unchanged', () => {
         const input = {
-            'wechat': ExclusionTarget.CLIP,
-            'wechat:has_parent=true,allows_resize=false': ExclusionTarget.ALL,
-            'wechat:has_parent=true,allows_resize=true': ExclusionTarget.SHADOW,
-            'steam:dialog': ExclusionTarget.ALL,
-            'discord:title=Voice Channel': ExclusionTarget.SHADOW,
+            [mainKey]: ExclusionTarget.CLIP,
+            [childKey]: ExclusionTarget.ALL,
         };
         expect(sanitizeWindowRules(input)).toEqual(input);
     });
 
-    it('drops invalid rule keys and non-string entries', () => {
+    it('drops bare app keys, legacy specifiers and malformed keys', () => {
         const input = {
-            'wechat': ExclusionTarget.CLIP,
+            [mainKey]: ExclusionTarget.CLIP,
+            'wechat': ExclusionTarget.ALL,
+            'wechat:dialog': ExclusionTarget.ALL,
+            'wechat:title=Exit': ExclusionTarget.ALL,
+            'wechat:has_parent=true,allows_resize=false': ExclusionTarget.ALL,
             'invalid:key:too:many:colons': ExclusionTarget.ALL,
-            'has space': ExclusionTarget.CLIP,
-            'wechat:foo=bar': ExclusionTarget.ALL,
-            'wechat:has_parent=invalid,allows_resize=true': ExclusionTarget.ALL,
-            'wechat:has_parent=false,allows_resize=true': ExclusionTarget.ALL,
-            'wechat:has_parent=false,allows_resize=false': ExclusionTarget.ALL,
-            'wechat:allows_resize=true,has_parent=true': ExclusionTarget.ALL,
-            'valid_app': 123,
+            'has space:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false': ExclusionTarget.ALL,
+            'bad:client_type=macos,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false': ExclusionTarget.ALL,
+            [buildRuleKey('valid_app')]: 123,
         };
-        expect(sanitizeWindowRules(input)).toEqual({
-            'wechat': ExclusionTarget.CLIP,
-        });
+        expect(sanitizeWindowRules(input)).toEqual({[mainKey]: ExclusionTarget.CLIP});
     });
 
     it('rejects case-colliding duplicate keys deterministically', () => {
         const input = {
-            'wechat': ExclusionTarget.CLIP,
-            'WeChat': ExclusionTarget.ALL,
+            [buildRuleKey('wechat')]: ExclusionTarget.CLIP,
+            [buildRuleKey('WeChat')]: ExclusionTarget.ALL,
         };
         expect(sanitizeWindowRules(input)).toEqual({
-            'wechat': ExclusionTarget.CLIP,
+            [buildRuleKey('wechat')]: ExclusionTarget.CLIP,
         });
     });
 
     it('migrates legacy disable-* rule modes to canonical forms', () => {
         const legacyInput = {
-            'wechat': 'disable-clip',
-            'steam:dialog': 'disable-all',
-            'discord:title=Voice Channel': 'disable-shadow',
+            [mainKey]: 'disable-clip',
+            [childKey]: 'disable-all',
         };
         expect(sanitizeWindowRules(legacyInput)).toEqual({
-            'wechat': ExclusionTarget.CLIP,
-            'steam:dialog': ExclusionTarget.ALL,
-            'discord:title=Voice Channel': ExclusionTarget.SHADOW,
+            [mainKey]: ExclusionTarget.CLIP,
+            [childKey]: ExclusionTarget.ALL,
         });
     });
 
     it('drops entries with invalid rule modes', () => {
         const input = {
-            'wechat': ExclusionTarget.CLIP,
-            'bad-app': 'not-a-valid-mode',
+            [mainKey]: ExclusionTarget.CLIP,
+            [buildRuleKey('bad-app')]: 'not-a-valid-mode',
         };
         expect(sanitizeWindowRules(input)).toEqual({
-            'wechat': ExclusionTarget.CLIP,
+            [mainKey]: ExclusionTarget.CLIP,
         });
     });
 
@@ -440,13 +381,15 @@ describe('sanitizeWindowRules', () => {
 });
 
 describe('getWindowRules', () => {
+    const validKey = buildRuleKey('wechat', {hasParent: true, allowsResize: false});
+
     it('unpacks and sanitizes from mock settings', () => {
         const mockSettings = {
             get_value: (key) => {
                 if (key === 'window-rules') {
                     return {
                         deep_unpack: () => ({
-                            'wechat': 'disable-clip',
+                            [validKey]: 'disable-clip',
                             'bad:foo=bar': 'all',
                         }),
                     };
@@ -455,7 +398,7 @@ describe('getWindowRules', () => {
             },
         };
         expect(getWindowRules(mockSettings)).toEqual({
-            'wechat': ExclusionTarget.CLIP,
+            [validKey]: ExclusionTarget.CLIP,
         });
     });
 
@@ -479,12 +422,12 @@ describe('getWindowRules', () => {
             },
         };
         setWindowRules(mockSettings, {
-            'wechat': 'all',
+            [buildRuleKey('wechat')]: 'all',
             'invalid:key': 'clip',
         });
         expect(savedKey).toBe('window-rules');
         expect(savedVariant.deep_unpack()).toEqual({
-            'wechat': ExclusionTarget.ALL,
+            [buildRuleKey('wechat')]: ExclusionTarget.ALL,
         });
     });
 });
@@ -513,30 +456,6 @@ describe('normalizeRuleMode', () => {
         expect(normalizeRuleMode('')).toBeNull();
         expect(normalizeRuleMode(null)).toBeNull();
         expect(normalizeRuleMode(undefined)).toBeNull();
-    });
-});
-
-describe('isDialogWindow', () => {
-    it('detects dialog by windowType DIALOG or MODAL_DIALOG', () => {
-        expect(isDialogWindow({windowType: WindowType.DIALOG})).toBe(true);
-        expect(isDialogWindow({windowType: WindowType.MODAL_DIALOG})).toBe(true);
-        expect(isDialogWindow({windowType: WindowType.NORMAL})).toBe(false);
-    });
-
-    it('detects dialog when hasParent is true', () => {
-        expect(isDialogWindow({windowType: WindowType.NORMAL, hasParent: true})).toBe(true);
-    });
-
-    it('detects dialog when isAttachedDialog is true', () => {
-        expect(isDialogWindow({windowType: WindowType.NORMAL, isAttachedDialog: true})).toBe(true);
-    });
-
-    it('returns false for normal standalone window', () => {
-        expect(isDialogWindow({
-            windowType: WindowType.NORMAL,
-            hasParent: false,
-            isAttachedDialog: false,
-        })).toBe(false);
     });
 });
 
@@ -586,7 +505,7 @@ describe('evaluateWindowActions', () => {
         const res = evaluateWindowActions({
             ...baseWin,
             wmClass: 'overlay-app',
-            windowRules: {'overlay-app': ExclusionTarget.ALL},
+            windowRules: {[buildRuleKey('overlay-app')]: ExclusionTarget.ALL},
         });
         expect(res.applyShadow).toBeFalse();
         expect(res.applyClip).toBeFalse();
@@ -597,7 +516,7 @@ describe('evaluateWindowActions', () => {
         const res = evaluateWindowActions({
             ...baseWin,
             wmClass: 'wechat',
-            windowRules: {'wechat': ExclusionTarget.CLIP},
+            windowRules: {[buildRuleKey('wechat')]: ExclusionTarget.CLIP},
         });
         expect(res.applyShadow).toBeTrue();
         expect(res.applyClip).toBeFalse();
@@ -608,7 +527,7 @@ describe('evaluateWindowActions', () => {
         const res = evaluateWindowActions({
             ...baseWin,
             wmClass: 'custom-tool',
-            windowRules: {'custom-tool': ExclusionTarget.SHADOW},
+            windowRules: {[buildRuleKey('custom-tool')]: ExclusionTarget.SHADOW},
         });
         expect(res.applyShadow).toBeFalse();
         expect(res.applyClip).toBeTrue();
@@ -620,7 +539,7 @@ describe('evaluateWindowActions', () => {
             ...baseWin,
             bufferWidth: 460, bufferHeight: 360, // single side 30px >= 8px
             wmClass: 'gtk4-app',
-            windowRules: {'gtk4-app': ExclusionTarget.CLIP},
+            windowRules: {[buildRuleKey('gtk4-app')]: ExclusionTarget.CLIP},
         };
         const res = evaluateWindowActions(csdWin);
         expect(res.applyShadow).toBeFalse();
@@ -670,65 +589,15 @@ describe('evaluateWindowActions', () => {
         expect(res.applyClip).toBeTrue();
     });
 
-    it('dialog popup with wechat:dialog rule disables decorations on dialog while retaining them on main window', () => {
+    it('rule for one window kind leaves other kinds of the same app decorated', () => {
         const rules = {
-            'wechat:dialog': ExclusionTarget.ALL,
+            [buildRuleKey('wechat', {hasParent: true, allowsResize: false})]: ExclusionTarget.ALL,
         };
 
-        // WeChat main window (NORMAL, no parent)
+        // Main window (top-level, resizable) is a different kind -> untouched
         const mainWin = evaluateWindowActions({
             ...baseWin,
             wmClass: 'wechat',
-            windowType: WindowType.NORMAL,
-            hasParent: false,
-            windowRules: rules,
-        });
-        expect(mainWin.applyShadow).toBeTrue();
-        expect(mainWin.applyClip).toBeTrue();
-
-        // WeChat exit popup (DIALOG windowType)
-        const dialogWin = evaluateWindowActions({
-            ...baseWin,
-            wmClass: 'wechat',
-            windowType: WindowType.DIALOG,
-            hasParent: true,
-            windowRules: rules,
-        });
-        expect(dialogWin.applyShadow).toBeFalse();
-        expect(dialogWin.applyClip).toBeFalse();
-        expect(dialogWin.reason).toContain('disabled-by-rule(wechat:all)');
-
-        // WeChat modal popup (MODAL_DIALOG windowType)
-        const modalWin = evaluateWindowActions({
-            ...baseWin,
-            wmClass: 'wechat',
-            windowType: WindowType.MODAL_DIALOG,
-            windowRules: rules,
-        });
-        expect(modalWin.applyShadow).toBeFalse();
-        expect(modalWin.applyClip).toBeFalse();
-
-        // WeChat popup with transient parent even if type is NORMAL
-        const transientWin = evaluateWindowActions({
-            ...baseWin,
-            wmClass: 'wechat',
-            windowType: WindowType.NORMAL,
-            hasParent: true,
-            windowRules: rules,
-        });
-        expect(transientWin.applyShadow).toBeFalse();
-        expect(transientWin.applyClip).toBeFalse();
-    });
-
-    it('WeChat real-world isolation: fixed exit dialog excluded without affecting resizable article browser or main window', () => {
-        const rules = {
-            'com.tencent.wechat:has_parent=true,allows_resize=false': ExclusionTarget.ALL,
-        };
-
-        // 1. WeChat main window (NORMAL, no parent, resizable) -> decorated normally
-        const mainWin = evaluateWindowActions({
-            ...baseWin,
-            wmClass: 'com.tencent.wechat',
             hasParent: false,
             allowsResize: true,
             windowRules: rules,
@@ -736,28 +605,59 @@ describe('evaluateWindowActions', () => {
         expect(mainWin.applyShadow).toBeTrue();
         expect(mainWin.applyClip).toBeTrue();
 
-        // 2. WeChat exit dialog (transient, non-resizable) -> excluded by rule
-        const exitDialog = evaluateWindowActions({
+        // Fixed child dialog matches the rule
+        const dialogWin = evaluateWindowActions({
             ...baseWin,
-            wmClass: 'com.tencent.wechat',
+            wmClass: 'wechat',
             hasParent: true,
             allowsResize: false,
             windowRules: rules,
         });
-        expect(exitDialog.applyShadow).toBeFalse();
-        expect(exitDialog.applyClip).toBeFalse();
-        expect(exitDialog.reason).toContain('disabled-by-rule(com.tencent.wechat:all)');
+        expect(dialogWin.applyShadow).toBeFalse();
+        expect(dialogWin.applyClip).toBeFalse();
+        expect(dialogWin.reason).toContain('disabled-by-rule');
 
-        // 3. WeChat article browser (transient, resizable) -> NOT affected by exit dialog rule!
-        const articleBrowser = evaluateWindowActions({
+        // Resizable child of the same app is a different kind -> untouched
+        const resizableChild = evaluateWindowActions({
             ...baseWin,
-            wmClass: 'com.tencent.wechat',
+            wmClass: 'wechat',
             hasParent: true,
             allowsResize: true,
             windowRules: rules,
         });
-        expect(articleBrowser.applyShadow).toBeTrue();
-        expect(articleBrowser.applyClip).toBeTrue();
+        expect(resizableChild.applyShadow).toBeTrue();
+        expect(resizableChild.applyClip).toBeTrue();
+    });
+
+    it('client type is part of the window kind: an X11 window does not match a Wayland rule', () => {
+        const rules = {
+            [buildRuleKey('wechat', {clientType: 'wayland', hasParent: true, allowsResize: false})]: ExclusionTarget.ALL,
+        };
+
+        const waylandChild = evaluateWindowActions({
+            ...baseWin,
+            wmClass: 'wechat',
+            isX11: false,
+            hasParent: true,
+            allowsResize: false,
+            windowRules: rules,
+        });
+        expect(waylandChild.applyShadow).toBeFalse();
+
+        // XWayland variant with 4px frame extents: decorated, because the stored
+        // rule targets the Wayland kind only.
+        const x11Child = evaluateWindowActions({
+            ...baseWin,
+            wmClass: 'wechat',
+            isX11: true,
+            bufferWidth: 408,
+            bufferHeight: 304,
+            hasParent: true,
+            allowsResize: false,
+            windowRules: rules,
+        });
+        expect(x11Child.applyShadow).toBeTrue();
+        expect(x11Child.applyClip).toBeTrue();
     });
 
     it('GNOME tiling alignment: hasTileMatch suppresses shadow to prevent adjacent window obstruction', () => {
@@ -869,34 +769,59 @@ describe('isWindowTiled', () => {
 });
 
 describe('extractWindowProperties', () => {
-    it('extracts all inspection properties from mock window', () => {
+    it('extracts the full window-kind fingerprint inputs', () => {
         const mockWin = {
             get_wm_class: () => 'com.tencent.wechat',
-            get_title: () => 'WeChat',
+            get_window_type: () => WindowType.NORMAL,
+            get_client_type: () => WindowClientType.WAYLAND,
             get_transient_for: () => ({}),
             allows_resize: () => false,
+            is_attached_dialog: () => false,
         };
         expect(extractWindowProperties(mockWin)).toEqual({
             wmClass: 'com.tencent.wechat',
-            title: 'WeChat',
+            clientType: 'wayland',
+            windowType: '0',
             hasParent: 'true',
             allowsResize: 'false',
+            isAttachedDialog: 'false',
+        });
+    });
+
+    it('marks X11 clients and encodes every boolean field', () => {
+        const x11Win = {
+            get_wm_class: () => 'wechat',
+            get_window_type: () => WindowType.MODAL_DIALOG,
+            get_client_type: () => WindowClientType.X11,
+            get_transient_for: () => null,
+            allows_resize: () => true,
+            is_attached_dialog: () => true,
+        };
+        expect(extractWindowProperties(x11Win)).toEqual({
+            wmClass: 'wechat',
+            clientType: 'x11',
+            windowType: String(WindowType.MODAL_DIALOG),
+            hasParent: 'false',
+            allowsResize: 'true',
+            isAttachedDialog: 'true',
         });
     });
 
     it('falls back to get_sandboxed_app_id when wm_class is unavailable', () => {
         const flatpakWin = {
             get_sandboxed_app_id: () => 'org.signal.Signal',
-            get_title: () => 'Signal',
             get_transient_for: () => null,
             allows_resize: () => true,
         };
-        expect(extractWindowProperties(flatpakWin)).toEqual({
-            wmClass: 'org.signal.Signal',
-            title: 'Signal',
-            hasParent: 'false',
-            allowsResize: 'true',
-        });
+        expect(extractWindowProperties(flatpakWin).wmClass).toBe('org.signal.Signal');
+    });
+
+    it('accepts a pre-resolved wmClass override (Shell.WindowTracker fallback for WM_CLASS-less windows)', () => {
+        const noWmClassWin = {
+            get_wm_class: () => null,
+            get_transient_for: () => null,
+        };
+        expect(extractWindowProperties(noWmClassWin, 'wechat').wmClass).toBe('wechat');
     });
 
     it('handles null and undefined safely', () => {

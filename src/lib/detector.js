@@ -6,6 +6,20 @@ import {
 export {WindowType};
 
 /**
+ * MetaWindowClientType (vendor/mutter/window.h). Values are stable across the
+ * typelib (`Meta.WindowClientType`); defined here so the pure detector module
+ * can classify client types without importing Shell/Meta.
+ */
+export const WindowClientType = Object.freeze({
+    WAYLAND: 0,
+    X11: 1,
+});
+
+/** Rule-key / D-Bus tokens for the client-type fingerprint field. */
+export const CLIENT_TYPE_TOKEN_WAYLAND = 'wayland';
+export const CLIENT_TYPE_TOKEN_X11 = 'x11';
+
+/**
  * Window CSD detection: determines whether a window lacks self-drawn client-side decorations.
  *
  * Criteria strictly align with Mutter source code (meta-shadow-factory.c / meta-window-actor-x11.c):
@@ -211,89 +225,98 @@ export function isWindowTiled(win, options = {}) {
 export const INSPECTOR_DBUS_NAME = 'org.gnome.Shell.Extensions.CsdFixer';
 export const INSPECTOR_DBUS_PATH = '/org/gnome/Shell/Extensions/CsdFixer';
 
+function boolString(value) {
+    return value ? 'true' : 'false';
+}
+
 /**
- * Extracts normalized inspection properties dictionary from a window instance.
- * Serves as the pure adapter bridging Meta.Window native properties to rule key inputs:
- * produces {wmClass, title, hasParent, allowsResize} consumed by buildRuleKey().
+ * Extracts the normalized inspection properties dictionary for the picker.
+ * Values are strings because the dictionary crosses D-Bus as `a{ss}`; prefs.js
+ * parses them back and feeds buildRuleKey(), which must yield exactly the key
+ * the runtime matcher derives from Meta.Window state.
  *
- * Placed in detector.js as a pure function to allow unit testing without Shell UI dependencies
- * and to ensure strict contract symmetry with buildRuleKey().
+ * Pure function: no Shell dependencies, unit-testable.
  *
  * @param {object} win - Window instance
+ * @param {string|null} [wmClassOverride=null] - Pre-resolved app id; Shell-side fallback for windows without WM_CLASS
  * @returns {Record<string, string>}
  */
-export function extractWindowProperties(win) {
+export function extractWindowProperties(win, wmClassOverride = null) {
     if (!win)
         return {};
 
-    const wmClass = win.get_wm_class?.() ?? win.get_sandboxed_app_id?.() ?? '';
-    const title = win.get_title?.() ?? '';
-    const hasParent = Boolean(win.get_transient_for?.());
-    const allowsResize = Boolean(win.allows_resize?.());
+    const wmClass = wmClassOverride ?? win.get_wm_class?.() ?? win.get_sandboxed_app_id?.() ?? '';
+    const windowType = win.get_window_type?.() ?? WindowType.NORMAL;
+    const isX11 = win.get_client_type?.() === WindowClientType.X11;
 
     return {
         wmClass,
-        title,
-        'hasParent': hasParent ? 'true' : 'false',
-        'allowsResize': allowsResize ? 'true' : 'false',
+        'clientType': isX11 ? CLIENT_TYPE_TOKEN_X11 : CLIENT_TYPE_TOKEN_WAYLAND,
+        'windowType': String(windowType),
+        'hasParent': boolString(win.get_transient_for?.()),
+        'allowsResize': boolString(win.allows_resize?.()),
+        'isAttachedDialog': boolString(win.is_attached_dialog?.()),
     };
 }
 
 /**
- * Determines whether a window acts as a dialog/transient window.
- * Benchmarked against Mutter's default_shadow_classes categorization.
+ * Canonical window fingerprint: the stable structural attributes that define a
+ * window "kind" for exclusion rules. The picker and the runtime matcher derive
+ * keys from the same fields and compare them as canonical strings, so a rule
+ * always targets exactly the kind of window the user picked.
  *
- * @param {object} [params={}]
- * @param {number} [params.windowType=WindowType.NORMAL] - Meta.WindowType
- * @param {boolean} [params.hasParent=false] - whether transient for another window
- * @param {boolean} [params.isAttachedDialog=false] - whether modal dialog attached to parent
- * @returns {boolean}
+ * Field order is part of the format. There is deliberately no app-wide form:
+ * an exclusion never generalizes to every window of an application.
  */
-export function isDialogWindow({
-    windowType = WindowType.NORMAL,
-    hasParent = false,
-    isAttachedDialog = false,
-} = {}) {
-    return windowType === WindowType.DIALOG ||
-           windowType === WindowType.MODAL_DIALOG ||
-           hasParent ||
-           isAttachedDialog;
-}
+const FP_CLIENT_TYPE = 'client_type';
+const FP_WINDOW_TYPE = 'window_type';
+const FP_HAS_PARENT = 'has_parent';
+const FP_ALLOWS_RESIZE = 'allows_resize';
+const FP_ATTACHED_DIALOG = 'attached_dialog';
 
-export const NATIVE_PROP_PARENT = 'has_parent';
-export const NATIVE_PROP_RESIZE = 'allows_resize';
+const FINGERPRINT_SPECIFIER_PATTERN = [
+    `${FP_CLIENT_TYPE}=(?:${CLIENT_TYPE_TOKEN_WAYLAND}|${CLIENT_TYPE_TOKEN_X11})`,
+    `${FP_WINDOW_TYPE}=\\d+`,
+    `${FP_HAS_PARENT}=(?:true|false)`,
+    `${FP_ALLOWS_RESIZE}=(?:true|false)`,
+    `${FP_ATTACHED_DIALOG}=(?:true|false)`,
+].join(',');
 
-export const NATIVE_RULE_PARENT = `${NATIVE_PROP_PARENT}=true`;
-export const NATIVE_RULE_RESIZE_TRUE = `${NATIVE_PROP_RESIZE}=true`;
-export const NATIVE_RULE_RESIZE_FALSE = `${NATIVE_PROP_RESIZE}=false`;
-
-export const NATIVE_SPECIFIER_PREFIX = `${NATIVE_RULE_PARENT},${NATIVE_PROP_RESIZE}=`;
-
-const NATIVE_SPECIFIERS_PATTERN = `${NATIVE_RULE_PARENT},${NATIVE_PROP_RESIZE}=(?:true|false)`;
 export const VALID_RULE_KEY_PATTERN = new RegExp(
-    `^[^\\s:]+(?::(?:dialog|title=.+|${NATIVE_SPECIFIERS_PATTERN}))?$`
+    `^[^\\s:]+:${FINGERPRINT_SPECIFIER_PATTERN}$`
 );
 
 /**
- * Builds a deterministic canonical rule key from window properties.
- * If window has no parent, returns the base wmClass.
- * If window has parent, returns `${wmClass}:has_parent=true,allows_resize=${allowsResize}`.
+ * Builds the canonical rule key (application + window-kind fingerprint).
  *
- * @param {string} wmClass - Base window class
+ * @param {string} wmClass - Base window class / app id
  * @param {object} [props={}]
- * @param {boolean} [props.hasParent=false]
- * @param {boolean} [props.allowsResize=true]
- * @returns {string} Canonical rule key
+ * @param {string} [props.clientType='wayland'] - 'wayland' | 'x11'
+ * @param {number} [props.windowType=WindowType.NORMAL] - Meta.WindowType
+ * @param {boolean} [props.hasParent=false] - transient child window
+ * @param {boolean} [props.allowsResize=true] - resizable
+ * @param {boolean} [props.isAttachedDialog=false] - modal dialog attached to parent
+ * @returns {string} Canonical rule key, or '' when wmClass is missing
  */
-export function buildRuleKey(wmClass, {hasParent = false, allowsResize = true} = {}) {
+export function buildRuleKey(wmClass, {
+    clientType = CLIENT_TYPE_TOKEN_WAYLAND,
+    windowType = WindowType.NORMAL,
+    hasParent = false,
+    allowsResize = true,
+    isAttachedDialog = false,
+} = {}) {
     if (!wmClass)
         return '';
 
-    if (!hasParent)
-        return wmClass;
+    const specifier = [
+        `${FP_CLIENT_TYPE}=${clientType}`,
+        `${FP_WINDOW_TYPE}=${windowType}`,
+        `${FP_HAS_PARENT}=${boolString(hasParent)}`,
+        `${FP_ALLOWS_RESIZE}=${boolString(allowsResize)}`,
+        `${FP_ATTACHED_DIALOG}=${boolString(isAttachedDialog)}`,
+    ].join(',');
 
-    const resizeProp = allowsResize ? NATIVE_RULE_RESIZE_TRUE : NATIVE_RULE_RESIZE_FALSE;
-    return `${wmClass}:${NATIVE_RULE_PARENT},${resizeProp}`;
+    return `${wmClass}:${specifier}`;
 }
 
 /**
@@ -340,64 +363,58 @@ export function sanitizeWindowRules(rawRules = {}) {
 }
 
 /**
- * Splits a rule key into base application wmClass, optional specifier, and parsed properties.
- * Strict whitelist-backed: returns empty result for invalid keys to ensure parser and validator consistency.
+ * Splits a rule key into base application wmClass, its fingerprint specifier,
+ * and the parsed property values. Strict: invalid keys yield an empty result so
+ * parser and validator can never disagree.
  *
- * E.g. "wechat:has_parent=true,allows_resize=false" -> { baseWmClass: "wechat", specifier: "...", properties: { has_parent: true, allows_resize: false } }
- *      "wechat:dialog" -> { baseWmClass: "wechat", specifier: "dialog", properties: null }
- *      "wechat" -> { baseWmClass: "wechat", specifier: null, properties: null }
+ * E.g. "wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false"
+ *   -> { baseWmClass: "wechat", specifier: "client_type=...", properties: {client_type:'wayland', window_type:0, ...} }
  *
  * @param {string} key - Rule key string
- * @returns {{ baseWmClass: string, specifier: string|null, properties: Record<string, boolean>|null }}
+ * @returns {{ baseWmClass: string, specifier: string|null, properties: Record<string, string|number|boolean>|null }}
  */
 export function parseRuleKey(key) {
     if (!key || typeof key !== 'string' || !VALID_RULE_KEY_PATTERN.test(key))
         return {baseWmClass: '', specifier: null, properties: null};
 
     const colonIdx = key.indexOf(':');
-    if (colonIdx === -1)
-        return {baseWmClass: key, specifier: null, properties: null};
-
     const baseWmClass = key.slice(0, colonIdx);
     const specifier = key.slice(colonIdx + 1);
 
-    let properties = null;
-    if (specifier.startsWith(NATIVE_SPECIFIER_PREFIX)) {
-        const resizeVal = specifier.slice(NATIVE_SPECIFIER_PREFIX.length) === 'true';
-        properties = {
-            [NATIVE_PROP_PARENT]: true,
-            [NATIVE_PROP_RESIZE]: resizeVal,
-        };
+    const properties = {};
+    for (const pair of specifier.split(',')) {
+        const eqIdx = pair.indexOf('=');
+        const propName = pair.slice(0, eqIdx);
+        const rawValue = pair.slice(eqIdx + 1);
+
+        if (propName === FP_WINDOW_TYPE)
+            properties[propName] = Number(rawValue);
+        else if (propName === FP_CLIENT_TYPE)
+            properties[propName] = rawValue;
+        else
+            properties[propName] = rawValue === 'true';
     }
 
-    return {
-        baseWmClass,
-        specifier,
-        properties,
-    };
+    return {baseWmClass, specifier, properties};
 }
 
 /**
- * Resolves the rule mode for a window based on composite static fingerprint.
- * Benchmarked against KWin's multi-criteria matching hierarchy (src/rules.cpp).
+ * Resolves the exclusion mode for a window by matching its canonical window-kind
+ * fingerprint against the stored rules. There is no specificity hierarchy and no
+ * app-wide fallback: a rule applies if and only if the window kind matches,
+ * so an exclusion can never silently spread to other windows of the app.
  *
- * Specificity precedence (most specific to least specific):
- * 1. Native property rule: `${wmClass}:has_parent=true,allows_resize=${allowsResize}`
- * 2. Exact title rule: `${wmClass}:title=${title}`
- * 3. Legacy dialog rule: `${wmClass}:dialog` (if window has parent or is dialog)
- * 4. Base application rule: `${wmClass}`
+ * wmClass comparison is case-insensitive (both directions); the fingerprint
+ * must match exactly.
  *
- * Bidirectional case-insensitive matching:
- * Matches if either candidate or stored rule key differs only in casing
- * (e.g. wmClass 'WeChat' matches rule 'wechat', and wmClass 'wechat' matches rule 'WeChat:has_parent=true,allows_resize=false').
- *
- * @param {string} wmClass - Window WM_CLASS identifier
+ * @param {string} wmClass - Window WM_CLASS / app id
  * @param {Record<string, string>} [windowRules={}] - Active rules dictionary
  * @param {object} [options={}]
+ * @param {string} [options.clientType='wayland'] - 'wayland' | 'x11'
+ * @param {number} [options.windowType=WindowType.NORMAL] - Meta.WindowType
  * @param {boolean} [options.hasParent=false] - Whether window has parent (transient)
  * @param {boolean} [options.allowsResize=true] - Whether window allows resizing
- * @param {boolean} [options.isDialog=false] - Whether window acts as dialog/transient
- * @param {string|null} [options.title=null] - Window title
+ * @param {boolean} [options.isAttachedDialog=false] - Whether modal dialog attached to parent
  * @returns {string|null} ExclusionTarget mode or null if no rule matched
  */
 export function resolveRule(wmClass, windowRules = {}, options = {}) {
@@ -405,38 +422,30 @@ export function resolveRule(wmClass, windowRules = {}, options = {}) {
         return null;
 
     const {
+        clientType = CLIENT_TYPE_TOKEN_WAYLAND,
+        windowType = WindowType.NORMAL,
         hasParent = false,
         allowsResize = true,
-        isDialog = false,
-        title = null,
+        isAttachedDialog = false,
     } = options;
 
-    const candidates = [];
+    const key = buildRuleKey(wmClass, {
+        clientType,
+        windowType,
+        hasParent,
+        allowsResize,
+        isAttachedDialog,
+    });
+    if (!key)
+        return null;
 
-    // 1. Native property-based exact match for child windows
-    if (hasParent)
-        candidates.push(buildRuleKey(wmClass, {hasParent: true, allowsResize}));
+    if (Object.prototype.hasOwnProperty.call(windowRules, key))
+        return windowRules[key];
 
-    // 2. Exact title rule (legacy / escape-hatch support)
-    if (title && typeof title === 'string' && title.trim().length > 0)
-        candidates.push(`${wmClass}:title=${title.trim()}`);
-
-    // 3. Dialog rule (backward compatibility with legacy :dialog rules)
-    if (isDialog || hasParent)
-        candidates.push(`${wmClass}:dialog`);
-
-    // 4. Base application rule (fallback)
-    candidates.push(wmClass);
-
-    for (const cand of candidates) {
-        if (Object.prototype.hasOwnProperty.call(windowRules, cand))
-            return windowRules[cand];
-
-        const lowerCand = cand.toLowerCase();
-        for (const [key, val] of Object.entries(windowRules)) {
-            if (key.toLowerCase() === lowerCand)
-                return val;
-        }
+    const lowerKey = key.toLowerCase();
+    for (const [storedKey, val] of Object.entries(windowRules)) {
+        if (storedKey.toLowerCase() === lowerKey)
+            return val;
     }
 
     return null;
@@ -460,7 +469,6 @@ export function resolveRule(wmClass, windowRules = {}, options = {}) {
  * @property {boolean} [isAttachedDialog=false] - Whether modal dialog attached to parent
  * @property {boolean} [allowsResize=true] - Whether window allows resizing
  * @property {boolean} [hasTileMatch=false] - Whether window is snap-tiled with an adjacent matching window
- * @property {string|null} [title=null] - Window title
  * @property {string} [wmClass] - Window WM_CLASS / app ID
  * @property {Record<string, string>} [windowRules={}] - Exclusion rules
  * @property {boolean} [preferCrispText=false] - Subpixel crisp text setting
@@ -486,7 +494,6 @@ export function evaluateWindowActions({
     isAttachedDialog = false,
     allowsResize = true,
     hasTileMatch = false,
-    title = null,
     wmClass,
     windowRules = {},
     preferCrispText = false,
@@ -517,17 +524,13 @@ export function evaluateWindowActions({
         };
     }
 
-    // 2. Rule evaluation (native properties & composite fingerprint matching)
-    const isWinDialog = isDialogWindow({
-        windowType,
-        hasParent,
-        isAttachedDialog,
-    });
+    // 2. Rule evaluation: exact window-kind fingerprint match
     const rule = resolveRule(wmClass, windowRules, {
+        clientType: isX11 ? CLIENT_TYPE_TOKEN_X11 : CLIENT_TYPE_TOKEN_WAYLAND,
+        windowType,
         hasParent: Boolean(hasParent),
         allowsResize,
-        isDialog: isWinDialog,
-        title,
+        isAttachedDialog,
     });
     const canonicalRule = normalizeRuleMode(rule);
 

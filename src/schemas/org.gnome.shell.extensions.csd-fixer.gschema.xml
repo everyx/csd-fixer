@@ -7,13 +7,11 @@
       <default>{}</default>
       <summary>Custom application exclusion rules</summary>
       <description>
-        Dictionary mapping window identifier to exclusion rule mode.
-        Key format (composite static fingerprint):
-        - 'app': matches all windows of this app (e.g. 'wechat')
-        - 'app:has_parent=true,allows_resize=false': matches non-resizable child popups (e.g. exit dialogs)
-        - 'app:has_parent=true,allows_resize=true': matches resizable child windows/views (e.g. article browsers)
-        - 'app:dialog': legacy fallback for child dialogs/transient windows (e.g. 'wechat:dialog')
-        - 'app:title=...': matches windows with specific title (e.g. 'wechat:title=Exit')
+        Dictionary mapping a window-kind fingerprint to an exclusion rule mode.
+        Key format: '&lt;wmClass&gt;:client_type=&lt;wayland|x11&gt;,window_type=&lt;int&gt;,has_parent=&lt;bool&gt;,allows_resize=&lt;bool&gt;,attached_dialog=&lt;bool&gt;'
+        e.g. 'wechat:client_type=wayland,window_type=0,has_parent=true,allows_resize=false,attached_dialog=false'
+        The fingerprint is derived from the picked window's stable structural
+        attributes; rules never generalize to every window of an application.
         Value modes:
         - 'all': disable all decorations (no shadow, no corners)
         - 'clip': disable rounded corners (retaining shadow)

@@ -181,7 +181,7 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
             }
 
             for (const [ruleKey, mode] of entries) {
-                const {baseWmClass, specifier} = parseRuleKey(ruleKey);
+                const {baseWmClass, properties} = parseRuleKey(ruleKey);
                 const appInfo = findAppInfoByWmClass(baseWmClass, installedApps);
 
                 const appName = appInfo?.name;
@@ -200,7 +200,7 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
                         pixel_size: 32,
                     }));
                 } else {
-                    const isSubWindow = Boolean(specifier);
+                    const isSubWindow = properties?.has_parent === true;
                     row.add_prefix(new Gtk.Image({
                         icon_name: isSubWindow ? 'window-duplicate-symbolic' : 'window-new-symbolic',
                         pixel_size: 24,
@@ -267,7 +267,13 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
 
                 const hasParent = props.hasParent === 'true';
                 const allowsResize = props.allowsResize === 'true';
-                const ruleKey = buildRuleKey(props.wmClass, {hasParent, allowsResize});
+                const ruleKey = buildRuleKey(props.wmClass, {
+                    clientType: props.clientType,
+                    windowType: Number(props.windowType),
+                    hasParent,
+                    allowsResize,
+                    isAttachedDialog: props.isAttachedDialog === 'true',
+                });
 
                 const currentRules = getWindowRules(settings);
                 if (currentRules[ruleKey]) {

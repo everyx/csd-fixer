@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: csd-fixer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-10 19:25+0800\n"
+"POT-Creation-Date: 2026-09-11 09:31+0800\n"
 "PO-Revision-Date: 2026-09-08 22:50+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Simplified) <i18n-zh@googlegroups.com>\n"
@@ -98,12 +98,12 @@ msgid ""
 "enabled."
 msgstr "无法连接到 CSD Fixer 扩展，请确认该扩展已在 GNOME 扩展中启用。"
 
-#: src/prefs.js:275
+#: src/prefs.js:281
 #, javascript-format
 msgid "Rule for \"%s\" already exists"
 msgstr "“%s”的规则已存在"
 
-#: src/prefs.js:286
+#: src/prefs.js:292
 #, javascript-format
 msgid "Added rule for \"%s\""
 msgstr "已为“%s”添加排除规则"

@@ -146,7 +146,6 @@ export class Manager {
             'position-changed', 'size-changed', 'notify::appears-focused',
             'notify::maximized-horizontally', 'notify::maximized-vertically',
             'notify::fullscreen', 'notify::main-monitor', 'highest-scale-monitor-changed',
-            'notify::title',
         ];
         for (const sig of windowSignals)
             this._connect(state.signals, win, sig, () => this._reconcileDebounced(), true);
@@ -319,7 +318,6 @@ export class Manager {
         const windowType = win.get_window_type();
         const isMaximized = isWindowMaximized(win);
         const hasTileMatch = Boolean(win.get_tile_match?.());
-        const title = win.get_title?.() ?? null;
 
         return evaluateWindowActions({
             // Geometry & scale
@@ -338,7 +336,6 @@ export class Manager {
             isAttachedDialog,
             allowsResize,
             hasTileMatch,
-            title,
             wmClass,
 
             // Preferences & rules

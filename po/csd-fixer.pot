@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-10 19:42+0800\n"
+"POT-Creation-Date: 2026-09-11 09:31+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -98,12 +98,12 @@ msgid ""
 "enabled."
 msgstr ""
 
-#: src/prefs.js:275
+#: src/prefs.js:281
 #, javascript-format
 msgid "Rule for \"%s\" already exists"
 msgstr ""
 
-#: src/prefs.js:286
+#: src/prefs.js:292
 #, javascript-format
 msgid "Added rule for \"%s\""
 msgstr ""
