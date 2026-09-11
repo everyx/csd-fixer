@@ -15,9 +15,12 @@ import {
     extractWindowProperties, WindowClientType,
     chooseWindowIdentity, isWindowBackedAppId,
 } from '../src/lib/detector.js';
+import {MUTTER_CSD_MIN_INSET_THRESHOLD} from '../src/lib/mutterRules.generated.js';
 import {
     getWindowRules,
     setWindowRules,
+    SETTINGS_KEY_SUPPRESS_RULES,
+    SETTINGS_KEY_FORCE_RULES,
 } from '../src/lib/settings.js';
 
 /** Per-side margins from a buffer/frame rectangle pair (matches runtime math). */
@@ -117,7 +120,7 @@ describe('inferDecorationBaseline', () => {
         expect(r.shadow).toBeTrue();
         expect(r.corners).toBeTrue();
         expect(r.reason).toContain('no-csd');
-        expect(r.reason).toContain('4.0x4.0 < 8');
+        expect(r.reason).toContain(`4.0x4.0 < ${MUTTER_CSD_MIN_INSET_THRESHOLD}`);
     });
 
     it('Wayland window with small resize grip (Chromium 4px resize grip) single side < 8px -> detected as lacking CSD, baseline decorates', () => {
@@ -128,7 +131,7 @@ describe('inferDecorationBaseline', () => {
         expect(r.shadow).toBeTrue();
         expect(r.corners).toBeTrue();
         expect(r.reason).toContain('no-csd');
-        expect(r.reason).toContain('4.0x4.0 < 8');
+        expect(r.reason).toContain(`4.0x4.0 < ${MUTTER_CSD_MIN_INSET_THRESHOLD}`);
     });
 
     it('X11 / XWayland windows without frame extents (WPS Office, Dida) -> Mutter C core manages native shadow, baseline off', () => {
@@ -151,7 +154,7 @@ describe('inferDecorationBaseline', () => {
         expect(r.shadow).toBeFalse();
         expect(r.corners).toBeFalse();
         expect(r.reason).toContain('has-csd');
-        expect(r.reason).toContain('20.0x20.0 >= 8');
+        expect(r.reason).toContain(`20.0x20.0 >= ${MUTTER_CSD_MIN_INSET_THRESHOLD}`);
     });
 
     it('oversized margin on a single axis (asymmetric) is not treated as a CSD shadow -> baseline decorates', () => {
@@ -542,7 +545,7 @@ describe('getWindowRules', () => {
     it('unpacks and sanitizes both groups from mock settings', () => {
         const mockSettings = {
             get_value: (key) => {
-                if (key === 'suppress-rules') {
+                if (key === SETTINGS_KEY_SUPPRESS_RULES) {
                     return {
                         deep_unpack: () => ({
                             [validKey]: 'corners',
@@ -550,7 +553,7 @@ describe('getWindowRules', () => {
                         }),
                     };
                 }
-                if (key === 'force-rules') {
+                if (key === SETTINGS_KEY_FORCE_RULES) {
                     return {
                         deep_unpack: () => ({
                             [buildRuleKey('gtk4-app')]: 'corners,shadow',
@@ -568,7 +571,7 @@ describe('getWindowRules', () => {
 
     it('reads only the suppress group when force-rules is absent', () => {
         const mockSettings = {
-            get_value: (key) => (key === 'suppress-rules'
+            get_value: (key) => (key === SETTINGS_KEY_SUPPRESS_RULES
                 ? {deep_unpack: () => ({[validKey]: 'shadow'})}
                 : null),
         };
@@ -605,12 +608,12 @@ describe('getWindowRules', () => {
             },
         });
 
-        expect(saved.has('suppress-rules')).toBeTrue();
-        expect(saved.has('force-rules')).toBeTrue();
-        expect(saved.get('suppress-rules').deep_unpack()).toEqual({
+        expect(saved.has(SETTINGS_KEY_SUPPRESS_RULES)).toBeTrue();
+        expect(saved.has(SETTINGS_KEY_FORCE_RULES)).toBeTrue();
+        expect(saved.get(SETTINGS_KEY_SUPPRESS_RULES).deep_unpack()).toEqual({
             [buildRuleKey('wechat')]: 'corners',
         });
-        expect(saved.get('force-rules').deep_unpack()).toEqual({
+        expect(saved.get(SETTINGS_KEY_FORCE_RULES).deep_unpack()).toEqual({
             [buildRuleKey('gtk4-app')]: 'shadow,corners',
         });
     });

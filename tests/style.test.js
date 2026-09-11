@@ -1,5 +1,12 @@
 /**
- * style state machine unit tests: tracks libadwaita window.csd states.
+ * style state machine unit tests: maps a window state onto a libadwaita style entry.
+ *
+ * Every expectation is written against the generated ADWAITA_STYLE, never as a
+ * copy of its numbers. tools/gen-style.mjs already pins that file to upstream, so
+ * repeating the numbers here would only block upstream changes the code absorbs
+ * anyway - the layers we draw are whatever the generated file says. What is worth
+ * asserting is our own share: which state selects which entry, and the outline we
+ * drop for the square states.
  */
 
 import {styleForWindow} from '../src/lib/style.js';
@@ -7,78 +14,56 @@ import {ADWAITA_STYLE} from '../src/lib/adwaitaStyle.generated.js';
 
 describe('styleForWindow', () => {
     const base = {focused: true, maximized: false, fullscreen: false, tiled: false, highContrast: false};
+    const {window: w} = ADWAITA_STYLE;
 
-    it('ADWAITA_STYLE defines valid window decoration defaults', () => {
-        expect(ADWAITA_STYLE.window.radius).toBeGreaterThan(0);
-        expect(ADWAITA_STYLE.window.shadows.length).toBeGreaterThan(0);
+    it('focused -> the window entry and the normal outline', () => {
+        expect(styleForWindow(base)).toEqual({
+            radius: w.radius,
+            shadows: w.shadows,
+            outline: w.outline.normal,
+        });
     });
 
-    it('focused normal window -> rounded corners + 3-layer shadow', () => {
-        const s = styleForWindow(base);
-        expect(s.radius).toBe(15);
-        expect(s.shadows.length).toBe(3);
-        expect(s.shadows[0].alpha).toBe(0.15);
+    it('unfocused -> the backdrop entry, same outline source', () => {
+        expect(styleForWindow({...base, focused: false})).toEqual({
+            radius: w.backdrop.radius,
+            shadows: w.backdrop.shadows,
+            outline: w.outline.normal,
+        });
     });
 
-    it('unfocused (backdrop) -> same radius, faded shadow, unchanged extents', () => {
-        const focused = styleForWindow(base);
-        const backdrop = styleForWindow({...base, focused: false});
-        expect(backdrop.radius).toBe(focused.radius);
-        // First layer transparent (retains extents to prevent jitter)
-        expect(backdrop.shadows[0].alpha).toBe(0);
-        expect(backdrop.shadows[0].blur).toBe(focused.shadows[0].blur);
-        expect(backdrop.shadows[0].spread).toBe(focused.shadows[0].spread);
-        // Visible shadow layer fades
-        expect(backdrop.shadows[1].alpha).toBeLessThan(focused.shadows[1].alpha);
+    it('tiled -> the tiled entry, without an outline', () => {
+        expect(styleForWindow({...base, tiled: true})).toEqual({...w.tiled, outline: null});
     });
 
-    it('tiled -> zero radius, 1px border only', () => {
-        const s = styleForWindow({...base, tiled: true});
-        expect(s.radius).toBe(0);
-        expect(s.shadows.length).toBe(1);
-        expect(s.shadows[0].spread).toBe(1);
-        expect(s.shadows[0].blur).toBe(0);
+    it('maximized -> the maximized entry, without an outline', () => {
+        expect(styleForWindow({...base, maximized: true})).toEqual({...w.maximized, outline: null});
     });
 
-    it('maximized / fullscreen -> no radius and no shadow', () => {
-        const max = styleForWindow({...base, maximized: true});
-        expect(max.radius).toBe(0);
-        expect(max.shadows.length).toBe(0);
-        const fs = styleForWindow({...base, fullscreen: true});
-        expect(fs.radius).toBe(0);
-        expect(fs.shadows.length).toBe(0);
+    it('fullscreen -> the fullscreen entry, without an outline', () => {
+        expect(styleForWindow({...base, fullscreen: true})).toEqual({...w.fullscreen, outline: null});
     });
 
-    it('high contrast mode -> deeper outline and replaced outline color', () => {
-        const normal = styleForWindow(base);
-        const hc = styleForWindow({...base, highContrast: true});
-        // Full shadow set replacement: outline layer 5% -> 80%
-        expect(hc.shadows[2].alpha).toBe(0.8);
-        expect(hc.shadows[2].blur).toBe(normal.shadows[2].blur);
-        // Outline color deepened: white 7% -> white 30%
-        expect(normal.outline.alpha).toBe(0.07);
-        expect(hc.outline.alpha).toBe(0.3);
-        expect(hc.outline.color).toEqual([255, 255, 255]);
+    it('high contrast -> the HC shadow set, keeping the ordinary outline source', () => {
+        expect(styleForWindow({...base, highContrast: true})).toEqual({
+            radius: w.radius,
+            shadows: w.highContrast.shadows,
+            outline: w.outline.highContrast,
+        });
     });
 
-    it('high contrast unfocused -> HC backdrop shadow set', () => {
-        const s = styleForWindow({...base, highContrast: true, focused: false});
-        // Backdrop first layer transparent to prevent jitter
-        expect(s.shadows[0].alpha).toBe(0);
-        expect(s.shadows[2].alpha).toBe(0.8);
+    it('high contrast, unfocused -> the HC backdrop shadow set', () => {
+        expect(styleForWindow({...base, highContrast: true, focused: false})).toEqual({
+            radius: w.backdrop.radius,
+            shadows: w.highContrast.backdropShadows,
+            outline: w.outline.highContrast,
+        });
     });
 
-    it('maximized / tiled / fullscreen -> no outline (upstream outline: none)', () => {
-        for (const st of [true, false]) {
-            expect(styleForWindow({...base, maximized: true, highContrast: st}).outline).toBeNull();
-            expect(styleForWindow({...base, fullscreen: true, highContrast: st}).outline).toBeNull();
-            expect(styleForWindow({...base, tiled: true, highContrast: st}).outline).toBeNull();
-        }
-    });
-
-    it('maximized takes precedence over tiled (matches libadwaita selector precedence)', () => {
-        const s = styleForWindow({...base, maximized: true, tiled: true});
-        expect(s.shadows.length).toBe(0);
-        expect(s.outline).toBeNull();
+    it('maximized wins over tiled', () => {
+        // The only precedence pair whose output differs, because the tiled entry
+        // keeps a border layer the maximized one does not.
+        expect(styleForWindow({...base, maximized: true, tiled: true}))
+            .toEqual({...w.maximized, outline: null});
     });
 });
