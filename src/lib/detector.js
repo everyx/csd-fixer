@@ -177,7 +177,12 @@ export const RuleDirection = Object.freeze({
     FORCE: 'force',
 });
 
-const RULE_AXIS_ORDER = [RuleAxis.SHADOW, RuleAxis.CORNERS];
+/**
+ * Every decoration a rule can name, in the canonical order of a rule value.
+ * Also the set a freshly picked rule names, so the user narrows down from a rule
+ * that covers the whole window rather than guessing at what it left out.
+ */
+export const RULE_AXIS_ORDER = [RuleAxis.SHADOW, RuleAxis.CORNERS];
 // Parenthesised: a bare `a|b` would let the `^` bind to the first alternative only.
 const RULE_AXIS_PATTERN = `(?:${RULE_AXIS_ORDER.join('|')})`;
 
@@ -413,6 +418,25 @@ export function buildRuleKey(wmClass, {
 }
 
 /**
+ * The rule key a window's property map produces (see extractWindowProperties).
+ *
+ * The picker and the runtime both key a window through here, so the key the
+ * prefs window writes for a picked window is the key the runtime later looks up.
+ *
+ * @param {Record<string, string>} [properties={}]
+ * @returns {string} Canonical rule key, or '' when the window has no identity
+ */
+export function buildRuleKeyFromProperties(properties = {}) {
+    return buildRuleKey(properties.wmClass, {
+        clientType: properties.clientType,
+        windowType: Number(properties.windowType ?? WindowType.NORMAL),
+        hasParent: properties.hasParent === 'true',
+        allowsResize: properties.allowsResize === 'true',
+        isAttachedDialog: properties.isAttachedDialog === 'true',
+    });
+}
+
+/**
  * Validates and sanitizes both rule groups read from settings.
  *
  * Drops malformed keys and values and drops case-colliding duplicate keys so the
@@ -486,6 +510,37 @@ export function lookupRuleKey(group, key) {
 
     const lowerKey = key.toLowerCase();
     return Object.keys(group).find(storedKey => storedKey.toLowerCase() === lowerKey) ?? null;
+}
+
+/**
+ * Returns the rules with `key` moved into `direction`, naming `axes`.
+ *
+ * A window kind lives in exactly one group, so the other group loses it - under
+ * whichever spelling it stored, the way this module compares keys everywhere. The
+ * picker and the effectiveness check below both go through here, so the rule that
+ * looked worth adding is the same rule that then gets stored.
+ *
+ * @param {{suppress?: Record<string, string>, force?: Record<string, string>}} [rules={}]
+ * @param {string} direction - RuleDirection
+ * @param {string} key
+ * @param {Iterable<string>} axes
+ * @returns {{suppress: Record<string, string>, force: Record<string, string>}}
+ */
+export function withRule({suppress = {}, force = {}} = {}, direction, key, axes) {
+    const moved = {
+        suppress: {...suppress},
+        force: {...force},
+    };
+
+    const other = direction === RuleDirection.SUPPRESS
+        ? RuleDirection.FORCE
+        : RuleDirection.SUPPRESS;
+    const previous = lookupRuleKey(moved[other], key);
+    if (previous)
+        delete moved[other][previous];
+
+    moved[direction][key] = buildRuleValue(axes);
+    return moved;
 }
 
 /**
@@ -678,5 +733,66 @@ export function evaluateWindowActions({
         reason = `tile-match(suppress-shadow,${reason})`;
 
     return {applyShadow: shadow, applyClip: corners, reason};
+}
+
+/**
+ * Whether a rule would change the actions we take for a window.
+ *
+ * A rule that changes nothing is a row that misrepresents what it does, so the
+ * picker refuses to add one. The comparison runs the same evaluator the runtime
+ * uses - structural facts, inferred baseline, rules, and the state modifiers on
+ * top of them - so "no effect" covers every reason: the kind is never decorated
+ * at all, its baseline already answers the way the rule asks, or a policy would
+ * override the rule again.
+ *
+ * @param {WindowEvaluationParams} params - The window, evaluated without the rule
+ * @param {{direction: string, key: string, axes: Iterable<string>}} rule
+ * @returns {boolean}
+ */
+export function ruleWouldChangeActions(params, {direction, key, axes}) {
+    const before = evaluateWindowActions(params);
+    const after = evaluateWindowActions({
+        ...params,
+        rules: withRule(params.rules, direction, key, axes),
+    });
+
+    return before.applyShadow !== after.applyShadow ||
+        before.applyClip !== after.applyClip;
+}
+
+/**
+ * Whether the rule a pick would add for `properties`' window kind would change
+ * what we draw for the window `params` describes.
+ *
+ * A fresh pick names every axis (RULE_AXIS_ORDER): the user then narrows the rule
+ * down, rather than starting from a rule that silently covers only part of the
+ * window.
+ *
+ * A rule is keyed by the window kind, so the state that comes and goes -
+ * maximized, fullscreen, snapped, currently server-decorated - must not decide
+ * this: a rule worth creating for a restored window is worth creating while that
+ * window is maximized, and refusing it there would be wrong. What is left is the
+ * kind's own attributes plus the margins it declares, which in practice travel
+ * with the kind.
+ *
+ * @param {Record<string, string>} properties - extractWindowProperties() output
+ * @param {WindowEvaluationParams} params - The window as the runtime sees it
+ * @param {string} direction - RuleDirection
+ * @returns {boolean|null} null when the window cannot be identified
+ */
+export function pickedRuleWouldChange(properties, params, direction) {
+    const key = buildRuleKeyFromProperties(properties);
+    if (!key)
+        return null;
+
+    const asKind = {
+        ...params,
+        isMaximized: false,
+        isFullscreen: false,
+        hasTileMatch: false,
+        hasSsd: false,
+    };
+
+    return ruleWouldChangeActions(asKind, {direction, key, axes: RULE_AXIS_ORDER});
 }
 

@@ -19,7 +19,7 @@ export default class CsdFixerExtension extends Extension {
         this._manager = new Manager(this);
         this._manager.enable();
 
-        this._inspector = new InspectorService();
+        this._inspector = new InspectorService(this._manager);
     }
 
     disable() {

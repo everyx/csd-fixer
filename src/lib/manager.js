@@ -25,8 +25,10 @@ import St from 'gi://St';
 
 import {
     evaluateWindowActions,
+    extractWindowProperties,
     isWindowMaximized,
     isWindowTiled,
+    pickedRuleWouldChange,
 } from './detector.js';
 import {getWindowRules, SETTINGS_KEY_SUPPRESS_RULES, SETTINGS_KEY_FORCE_RULES} from './settings.js';
 import {resolveWindowIdentity} from './window.js';
@@ -320,47 +322,55 @@ export class Manager {
     }
 
     /** Reads full window state -> passes to detector.evaluateWindowActions */
+    /**
+     * Everything the decoration decision depends on, read from a live window.
+     * Shared with ruleWouldChangeKind() so a rule is judged against the same
+     * inputs the runtime will later apply it to.
+     */
+    _decorationInputs(win) {
+        const b = win.get_buffer_rect();
+        const f = win.get_frame_rect();
+        const clientType = win.get_client_type?.();
+
+        return {
+            // Geometry & scale
+            bufferWidth: b.width, bufferHeight: b.height,
+            frameWidth: f.width, frameHeight: f.height,
+            monitorScale: this._getMonitorScale(win),
+
+            // Window state & type
+            isMaximized: isWindowMaximized(win),
+            isFullscreen: win.is_fullscreen(),
+            hasSsd: Boolean(win.decorated),
+            isX11: clientType === CLIENT_TYPE_X11,
+            windowType: win.get_window_type(),
+            hasParent: Boolean(win.get_transient_for?.()),
+            isAttachedDialog: Boolean(win.is_attached_dialog?.()),
+            allowsResize: Boolean(win.allows_resize?.()),
+            hasTileMatch: Boolean(win.get_tile_match?.()),
+            wmClass: resolveWindowIdentity(win),
+
+            // Preferences & rules
+            rules: this._windowRules,
+            preferCrispText: this._settings.get_boolean('prefer-crisp-text'),
+        };
+    }
+
     _evaluateActions(win) {
         const actor = win.get_compositor_private();
         if (!actor)
             return {applyShadow: false, applyClip: false};
 
-        const b = win.get_buffer_rect();
-        const f = win.get_frame_rect();
-        const hasSsd = Boolean(win.decorated);
-        const clientType = win.get_client_type?.();
-        const isX11 = clientType === CLIENT_TYPE_X11;
-        const wmClass = resolveWindowIdentity(win);
-        const monitorScale = this._getMonitorScale(win);
-        const hasParent = Boolean(win.get_transient_for?.());
-        const allowsResize = Boolean(win.allows_resize?.());
-        const isAttachedDialog = Boolean(win.is_attached_dialog?.());
-        const windowType = win.get_window_type();
-        const isMaximized = isWindowMaximized(win);
-        const hasTileMatch = Boolean(win.get_tile_match?.());
+        return evaluateWindowActions(this._decorationInputs(win));
+    }
 
-        return evaluateWindowActions({
-            // Geometry & scale
-            bufferWidth: b.width, bufferHeight: b.height,
-            frameWidth: f.width, frameHeight: f.height,
-            monitorScale,
-
-            // Window state & type
-            isMaximized,
-            isFullscreen: win.is_fullscreen(),
-            hasSsd,
-            isX11,
-            windowType,
-            hasParent,
-            isAttachedDialog,
-            allowsResize,
-            hasTileMatch,
-            wmClass,
-
-            // Preferences & rules
-            rules: this._windowRules,
-            preferCrispText: this._settings.get_boolean('prefer-crisp-text'),
-        });
+    /**
+     * Whether a rule for this window's kind would change what we draw, or null
+     * when the window cannot be identified.
+     */
+    ruleWouldChangeKind(win, direction) {
+        const inputs = this._decorationInputs(win);
+        return pickedRuleWouldChange(extractWindowProperties(win, inputs.wmClass), inputs, direction);
     }
 
     _undecorate(win) {

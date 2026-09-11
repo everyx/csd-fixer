@@ -11,7 +11,8 @@ import {
     RuleAxis, RuleDirection,
     parseRuleAxes, buildRuleValue,
     resolveRule, evaluateWindowActions,
-    parseRuleKey, buildRuleKey, sanitizeWindowRules,
+    parseRuleKey, buildRuleKey, buildRuleKeyFromProperties, sanitizeWindowRules,
+    withRule, pickedRuleWouldChange, RULE_AXIS_ORDER,
     extractWindowProperties, WindowClientType,
     chooseWindowIdentity, isWindowBackedAppId,
 } from '../src/lib/detector.js';
@@ -1139,5 +1140,98 @@ describe('chooseWindowIdentity', () => {
     it('returns empty when nothing identifies the window', () => {
         expect(chooseWindowIdentity({})).toBe('');
         expect(chooseWindowIdentity({pid: -1})).toBe('');
+    });
+});
+
+describe('withRule', () => {
+    const key = buildRuleKey('wechat', {hasParent: true});
+
+    it('puts the rule in the named group', () => {
+        expect(withRule({}, RuleDirection.FORCE, key, ['shadow'])).toEqual({
+            suppress: {},
+            force: {[key]: 'shadow'},
+        });
+    });
+
+    it('takes the kind away from the other group, whatever its casing', () => {
+        const stored = buildRuleKey('WeChat', {hasParent: true});
+        const moved = withRule({suppress: {[stored]: 'corners'}}, RuleDirection.FORCE, key, ['corners']);
+
+        expect(moved.suppress).toEqual({});
+        expect(moved.force).toEqual({[key]: 'corners'});
+    });
+
+    it('writes the axes in canonical order', () => {
+        const moved = withRule({}, RuleDirection.SUPPRESS, key, ['corners', 'shadow']);
+        expect(moved.suppress[key]).toBe(buildRuleValue(RULE_AXIS_ORDER));
+    });
+
+    it('leaves the rule groups it was given untouched', () => {
+        const rules = {suppress: {[key]: 'shadow'}, force: {}};
+        withRule(rules, RuleDirection.FORCE, key, ['corners']);
+        expect(rules).toEqual({suppress: {[key]: 'shadow'}, force: {}});
+    });
+});
+
+describe('pickedRuleWouldChange', () => {
+    // What a window we decorate looks like: the client declares no margin at all.
+    const plainWindow = {
+        bufferWidth: 400, bufferHeight: 300,
+        frameWidth: 400, frameHeight: 300,
+        monitorScale: 1,
+        windowType: WindowType.NORMAL,
+        wmClass: 'plain-app',
+    };
+    // A client that declares its own margins, so the heuristic stands down.
+    const csdWindow = {
+        ...plainWindow,
+        bufferWidth: 460, bufferHeight: 360,
+        wmClass: 'csd-app',
+    };
+    const propertiesFor = win => ({
+        wmClass: win.wmClass,
+        clientType: 'wayland',
+        windowType: String(win.windowType),
+        hasParent: 'false',
+        allowsResize: 'true',
+        isAttachedDialog: 'false',
+    });
+
+    it('reports no effect when forcing a decoration we already draw', () => {
+        expect(pickedRuleWouldChange(propertiesFor(plainWindow), plainWindow, RuleDirection.FORCE)).toBeFalse();
+    });
+
+    it('reports an effect when forcing a decoration the client already draws', () => {
+        expect(pickedRuleWouldChange(propertiesFor(csdWindow), csdWindow, RuleDirection.FORCE)).toBeTrue();
+    });
+
+    it('reports an effect when suppressing a decoration we draw', () => {
+        expect(pickedRuleWouldChange(propertiesFor(plainWindow), plainWindow, RuleDirection.SUPPRESS)).toBeTrue();
+    });
+
+    it('reports no effect when suppressing a decoration we never draw', () => {
+        expect(pickedRuleWouldChange(propertiesFor(csdWindow), csdWindow, RuleDirection.SUPPRESS)).toBeFalse();
+    });
+
+    it('reports no effect either way for a window type we never decorate', () => {
+        const menu = {...plainWindow, windowType: WindowType.MENU};
+
+        expect(pickedRuleWouldChange(propertiesFor(menu), menu, RuleDirection.FORCE)).toBeFalse();
+        expect(pickedRuleWouldChange(propertiesFor(menu), menu, RuleDirection.SUPPRESS)).toBeFalse();
+    });
+
+    it('judges the rule against the kind, not the state the window is in', () => {
+        // A maximized window is never decorated, but the rule outlives the state.
+        const maximized = {...plainWindow, isMaximized: true};
+        expect(pickedRuleWouldChange(propertiesFor(maximized), maximized, RuleDirection.SUPPRESS)).toBeTrue();
+    });
+
+    it('returns null when the window declares no identity', () => {
+        const anonymous = {...plainWindow, wmClass: ''};
+        expect(pickedRuleWouldChange(propertiesFor(anonymous), anonymous, RuleDirection.FORCE)).toBeNull();
+    });
+
+    it('keys the rule the way the runtime looks it up', () => {
+        expect(buildRuleKeyFromProperties(propertiesFor(plainWindow))).toBe(buildRuleKey('plain-app'));
     });
 });
