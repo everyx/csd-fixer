@@ -24,32 +24,30 @@ export const CLIENT_TYPE_TOKEN_X11 = 'x11';
  *
  * Decoration is decided per axis (shadow, corners), in four layers:
  * 1. Structural eligibility - window type, maximized/fullscreen, server-side
- *    decorations. These are facts about the window; no rule may override them.
+ *    decorations: facts about the window that no rule may override.
  * 2. Inferred baseline - whether the client already draws a shadow (content
  *    margins) or, for X11, whether Mutter draws one itself. Both axes answer
- *    alike here, because every case is about the window as a whole.
+ *    alike, because every case is about the window as a whole.
  * 3. User rules - 'suppress-rules' / 'force-rules' move the axes they name and
- *    leave the others to the baseline. This is the only layer that may turn an
- *    axis back on.
- * 4. State modifiers - snap-tiled windows lose the shadow (matches Mutter, so
- *    the shadow does not obstruct the neighbour), and corner clipping is skipped
- *    under fractional scaling when the user prefers crisp text.
+ *    leave the rest to the baseline. The only layer that may turn an axis on.
+ * 4. State modifiers - snap-tiled windows lose the shadow (matching Mutter, so
+ *    it cannot obstruct the neighbour); corner clipping is skipped under
+ *    fractional scaling when the user prefers crisp text.
  *
- * Pure logic module: independent of shell global objects, unit-testable.
+ * Pure logic module: no shell globals, unit-testable.
  */
 
 /**
  * Computes window content margins: how far the buffer extends past the frame on
  * each side pair.
  *
- * MetaWindow scales both rectangles by the window's geometry scale, so they are
- * always in the same space and the difference is a margin. That scale is 1
- * whenever the logical monitor layout is LOGICAL, which the native backend
- * always reports (meta-monitor-manager-native.c) - so on Wayland the margin is
- * in logical pixels and compares directly against a logical threshold. A backend
- * that lays monitors out physically uses the integer monitor scale instead,
- * which GJS cannot read; leaving that margin unconverted makes it look larger,
- * never smaller, so the error stays on the side of drawing nothing.
+ * MetaWindow scales both rectangles by the same geometry scale, so the difference
+ * is a margin. That scale is 1 whenever the logical monitor layout is LOGICAL,
+ * which the native backend always reports (meta-monitor-manager-native.c), so on
+ * Wayland the margin is in logical pixels and compares against a logical
+ * threshold. A backend that lays monitors out physically uses the integer monitor
+ * scale instead, which GJS cannot read; leaving it unconverted makes a margin
+ * look larger, never smaller, so the error stays on the side of drawing nothing.
  *
  * Returns {w, h}, each >= 0, holding the two-sided total difference.
  */
@@ -227,19 +225,11 @@ export function isWindowMaximized(win) {
 /**
  * Checks whether a window is in a snap-tiled state.
  *
- * Design intent & dual-semantics of get_tile_match():
- * 1. Geometry layer (here in isWindowTiled):
- *    Determines whether a window should have flat square corners (radius: 0) and 1px border.
- *    Any snap-tiled window (whether single-axis half-tiled or snap-matched with a neighbor)
- *    must flatten its corners to prevent background leak against screen edges or split borders (Libadwaita alignment).
- * 2. Compositor layer (in evaluateWindowActions):
- *    Suppresses shadows ONLY when hasTileMatch is true (two windows tiled side-by-side touching).
- *    Single tiled windows without an adjacent neighbor retain their outer edge shadow.
- *
- * A window is considered tiled when:
- * 1. It is not fully maximized (neither fullscreen nor both axes maximized), AND
- * 2. Either it is half-tiled (single-axis maximized, hMax !== vMax), OR
- * 3. It is snap-tiled with an adjacent matching window (win.get_tile_match()).
+ * Geometry and compositor read different answers from the same fact. Any
+ * snap-tiled window flattens its corners, so the background cannot leak past a
+ * flat screen edge or the split between two neighbours (libadwaita aligns with
+ * that); only a window with an adjacent match loses its shadow, so a lone
+ * half-tiled window keeps the shadow on its outer edge.
  *
  * @param {object} win - Meta.Window instance
  * @param {object} [options={}]
@@ -516,9 +506,9 @@ export function lookupRuleKey(group, key) {
  * Returns the rules with `key` moved into `direction`, naming `axes`.
  *
  * A window kind lives in exactly one group, so the other group loses it - under
- * whichever spelling it stored, the way this module compares keys everywhere. The
- * picker and the effectiveness check below both go through here, so the rule that
- * looked worth adding is the same rule that then gets stored.
+ * whichever spelling it stored. The picker and the effectiveness check both go
+ * through here, so the rule that looked worth adding is the rule that gets
+ * stored.
  *
  * @param {{suppress?: Record<string, string>, force?: Record<string, string>}} [rules={}]
  * @param {string} direction - RuleDirection
@@ -739,11 +729,10 @@ export function evaluateWindowActions({
  * Whether a rule would change the actions we take for a window.
  *
  * A rule that changes nothing is a row that misrepresents what it does, so the
- * picker refuses to add one. The comparison runs the same evaluator the runtime
- * uses - structural facts, inferred baseline, rules, and the state modifiers on
- * top of them - so "no effect" covers every reason: the kind is never decorated
- * at all, its baseline already answers the way the rule asks, or a policy would
- * override the rule again.
+ * picker refuses to add one. Running the runtime's own evaluator twice - with and
+ * without the rule - covers every reason a rule can be inert: the kind is never
+ * decorated, its baseline already answers the way the rule asks, or a policy
+ * overrides it again.
  *
  * @param {WindowEvaluationParams} params - The window, evaluated without the rule
  * @param {{direction: string, key: string, axes: Iterable<string>}} rule
@@ -764,16 +753,11 @@ export function ruleWouldChangeActions(params, {direction, key, axes}) {
  * Whether the rule a pick would add for `properties`' window kind would change
  * what we draw for the window `params` describes.
  *
- * A fresh pick names every axis (RULE_AXIS_ORDER): the user then narrows the rule
- * down, rather than starting from a rule that silently covers only part of the
- * window.
- *
- * A rule is keyed by the window kind, so the state that comes and goes -
- * maximized, fullscreen, snapped, currently server-decorated - must not decide
- * this: a rule worth creating for a restored window is worth creating while that
- * window is maximized, and refusing it there would be wrong. What is left is the
- * kind's own attributes plus the margins it declares, which in practice travel
- * with the kind.
+ * A fresh pick names every axis (RULE_AXIS_ORDER), and the user narrows it down
+ * from there. The state that comes and goes - maximized, fullscreen, snapped,
+ * currently server-decorated - must not decide this: a rule worth creating for a
+ * restored window is worth creating while it is maximized. What is left is the
+ * kind's own attributes plus the margins it declares, which travel with it.
  *
  * @param {Record<string, string>} properties - extractWindowProperties() output
  * @param {WindowEvaluationParams} params - The window as the runtime sees it
