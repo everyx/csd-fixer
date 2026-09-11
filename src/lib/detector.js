@@ -465,10 +465,11 @@ export function evaluateWindowActions({
 }) {
     // 1. Base geometric criteria (whether window lacks CSD)
     // Note on X11 / XWayland precedence:
-    // Step 1 inside shouldDecorate unconditionally rejects X11 windows (x11-mutter-native-shadow)
-    // because Mutter's C core natively renders shadows for X11 frames.
-    // Rule matching is intentionally executed AFTER base criteria: custom rules cannot and
-    // should not force decorations onto X11 windows, preventing duplicate shadow rendering.
+    // shouldDecorate suppresses decorations on X11 windows that lack custom frame extents (insets <= 0)
+    // because Mutter's C core natively renders their shadows (meta-window-actor-x11.c:has_shadow).
+    // X11 windows declaring custom frame extents (e.g. resize grips) lack native shadows and are decorated.
+    // Rule matching is intentionally executed AFTER base criteria: custom rules cannot force decorations
+    // onto standard X11 windows, preventing duplicate shadow rendering.
     const base = shouldDecorate({
         bufferWidth, bufferHeight, frameWidth, frameHeight,
         scale: geometryScale,
