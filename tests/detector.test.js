@@ -4,9 +4,12 @@
  */
 
 import {
-    shouldDecorate, computeInsets, WindowType, isFractionalScale,
-    shouldClipWindow, ExclusionTarget, normalizeRuleMode,
+    computeInsets, WindowType, isFractionalScale,
+    shouldClipWindow,
     isWindowMaximized, isWindowTiled,
+    checkDecorationEligibility, inferDecorationBaseline,
+    RuleAxis, RuleDirection,
+    parseRuleAxes, buildRuleValue,
     resolveRule, evaluateWindowActions,
     parseRuleKey, buildRuleKey, sanitizeWindowRules,
     extractWindowProperties, WindowClientType,
@@ -16,6 +19,17 @@ import {
     getWindowRules,
     setWindowRules,
 } from '../src/lib/settings.js';
+
+/** Per-side margins from a buffer/frame rectangle pair (matches runtime math). */
+function marginsFromRects(bufferWidth, bufferHeight, frameWidth, frameHeight, scale = 1) {
+    const {w, h} = computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight, scale);
+    return {sideW: w / 2, sideH: h / 2};
+}
+
+/** Comparable shape for a resolveRule() result. */
+function resolved(result) {
+    return result && {direction: result.direction, axes: [...result.axes].sort()};
+}
 
 describe('computeInsets', () => {
     it('buffer == frame (scale = 1) -> zero insets', () => {
@@ -41,97 +55,120 @@ describe('computeInsets', () => {
     });
 });
 
-describe('shouldDecorate', () => {
+describe('checkDecorationEligibility', () => {
+    // These are the structural gates: facts about the window that a user rule
+    // must never be able to override.
     const base = {
-        bufferWidth: 400, bufferHeight: 300,
-        frameWidth: 400, frameHeight: 300,
-        scale: 1,
-        isX11: false, skipXwayland: false,
-        isMaximized: false, isFullscreen: false,
-        hasSsd: false,
         windowType: WindowType.NORMAL,
-        wmClass: 'test-app',
+        isMaximized: false,
+        isFullscreen: false,
+        hasSsd: false,
     };
 
-    it('non-CSD normal window -> decorate', () => {
-        const r = shouldDecorate(base);
-        expect(r.apply).toBeTrue();
+    it('plain normal window -> eligible', () => {
+        expect(checkDecorationEligibility(base)).toEqual({eligible: true, reason: ''});
+    });
+
+    it('every decoratable window type is eligible', () => {
+        for (const windowType of [
+            WindowType.NORMAL, WindowType.DIALOG,
+            WindowType.MODAL_DIALOG, WindowType.UTILITY,
+        ])
+            expect(checkDecorationEligibility({...base, windowType}).eligible).toBeTrue();
+    });
+
+    it('server-side decorations (SSD, traditional X11 app with system titlebar) -> ineligible', () => {
+        const r = checkDecorationEligibility({...base, hasSsd: true});
+        expect(r.eligible).toBeFalse();
+        expect(r.reason).toBe('has-ssd-frame');
+    });
+
+    it('maximized / fullscreen -> ineligible', () => {
+        expect(checkDecorationEligibility({...base, isMaximized: true}))
+            .toEqual({eligible: false, reason: 'maximized/fullscreen'});
+        expect(checkDecorationEligibility({...base, isFullscreen: true}))
+            .toEqual({eligible: false, reason: 'maximized/fullscreen'});
+    });
+
+    it('non-normal window type -> ineligible and names the offending type', () => {
+        const r = checkDecorationEligibility({...base, windowType: WindowType.DOCK});
+        expect(r.eligible).toBeFalse();
+        expect(r.reason).toBe(`window-type=${WindowType.DOCK}`);
+    });
+
+    it('uses sane defaults when called without arguments', () => {
+        expect(checkDecorationEligibility()).toEqual({eligible: true, reason: ''});
+    });
+});
+
+describe('inferDecorationBaseline', () => {
+    // Geometric inference: who already paints a shadow, answered per axis.
+    const normal = marginsFromRects(400, 300, 400, 300);
+
+    it('non-CSD normal window -> both axes on', () => {
+        const r = inferDecorationBaseline(normal);
+        expect(r.shadow).toBeTrue();
+        expect(r.corners).toBeTrue();
         expect(r.reason).toContain('no-csd');
     });
 
-    it('WeChat article / browser window (XWayland, Chromium 4px resize grip) single side < 8px -> Mutter skips native shadow, decorate', () => {
+    it('WeChat article / browser window (XWayland, Chromium 4px resize grip) single side < 8px -> Mutter skips native shadow, baseline decorates', () => {
         // Captured real-world data: buf=[1156, 852], frame=[1148, 844], 4px per edge
-        const r = shouldDecorate({
-            ...base,
+        const r = inferDecorationBaseline({
             isX11: true,
-            wmClass: null,
-            bufferWidth: 1156, bufferHeight: 852,
-            frameWidth: 1148, frameHeight: 844,
+            ...marginsFromRects(1156, 852, 1148, 844),
         });
-        expect(r.apply).toBeTrue();
+        expect(r.shadow).toBeTrue();
+        expect(r.corners).toBeTrue();
         expect(r.reason).toContain('no-csd');
         expect(r.reason).toContain('4.0x4.0 < 8');
     });
 
-    it('Wayland window with small resize grip (Chromium 4px resize grip) single side < 8px -> detected as lacking CSD, decorate', () => {
-        const r = shouldDecorate({
-            ...base,
+    it('Wayland window with small resize grip (Chromium 4px resize grip) single side < 8px -> detected as lacking CSD, baseline decorates', () => {
+        const r = inferDecorationBaseline({
             isX11: false,
-            wmClass: null,
-            bufferWidth: 1156, bufferHeight: 852,
-            frameWidth: 1148, frameHeight: 844,
+            ...marginsFromRects(1156, 852, 1148, 844),
         });
-        expect(r.apply).toBeTrue();
+        expect(r.shadow).toBeTrue();
+        expect(r.corners).toBeTrue();
         expect(r.reason).toContain('no-csd');
         expect(r.reason).toContain('4.0x4.0 < 8');
     });
 
-    it('X11 / XWayland windows without frame extents (WPS Office, Dida) -> Mutter C core manages native shadow, skip', () => {
-        const r = shouldDecorate({
-            ...base,
-            isX11: true,
-            bufferWidth: 800, bufferHeight: 600,
-            frameWidth: 800, frameHeight: 600,
-        });
-        expect(r.apply).toBeFalse();
+    it('X11 / XWayland windows without frame extents (WPS Office, Dida) -> Mutter C core manages native shadow, baseline off', () => {
+        const r = inferDecorationBaseline({isX11: true, ...marginsFromRects(800, 600, 800, 600)});
+        expect(r.shadow).toBeFalse();
+        expect(r.corners).toBeFalse();
         expect(r.reason).toBe('x11-mutter-native-shadow');
     });
 
-    it('genuine self-drawn CSD shadow (e.g. GTK4/Adwaita, single side 20px+ >= 8px) -> skip', () => {
+    it('X11 with a small non-zero grip declares custom frame extents -> baseline still decorates', () => {
+        const r = inferDecorationBaseline({isX11: true, ...marginsFromRects(808, 604, 800, 600)});
+        expect(r.shadow).toBeTrue();
+        expect(r.corners).toBeTrue();
+        expect(r.reason).toContain('no-csd');
+    });
+
+    it('genuine self-drawn CSD shadow (e.g. GTK4/Adwaita, single side 20px+ >= 8px) -> baseline off', () => {
         // Margins: 20px left/right (bufferWidth=440, frameWidth=400), 20px top/bottom
-        const r = shouldDecorate({
-            ...base,
-            bufferWidth: 440, bufferHeight: 340,
-            frameWidth: 400, frameHeight: 300,
-        });
-        expect(r.apply).toBeFalse();
+        const r = inferDecorationBaseline(marginsFromRects(440, 340, 400, 300));
+        expect(r.shadow).toBeFalse();
+        expect(r.corners).toBeFalse();
         expect(r.reason).toContain('has-csd');
         expect(r.reason).toContain('20.0x20.0 >= 8');
     });
 
-    it('oversized margin on a single axis (asymmetric) is not treated as a CSD shadow -> decorate', () => {
-        const r = shouldDecorate({
-            ...base,
-            bufferWidth: 440, bufferHeight: 300,
-            frameWidth: 400, frameHeight: 300,
-        });
-        expect(r.apply).toBeTrue();
+    it('oversized margin on a single axis (asymmetric) is not treated as a CSD shadow -> baseline decorates', () => {
+        const r = inferDecorationBaseline(marginsFromRects(440, 300, 400, 300));
+        expect(r.shadow).toBeTrue();
+        expect(r.corners).toBeTrue();
         expect(r.reason).toContain('no-csd');
     });
 
-    it('server-side decorations (SSD, traditional X11 app with system titlebar) -> skip', () => {
-        const r = shouldDecorate({...base, hasSsd: true});
-        expect(r.apply).toBeFalse();
-        expect(r.reason).toBe('has-ssd-frame');
-    });
-
-    it('maximized / fullscreen -> skip', () => {
-        expect(shouldDecorate({...base, isMaximized: true}).apply).toBeFalse();
-        expect(shouldDecorate({...base, isFullscreen: true}).apply).toBeFalse();
-    });
-
-    it('non-normal window type -> skip', () => {
-        expect(shouldDecorate({...base, windowType: WindowType.DOCK}).apply).toBeFalse();
+    it('honours an explicit inset threshold', () => {
+        const margins = marginsFromRects(410, 310, 400, 300); // single side 5px
+        expect(inferDecorationBaseline({...margins, insetThreshold: 4}).reason).toContain('has-csd');
+        expect(inferDecorationBaseline({...margins, insetThreshold: 8}).reason).toContain('no-csd');
     });
 });
 
@@ -178,21 +215,79 @@ describe('shouldClipWindow', () => {
     });
 });
 
+describe('rule axes vocabulary', () => {
+    it('parseRuleAxes reads each canonical value into a set', () => {
+        expect([...parseRuleAxes('shadow')]).toEqual([RuleAxis.SHADOW]);
+        expect([...parseRuleAxes('corners')]).toEqual([RuleAxis.CORNERS]);
+        expect([...parseRuleAxes('shadow,corners')].sort()).toEqual(['corners', 'shadow']);
+    });
+
+    it('parseRuleAxes accepts a reversed pair, normalised later by buildRuleValue', () => {
+        expect([...parseRuleAxes('corners,shadow')].sort()).toEqual(['corners', 'shadow']);
+    });
+
+    it('parseRuleAxes rejects empty, legacy modes and unknown values', () => {
+        for (const bad of [
+            '', 'all', 'clip', 'disable-all', 'disable-clip', 'disable-shadow',
+            'nonsense', 'both', null, undefined, 42,
+        ])
+            expect(parseRuleAxes(bad)).toBeNull();
+    });
+
+    it('buildRuleValue renders the canonical order regardless of input order', () => {
+        expect(buildRuleValue(['corners', 'shadow'])).toBe('shadow,corners');
+        expect(buildRuleValue(['shadow', 'corners'])).toBe('shadow,corners');
+        expect(buildRuleValue([RuleAxis.CORNERS])).toBe('corners');
+        expect(buildRuleValue([RuleAxis.SHADOW])).toBe('shadow');
+    });
+
+    it('buildRuleValue returns an empty string when no known axis is named', () => {
+        expect(buildRuleValue([])).toBe('');
+        expect(buildRuleValue(new Set())).toBe('');
+        expect(buildRuleValue(['nonsense'])).toBe('');
+    });
+
+    it('round-trips parseRuleAxes -> buildRuleValue', () => {
+        for (const value of ['shadow', 'corners', 'shadow,corners'])
+            expect(buildRuleValue(parseRuleAxes(value))).toBe(value);
+        expect(buildRuleValue(parseRuleAxes('corners,shadow'))).toBe('shadow,corners');
+    });
+});
+
 describe('resolveRule', () => {
     const mainKey = buildRuleKey('wechat');
     const fixedChildKey = buildRuleKey('wechat', {hasParent: true, allowsResize: false});
 
-    it('exact fingerprint match', () => {
+    it('exact fingerprint match, returning direction and axes', () => {
         const rules = {
-            [mainKey]: ExclusionTarget.CLIP,
-            [fixedChildKey]: ExclusionTarget.ALL,
+            suppress: {
+                [mainKey]: 'corners',
+                [fixedChildKey]: 'shadow,corners',
+            },
         };
-        expect(resolveRule('wechat', rules)).toBe(ExclusionTarget.CLIP);
-        expect(resolveRule('wechat', rules, {hasParent: true, allowsResize: false})).toBe(ExclusionTarget.ALL);
+        expect(resolved(resolveRule('wechat', rules)))
+            .toEqual({direction: RuleDirection.SUPPRESS, axes: ['corners']});
+        expect(resolved(resolveRule('wechat', rules, {hasParent: true, allowsResize: false})))
+            .toEqual({direction: RuleDirection.SUPPRESS, axes: ['corners', 'shadow']});
+    });
+
+    it('reads force rules from the force group', () => {
+        const rules = {force: {[mainKey]: 'corners'}};
+        expect(resolved(resolveRule('wechat', rules)))
+            .toEqual({direction: RuleDirection.FORCE, axes: ['corners']});
+    });
+
+    it('suppression wins when a window kind is in both groups', () => {
+        const rules = {
+            suppress: {[mainKey]: 'shadow'},
+            force: {[mainKey]: 'corners'},
+        };
+        expect(resolved(resolveRule('wechat', rules)))
+            .toEqual({direction: RuleDirection.SUPPRESS, axes: ['shadow']});
     });
 
     it('does not fall back to the application: a different window kind of the same app does not match', () => {
-        const rules = {[fixedChildKey]: ExclusionTarget.ALL};
+        const rules = {suppress: {[fixedChildKey]: 'shadow,corners'}};
 
         expect(resolveRule('wechat', rules)).toBeNull();
         expect(resolveRule('wechat', rules, {hasParent: true, allowsResize: true})).toBeNull();
@@ -202,16 +297,18 @@ describe('resolveRule', () => {
 
     it('case-insensitive wmClass match in both directions', () => {
         const upperRule = buildRuleKey('WeChat', {hasParent: true, allowsResize: false});
-        expect(resolveRule('wechat', {[upperRule]: ExclusionTarget.ALL}, {hasParent: true, allowsResize: false})).toBe(ExclusionTarget.ALL);
+        expect(resolved(resolveRule('wechat', {suppress: {[upperRule]: 'shadow,corners'}}, {hasParent: true, allowsResize: false})))
+            .toEqual({direction: RuleDirection.SUPPRESS, axes: ['corners', 'shadow']});
 
         const lowerRule = buildRuleKey('wechat', {hasParent: true, allowsResize: false});
-        expect(resolveRule('WeChat', {[lowerRule]: ExclusionTarget.ALL}, {hasParent: true, allowsResize: false})).toBe(ExclusionTarget.ALL);
+        expect(resolved(resolveRule('WeChat', {suppress: {[lowerRule]: 'shadow,corners'}}, {hasParent: true, allowsResize: false})))
+            .toEqual({direction: RuleDirection.SUPPRESS, axes: ['corners', 'shadow']});
     });
 
     it('no match returns null', () => {
-        expect(resolveRule('unknown-app', {[mainKey]: ExclusionTarget.ALL})).toBeNull();
-        expect(resolveRule(null, {[mainKey]: ExclusionTarget.ALL})).toBeNull();
-        expect(resolveRule('', {[mainKey]: ExclusionTarget.ALL})).toBeNull();
+        expect(resolveRule('unknown-app', {suppress: {[mainKey]: 'shadow,corners'}})).toBeNull();
+        expect(resolveRule(null, {suppress: {[mainKey]: 'shadow,corners'}})).toBeNull();
+        expect(resolveRule('', {suppress: {[mainKey]: 'shadow,corners'}})).toBeNull();
     });
 
     it('every fingerprint field participates in matching', () => {
@@ -219,9 +316,9 @@ describe('resolveRule', () => {
             clientType: 'wayland', windowType: WindowType.NORMAL,
             hasParent: true, allowsResize: false, isAttachedDialog: false,
         });
-        const rules = {[base]: ExclusionTarget.ALL};
+        const rules = {suppress: {[base]: 'shadow,corners'}};
 
-        expect(resolveRule('app', rules, {hasParent: true, allowsResize: false})).toBe(ExclusionTarget.ALL);
+        expect(resolveRule('app', rules, {hasParent: true, allowsResize: false})).not.toBeNull();
         expect(resolveRule('app', rules, {clientType: 'x11', windowType: WindowType.NORMAL, hasParent: true, allowsResize: false, isAttachedDialog: false})).toBeNull();
         expect(resolveRule('app', rules, {windowType: WindowType.DIALOG, hasParent: true, allowsResize: false, isAttachedDialog: false})).toBeNull();
         expect(resolveRule('app', rules, {hasParent: true, allowsResize: true, isAttachedDialog: false})).toBeNull();
@@ -324,9 +421,10 @@ describe('rule key contract & round-trip', () => {
     it('prefs-generated keys match resolveRule for the picked kind only', () => {
         const picked = {hasParent: true, allowsResize: false};
         const prefsGeneratedRules = {
-            [buildRuleKey('code', picked)]: ExclusionTarget.ALL,
+            suppress: {[buildRuleKey('code', picked)]: 'shadow,corners'},
         };
-        expect(resolveRule('code', prefsGeneratedRules, picked)).toBe(ExclusionTarget.ALL);
+        expect(resolved(resolveRule('code', prefsGeneratedRules, picked)))
+            .toEqual({direction: RuleDirection.SUPPRESS, axes: ['corners', 'shadow']});
         expect(resolveRule('code', prefsGeneratedRules, {hasParent: true, allowsResize: true})).toBeNull();
         expect(resolveRule('code', prefsGeneratedRules)).toBeNull();
     });
@@ -338,76 +436,128 @@ describe('sanitizeWindowRules', () => {
 
     it('passes valid fingerprint keys unchanged', () => {
         const input = {
-            [mainKey]: ExclusionTarget.CLIP,
-            [childKey]: ExclusionTarget.ALL,
+            suppress: {
+                [mainKey]: 'corners',
+                [childKey]: 'shadow,corners',
+            },
         };
-        expect(sanitizeWindowRules(input)).toEqual(input);
+        expect(sanitizeWindowRules(input)).toEqual({
+            suppress: {
+                [mainKey]: 'corners',
+                [childKey]: 'shadow,corners',
+            },
+            force: {},
+        });
     });
 
     it('drops bare app keys, legacy specifiers and malformed keys', () => {
         const input = {
-            [mainKey]: ExclusionTarget.CLIP,
-            'wechat': ExclusionTarget.ALL,
-            'wechat:dialog': ExclusionTarget.ALL,
-            'wechat:title=Exit': ExclusionTarget.ALL,
-            'wechat:has_parent=true,allows_resize=false': ExclusionTarget.ALL,
-            'invalid:key:too:many:colons': ExclusionTarget.ALL,
-            'has space:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false': ExclusionTarget.ALL,
-            'bad:client_type=macos,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false': ExclusionTarget.ALL,
-            [buildRuleKey('valid_app')]: 123,
+            suppress: {
+                [mainKey]: 'corners',
+                'wechat': 'shadow,corners',
+                'wechat:dialog': 'shadow,corners',
+                'wechat:title=Exit': 'shadow,corners',
+                'wechat:has_parent=true,allows_resize=false': 'shadow,corners',
+                'invalid:key:too:many:colons': 'shadow,corners',
+                'has space:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false': 'shadow,corners',
+                'bad:client_type=macos,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false': 'shadow,corners',
+                [buildRuleKey('valid_app')]: 123,
+            },
         };
-        expect(sanitizeWindowRules(input)).toEqual({[mainKey]: ExclusionTarget.CLIP});
+        expect(sanitizeWindowRules(input)).toEqual({
+            suppress: {[mainKey]: 'corners'},
+            force: {},
+        });
+    });
+
+    it('drops entries naming an invalid or legacy rule value', () => {
+        const input = {
+            suppress: {
+                [mainKey]: 'shadow,corners',
+                [childKey]: 'not-a-valid-mode',
+                [buildRuleKey('legacy-all')]: 'all',
+                [buildRuleKey('legacy-clip')]: 'clip',
+                [buildRuleKey('legacy-disable')]: 'disable-all',
+            },
+        };
+        expect(sanitizeWindowRules(input)).toEqual({
+            suppress: {[mainKey]: 'shadow,corners'},
+            force: {},
+        });
     });
 
     it('rejects case-colliding duplicate keys deterministically', () => {
         const input = {
-            [buildRuleKey('wechat')]: ExclusionTarget.CLIP,
-            [buildRuleKey('WeChat')]: ExclusionTarget.ALL,
+            suppress: {
+                [buildRuleKey('wechat')]: 'corners',
+                [buildRuleKey('WeChat')]: 'shadow,corners',
+            },
         };
         expect(sanitizeWindowRules(input)).toEqual({
-            [buildRuleKey('wechat')]: ExclusionTarget.CLIP,
+            suppress: {[buildRuleKey('wechat')]: 'corners'},
+            force: {},
         });
     });
 
-    it('migrates legacy disable-* rule modes to canonical forms', () => {
-        const legacyInput = {
-            [mainKey]: 'disable-clip',
-            [childKey]: 'disable-all',
-        };
-        expect(sanitizeWindowRules(legacyInput)).toEqual({
-            [mainKey]: ExclusionTarget.CLIP,
-            [childKey]: ExclusionTarget.ALL,
+    it('canonicalises axis order in stored values', () => {
+        const input = {suppress: {[mainKey]: 'corners,shadow'}};
+        expect(sanitizeWindowRules(input)).toEqual({
+            suppress: {[mainKey]: 'shadow,corners'},
+            force: {},
         });
     });
 
-    it('drops entries with invalid rule modes', () => {
+    it('mutual exclusion: a key in both groups is kept only in suppress', () => {
         const input = {
-            [mainKey]: ExclusionTarget.CLIP,
-            [buildRuleKey('bad-app')]: 'not-a-valid-mode',
+            suppress: {[mainKey]: 'shadow'},
+            force: {[mainKey]: 'corners', [childKey]: 'shadow,corners'},
         };
         expect(sanitizeWindowRules(input)).toEqual({
-            [mainKey]: ExclusionTarget.CLIP,
+            suppress: {[mainKey]: 'shadow'},
+            force: {[childKey]: 'shadow,corners'},
         });
     });
 
-    it('handles null, undefined, or non-object input gracefully', () => {
-        expect(sanitizeWindowRules(null)).toEqual({});
-        expect(sanitizeWindowRules(undefined)).toEqual({});
-        expect(sanitizeWindowRules('string')).toEqual({});
+    it('mutual exclusion is case-insensitive across groups', () => {
+        const input = {
+            suppress: {[buildRuleKey('wechat')]: 'shadow'},
+            force: {[buildRuleKey('WeChat')]: 'corners'},
+        };
+        expect(sanitizeWindowRules(input)).toEqual({
+            suppress: {[buildRuleKey('wechat')]: 'shadow'},
+            force: {},
+        });
+    });
+
+    it('handles undefined or non-object input as empty groups', () => {
+        expect(sanitizeWindowRules(undefined)).toEqual({suppress: {}, force: {}});
+        expect(sanitizeWindowRules('string')).toEqual({suppress: {}, force: {}});
+        expect(sanitizeWindowRules({})).toEqual({suppress: {}, force: {}});
+    });
+
+    it('rejects a null input', () => {
+        expect(() => sanitizeWindowRules(null)).toThrow();
     });
 });
 
 describe('getWindowRules', () => {
     const validKey = buildRuleKey('wechat', {hasParent: true, allowsResize: false});
 
-    it('unpacks and sanitizes from mock settings', () => {
+    it('unpacks and sanitizes both groups from mock settings', () => {
         const mockSettings = {
             get_value: (key) => {
-                if (key === 'window-rules') {
+                if (key === 'suppress-rules') {
                     return {
                         deep_unpack: () => ({
-                            [validKey]: 'disable-clip',
-                            'bad:foo=bar': 'all',
+                            [validKey]: 'corners',
+                            'bad:foo=bar': 'corners',
+                        }),
+                    };
+                }
+                if (key === 'force-rules') {
+                    return {
+                        deep_unpack: () => ({
+                            [buildRuleKey('gtk4-app')]: 'corners,shadow',
                         }),
                     };
                 }
@@ -415,64 +565,58 @@ describe('getWindowRules', () => {
             },
         };
         expect(getWindowRules(mockSettings)).toEqual({
-            [validKey]: ExclusionTarget.CLIP,
+            suppress: {[validKey]: 'corners'},
+            force: {[buildRuleKey('gtk4-app')]: 'shadow,corners'},
         });
     });
 
-    it('returns empty object on null or throwing settings', () => {
-        expect(getWindowRules(null)).toEqual({});
-        expect(getWindowRules({})).toEqual({});
+    it('reads only the suppress group when force-rules is absent', () => {
+        const mockSettings = {
+            get_value: (key) => (key === 'suppress-rules'
+                ? {deep_unpack: () => ({[validKey]: 'shadow'})}
+                : null),
+        };
+        expect(getWindowRules(mockSettings)).toEqual({
+            suppress: {[validKey]: 'shadow'},
+            force: {},
+        });
+    });
+
+    it('returns empty groups on null or throwing settings', () => {
+        expect(getWindowRules(null)).toEqual({suppress: {}, force: {}});
+        expect(getWindowRules({})).toEqual({suppress: {}, force: {}});
         expect(getWindowRules({
             get_value: () => {
                 throw new Error('boom');
             },
-        })).toEqual({});
+        })).toEqual({suppress: {}, force: {}});
     });
 
-    it('setWindowRules sanitizes and serializes into GSettings variant', () => {
-        let savedKey = null;
-        let savedVariant = null;
+    it('setWindowRules sanitizes and writes both GSettings keys', () => {
+        const saved = new Map();
         const mockSettings = {
             set_value: (key, val) => {
-                savedKey = key;
-                savedVariant = val;
+                saved.set(key, val);
             },
         };
         setWindowRules(mockSettings, {
-            [buildRuleKey('wechat')]: 'all',
-            'invalid:key': 'clip',
+            suppress: {
+                [buildRuleKey('wechat')]: 'corners',
+                'invalid:key': 'corners',
+            },
+            force: {
+                [buildRuleKey('gtk4-app')]: 'corners,shadow',
+            },
         });
-        expect(savedKey).toBe('window-rules');
-        expect(savedVariant.deep_unpack()).toEqual({
-            [buildRuleKey('wechat')]: ExclusionTarget.ALL,
+
+        expect(saved.has('suppress-rules')).toBeTrue();
+        expect(saved.has('force-rules')).toBeTrue();
+        expect(saved.get('suppress-rules').deep_unpack()).toEqual({
+            [buildRuleKey('wechat')]: 'corners',
         });
-    });
-});
-
-describe('normalizeRuleMode', () => {
-    it('returns canonical modes as-is', () => {
-        expect(normalizeRuleMode('all')).toBe('all');
-        expect(normalizeRuleMode('clip')).toBe('clip');
-        expect(normalizeRuleMode('shadow')).toBe('shadow');
-    });
-
-    it('maps legacy disable-* modes to canonical modes', () => {
-        expect(normalizeRuleMode('disable-all')).toBe('all');
-        expect(normalizeRuleMode('disable-clip')).toBe('clip');
-        expect(normalizeRuleMode('disable-shadow')).toBe('shadow');
-    });
-
-    it('is case-insensitive', () => {
-        expect(normalizeRuleMode('ALL')).toBe('all');
-        expect(normalizeRuleMode('Disable-Clip')).toBe('clip');
-        expect(normalizeRuleMode('DISABLE-SHADOW')).toBe('shadow');
-    });
-
-    it('returns null for invalid modes', () => {
-        expect(normalizeRuleMode('invalid')).toBeNull();
-        expect(normalizeRuleMode('')).toBeNull();
-        expect(normalizeRuleMode(null)).toBeNull();
-        expect(normalizeRuleMode(undefined)).toBeNull();
+        expect(saved.get('force-rules').deep_unpack()).toEqual({
+            [buildRuleKey('gtk4-app')]: 'shadow,corners',
+        });
     });
 });
 
@@ -518,50 +662,170 @@ describe('evaluateWindowActions', () => {
         expect(res.reason).toContain('no-csd');
     });
 
-    it('disable-all rule: both shadow and clip disabled', () => {
+    it('suppress rule naming both axes: both shadow and clip disabled', () => {
         const res = evaluateWindowActions({
             ...baseWin,
             wmClass: 'overlay-app',
-            windowRules: {[buildRuleKey('overlay-app')]: ExclusionTarget.ALL},
+            rules: {suppress: {[buildRuleKey('overlay-app')]: 'shadow,corners'}},
         });
         expect(res.applyShadow).toBeFalse();
         expect(res.applyClip).toBeFalse();
-        expect(res.reason).toContain('disabled-by-rule');
+        expect(res.reason).toContain('rule-applied');
     });
 
-    it('disable-clip rule: retains shadow, disables clip', () => {
+    it('suppress rule naming corners: retains shadow, disables clip', () => {
         const res = evaluateWindowActions({
             ...baseWin,
             wmClass: 'wechat',
-            windowRules: {[buildRuleKey('wechat')]: ExclusionTarget.CLIP},
+            rules: {suppress: {[buildRuleKey('wechat')]: 'corners'}},
         });
         expect(res.applyShadow).toBeTrue();
         expect(res.applyClip).toBeFalse();
         expect(res.reason).toContain('rule-applied');
     });
 
-    it('disable-shadow rule: disables shadow, retains clip', () => {
+    it('suppress rule naming shadow: disables shadow, retains clip', () => {
         const res = evaluateWindowActions({
             ...baseWin,
             wmClass: 'custom-tool',
-            windowRules: {[buildRuleKey('custom-tool')]: ExclusionTarget.SHADOW},
+            rules: {suppress: {[buildRuleKey('custom-tool')]: 'shadow'}},
         });
         expect(res.applyShadow).toBeFalse();
         expect(res.applyClip).toBeTrue();
         expect(res.reason).toContain('rule-applied');
     });
 
-    it('CSD window (GTK4): no decorations applied regardless of rules', () => {
+    it('suppression wins over a force rule for the same window kind', () => {
+        const res = evaluateWindowActions({
+            ...baseWin,
+            wmClass: 'wechat',
+            rules: {
+                suppress: {[buildRuleKey('wechat')]: 'corners'},
+                force: {[buildRuleKey('wechat')]: 'shadow,corners'},
+            },
+        });
+        expect(res.applyShadow).toBeTrue();
+        expect(res.applyClip).toBeFalse();
+        expect(res.reason).toBe('rule-applied(wechat:suppress:corners)');
+    });
+
+    it('CSD window (GTK4): no decorations applied regardless of suppress rules', () => {
         const csdWin = {
             ...baseWin,
             bufferWidth: 460, bufferHeight: 360, // single side 30px >= 8px
             wmClass: 'gtk4-app',
-            windowRules: {[buildRuleKey('gtk4-app')]: ExclusionTarget.CLIP},
+            rules: {suppress: {[buildRuleKey('gtk4-app')]: 'corners'}},
         };
         const res = evaluateWindowActions(csdWin);
         expect(res.applyShadow).toBeFalse();
         expect(res.applyClip).toBeFalse();
+    });
+
+    it('CSD window (GTK4): the has-csd baseline reason surfaces when no rule matches', () => {
+        const res = evaluateWindowActions({
+            ...baseWin,
+            bufferWidth: 460, bufferHeight: 360, // single side 30px >= 8px
+            wmClass: 'gtk4-app',
+        });
+        expect(res.applyShadow).toBeFalse();
+        expect(res.applyClip).toBeFalse();
         expect(res.reason).toContain('has-csd');
+    });
+
+    it('force rule re-enables both axes on a has-csd baseline', () => {
+        const res = evaluateWindowActions({
+            ...baseWin,
+            bufferWidth: 460, bufferHeight: 360, // has-csd baseline: both off
+            wmClass: 'gtk4-app',
+            rules: {force: {[buildRuleKey('gtk4-app')]: 'shadow,corners'}},
+        });
+        expect(res.applyShadow).toBeTrue();
+        expect(res.applyClip).toBeTrue();
+        expect(res.reason).toBe('rule-applied(gtk4-app:force:shadow,corners)');
+    });
+
+    it('force rule re-enables both axes on an x11-mutter-native-shadow baseline', () => {
+        const res = evaluateWindowActions({
+            ...baseWin,
+            isX11: true,
+            wmClass: 'wps',
+            rules: {force: {[buildRuleKey('wps', {clientType: 'x11'})]: 'shadow,corners'}},
+        });
+        expect(res.applyShadow).toBeTrue();
+        expect(res.applyClip).toBeTrue();
+        expect(res.reason).toContain('rule-applied');
+    });
+
+    it('per-axis force: corners turned ON while shadow keeps the inferred baseline', () => {
+        const res = evaluateWindowActions({
+            ...baseWin,
+            bufferWidth: 460, bufferHeight: 360, // has-csd baseline: shadow=false, corners=false
+            wmClass: 'gtk4-app',
+            rules: {force: {[buildRuleKey('gtk4-app')]: 'corners'}},
+        });
+        expect(res.applyShadow).toBeFalse();
+        expect(res.applyClip).toBeTrue();
+        expect(res.reason).toBe('rule-applied(gtk4-app:force:corners)');
+    });
+
+    it('per-axis force: shadow turned ON while corners keeps the inferred baseline', () => {
+        const res = evaluateWindowActions({
+            ...baseWin,
+            isX11: true,
+            wmClass: 'wps',
+            rules: {force: {[buildRuleKey('wps', {clientType: 'x11'})]: 'shadow'}},
+        });
+        expect(res.applyShadow).toBeTrue();
+        expect(res.applyClip).toBeFalse();
+        expect(res.reason).toBe('rule-applied(wps:force:shadow)');
+    });
+
+    it('force rules cannot override structural ineligibility: maximized', () => {
+        const res = evaluateWindowActions({
+            ...baseWin,
+            isMaximized: true,
+            wmClass: 'wechat',
+            rules: {force: {[buildRuleKey('wechat')]: 'shadow,corners'}},
+        });
+        expect(res.applyShadow).toBeFalse();
+        expect(res.applyClip).toBeFalse();
+        expect(res.reason).toBe('maximized/fullscreen');
+    });
+
+    it('force rules cannot override structural ineligibility: fullscreen', () => {
+        const res = evaluateWindowActions({
+            ...baseWin,
+            isFullscreen: true,
+            wmClass: 'wechat',
+            rules: {force: {[buildRuleKey('wechat')]: 'shadow,corners'}},
+        });
+        expect(res.applyShadow).toBeFalse();
+        expect(res.applyClip).toBeFalse();
+        expect(res.reason).toBe('maximized/fullscreen');
+    });
+
+    it('force rules cannot override structural ineligibility: non-normal window type', () => {
+        const res = evaluateWindowActions({
+            ...baseWin,
+            windowType: WindowType.DOCK,
+            wmClass: 'dock-app',
+            rules: {force: {[buildRuleKey('dock-app', {windowType: WindowType.DOCK})]: 'shadow,corners'}},
+        });
+        expect(res.applyShadow).toBeFalse();
+        expect(res.applyClip).toBeFalse();
+        expect(res.reason).toBe(`window-type=${WindowType.DOCK}`);
+    });
+
+    it('force rules cannot override structural ineligibility: SSD', () => {
+        const res = evaluateWindowActions({
+            ...baseWin,
+            hasSsd: true,
+            wmClass: 'legacy-x11',
+            rules: {force: {[buildRuleKey('legacy-x11')]: 'shadow,corners'}},
+        });
+        expect(res.applyShadow).toBeFalse();
+        expect(res.applyClip).toBeFalse();
+        expect(res.reason).toBe('has-ssd-frame');
     });
 
     it('preferCrispText retains rounded corners on integer scale displays (1.0x, 2.0x)', () => {
@@ -608,7 +872,9 @@ describe('evaluateWindowActions', () => {
 
     it('rule for one window kind leaves other kinds of the same app decorated', () => {
         const rules = {
-            [buildRuleKey('wechat', {hasParent: true, allowsResize: false})]: ExclusionTarget.ALL,
+            suppress: {
+                [buildRuleKey('wechat', {hasParent: true, allowsResize: false})]: 'shadow,corners',
+            },
         };
 
         // Main window (top-level, resizable) is a different kind -> untouched
@@ -617,7 +883,7 @@ describe('evaluateWindowActions', () => {
             wmClass: 'wechat',
             hasParent: false,
             allowsResize: true,
-            windowRules: rules,
+            rules,
         });
         expect(mainWin.applyShadow).toBeTrue();
         expect(mainWin.applyClip).toBeTrue();
@@ -628,11 +894,11 @@ describe('evaluateWindowActions', () => {
             wmClass: 'wechat',
             hasParent: true,
             allowsResize: false,
-            windowRules: rules,
+            rules,
         });
         expect(dialogWin.applyShadow).toBeFalse();
         expect(dialogWin.applyClip).toBeFalse();
-        expect(dialogWin.reason).toContain('disabled-by-rule');
+        expect(dialogWin.reason).toContain('rule-applied');
 
         // Resizable child of the same app is a different kind -> untouched
         const resizableChild = evaluateWindowActions({
@@ -640,7 +906,7 @@ describe('evaluateWindowActions', () => {
             wmClass: 'wechat',
             hasParent: true,
             allowsResize: true,
-            windowRules: rules,
+            rules,
         });
         expect(resizableChild.applyShadow).toBeTrue();
         expect(resizableChild.applyClip).toBeTrue();
@@ -648,7 +914,9 @@ describe('evaluateWindowActions', () => {
 
     it('client type is part of the window kind: an X11 window does not match a Wayland rule', () => {
         const rules = {
-            [buildRuleKey('wechat', {clientType: 'wayland', hasParent: true, allowsResize: false})]: ExclusionTarget.ALL,
+            suppress: {
+                [buildRuleKey('wechat', {clientType: 'wayland', hasParent: true, allowsResize: false})]: 'shadow,corners',
+            },
         };
 
         const waylandChild = evaluateWindowActions({
@@ -657,7 +925,7 @@ describe('evaluateWindowActions', () => {
             isX11: false,
             hasParent: true,
             allowsResize: false,
-            windowRules: rules,
+            rules,
         });
         expect(waylandChild.applyShadow).toBeFalse();
 
@@ -671,7 +939,7 @@ describe('evaluateWindowActions', () => {
             bufferHeight: 304,
             hasParent: true,
             allowsResize: false,
-            windowRules: rules,
+            rules,
         });
         expect(x11Child.applyShadow).toBeTrue();
         expect(x11Child.applyClip).toBeTrue();
@@ -877,4 +1145,3 @@ describe('chooseWindowIdentity', () => {
         expect(chooseWindowIdentity({pid: -1})).toBe('');
     });
 });
-

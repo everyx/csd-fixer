@@ -51,62 +51,80 @@ export function computeInsets(bufferWidth, bufferHeight,
 }
 
 /**
- * Determines whether a window needs decoration. Returns {apply, reason}.
+ * Whether the extension is allowed to decorate this window at all.
  *
- * Parameters (read from Meta.Window/actor without side effects):
- *   bufferWidth/bufferHeight  physical pixels
- *   frameWidth/frameHeight    logical pixels
- *   scale                     geometry scale (>= 1)
- *   isMaximized/isFullscreen  boolean
- *   hasSsd                    whether native server-side decorations are present
- *   isX11                     whether the client connects via X11 / XWayland
- *   windowType                Meta.WindowType
- *   insetThreshold            single-side CSD shadow threshold (default: Mutter min radius 8px)
+ * These are structural facts, not guesses: a menu is never a window we decorate,
+ * a maximized window has no decoration to add, and a server-decorated window
+ * already has one. A user rule must never override them.
+ *
+ * @param {object} [params={}]
+ * @param {number} [params.windowType=WindowType.NORMAL] - Meta.WindowType
+ * @param {boolean} [params.isMaximized=false]
+ * @param {boolean} [params.isFullscreen=false]
+ * @param {boolean} [params.hasSsd=false] - Mutter already draws frame/titlebar
+ * @returns {{eligible: boolean, reason: string}}
  */
-export function shouldDecorate({
-    bufferWidth, bufferHeight, frameWidth, frameHeight, scale = 1,
+export function checkDecorationEligibility({
+    windowType = WindowType.NORMAL,
     isMaximized = false, isFullscreen = false,
     hasSsd = false,
-    isX11 = false,
-    windowType = WindowType.NORMAL,
-    insetThreshold = MUTTER_CSD_MIN_INSET_THRESHOLD,
-}) {
-    // 1. Only decorate normal, dialog, and utility windows
+} = {}) {
+    // Only normal, dialog, modal and utility windows are ours to decorate.
     if (windowType !== WindowType.NORMAL && windowType !== WindowType.DIALOG &&
         windowType !== WindowType.MODAL_DIALOG && windowType !== WindowType.UTILITY)
-        return {apply: false, reason: `window-type=${windowType}`};
+        return {eligible: false, reason: `window-type=${windowType}`};
 
-    // 2. Maximized / fullscreen windows are excluded (matches Mutter has_shadow)
+    // Maximized / fullscreen: libadwaita gives them square corners and no shadow.
     if (isMaximized || isFullscreen)
-        return {apply: false, reason: 'maximized/fullscreen'};
+        return {eligible: false, reason: 'maximized/fullscreen'};
 
-    // 3. Server-side decorated windows: Mutter manages shadows natively
+    // Server-side decorations: Mutter already drew the whole decoration.
     if (hasSsd)
-        return {apply: false, reason: 'has-ssd-frame'};
+        return {eligible: false, reason: 'has-ssd-frame'};
 
-    // 4. Core geometric criteria: matches Mutter shadow threshold.
+    return {eligible: true, reason: ''};
+}
+
+/**
+ * The decoration we would apply with no user rule, answered per axis.
+ *
+ * Both axes answer the same today, because each reason below is about the window
+ * as a whole. They are returned separately because a `force` rule may flip one
+ * axis while leaving the other to this baseline.
+ *
+ * The X11 case also covers corners, not only the shadow: Mutter's generated
+ * shadow follows the window's square frame and cannot be removed from JS, so
+ * rounding the contents alone would leave square shadow corners poking out past
+ * the rounded content. That is a visual-consistency call rather than a hard
+ * fact, which is exactly why a `force` rule is allowed to override it.
+ *
+ * @param {object} params
+ * @param {boolean} [params.isX11=false]
+ * @param {number} params.sideW - per-side content margin, logical px
+ * @param {number} params.sideH - per-side content margin, logical px
+ * @param {number} [params.insetThreshold]
+ * @returns {{shadow: boolean, corners: boolean, reason: string}}
+ */
+export function inferDecorationBaseline({
+    isX11 = false,
+    sideW, sideH,
+    insetThreshold = MUTTER_CSD_MIN_INSET_THRESHOLD,
+}) {
     // A genuine client-side shadow reserves margin on every side; an oversized
-    // margin on a single axis is instead a resize grip / partial decoration.
-    // Require both axes to clear the threshold rather than either one.
-    // Single-side margin = (physical buffer / scale - logical frame) / 2
-    const {w, h} = computeInsets(bufferWidth, bufferHeight,
-        frameWidth, frameHeight, scale);
-    const sideW = w / 2;
-    const sideH = h / 2;
-
+    // margin on a single axis is instead a resize grip or partial decoration.
     if (sideW >= insetThreshold && sideH >= insetThreshold)
-        return {apply: false, reason: `has-csd(insets=${sideW.toFixed(1)}x${sideH.toFixed(1)} >= ${insetThreshold})`};
+        return {shadow: false, corners: false, reason: `has-csd(insets=${sideW.toFixed(1)}x${sideH.toFixed(1)} >= ${insetThreshold})`};
 
-    // 5. X11 / XWayland windows without custom frame extents (insets === 0, e.g. WPS Office, Dida):
-    // Mutter C core natively renders box shadows (meta-window-actor-x11.c:has_shadow).
+    // X11 / XWayland without custom frame extents (e.g. WPS Office, Dida):
+    // Mutter C core renders box shadows itself (meta-window-actor-x11.c:has_shadow).
     // Decorating causes duplicate shadows and breaks offscreen clip geometry.
-    // Note: X11 windows that DO declare custom frame extents (e.g. WeChat 4px resize grip, sideW > 0)
-    // cause Mutter to disable its native shadow (priv->has_custom_frame_extents == TRUE).
-    // Those windows lack shadows entirely and MUST be decorated.
+    // X11 windows that DO declare custom frame extents (e.g. the WeChat 4px resize
+    // grip) make Mutter drop its native shadow (has_custom_frame_extents), so those
+    // lack any shadow and must be decorated.
     if (isX11 && sideW <= 0 && sideH <= 0)
-        return {apply: false, reason: 'x11-mutter-native-shadow'};
+        return {shadow: false, corners: false, reason: 'x11-mutter-native-shadow'};
 
-    return {apply: true, reason: `no-csd(insets=${sideW.toFixed(1)}x${sideH.toFixed(1)} < ${insetThreshold})`};
+    return {shadow: true, corners: true, reason: `no-csd(insets=${sideW.toFixed(1)}x${sideH.toFixed(1)} < ${insetThreshold})`};
 }
 
 /**
@@ -135,39 +153,50 @@ export function shouldClipWindow({preferCrispText = false, scale = 1}) {
 }
 
 /**
- * Window exclusion rule mode enumeration.
- * Specifies decoration capabilities to exclude for a window.
+ * The two decorations this extension paints. They are independent: a window can
+ * have either, both, or neither, and a rule may name one without the other.
  */
-export const ExclusionTarget = {
-    ALL: 'all',       // Completely disabled (no shadow, no corner clipping)
-    CLIP: 'clip',     // Disable corner clipping (retains shadow)
-    SHADOW: 'shadow', // Disable shadow (retains corner clipping)
-};
+export const RuleAxis = Object.freeze({
+    SHADOW: 'shadow',
+    CORNERS: 'corners',
+});
 
-export const RULE_MODE_ALIASES = {
-    'disable-all': ExclusionTarget.ALL,
-    'disable-clip': ExclusionTarget.CLIP,
-    'disable-shadow': ExclusionTarget.SHADOW,
-};
+/** Which way a rule moves the axes it names. */
+export const RuleDirection = Object.freeze({
+    SUPPRESS: 'suppress',
+    FORCE: 'force',
+});
+
+const RULE_AXIS_ORDER = [RuleAxis.SHADOW, RuleAxis.CORNERS];
+// Parenthesised: a bare `a|b` would let the `^` bind to the first alternative only.
+const RULE_AXIS_PATTERN = `(?:${RULE_AXIS_ORDER.join('|')})`;
+
+/** A rule value names one or both axes, in canonical order. */
+export const VALID_RULE_VALUE_PATTERN = new RegExp(
+    `^${RULE_AXIS_PATTERN}(?:,${RULE_AXIS_PATTERN})?$`
+);
 
 /**
- * Normalizes an exclusion rule mode to its canonical form ('all', 'clip', 'shadow').
- * Transparently maps legacy 'disable-*' modes for backward compatibility.
+ * Parses a rule value into the set of axes it names.
  *
- * @param {string} mode
- * @returns {'all'|'clip'|'shadow'|null}
+ * @param {string} value
+ * @returns {Set<string>|null} null when the value is not a valid axis list
  */
-export function normalizeRuleMode(mode) {
-    if (typeof mode !== 'string')
+export function parseRuleAxes(value) {
+    if (typeof value !== 'string' || !VALID_RULE_VALUE_PATTERN.test(value))
         return null;
-    const lower = mode.toLowerCase();
-    if (RULE_MODE_ALIASES[lower])
-        return RULE_MODE_ALIASES[lower];
-    if (lower === ExclusionTarget.ALL ||
-        lower === ExclusionTarget.CLIP ||
-        lower === ExclusionTarget.SHADOW)
-        return lower;
-    return null;
+    return new Set(value.split(','));
+}
+
+/**
+ * Renders axes back into the canonical rule value (declaration order fixed).
+ *
+ * @param {Iterable<string>} axes
+ * @returns {string} '' when no known axis is named
+ */
+export function buildRuleValue(axes) {
+    const named = new Set(axes);
+    return RULE_AXIS_ORDER.filter(axis => named.has(axis)).join(',');
 }
 
 /**
@@ -374,46 +403,74 @@ export function buildRuleKey(wmClass, {
 }
 
 /**
- * Validates and sanitizes a window rules dictionary from settings.
- * Discards malformed keys and drops case-colliding duplicate keys to ensure determinism.
+ * Validates and sanitizes both rule groups read from settings.
  *
- * @param {Record<string, string>} [rawRules={}]
- * @returns {Record<string, string>}
+ * Drops malformed keys and values and drops case-colliding duplicate keys so the
+ * result is deterministic. It also enforces the invariant the two groups rely
+ * on: a window kind belongs to at most one of them. On collision the suppression
+ * wins, because under-decorating is visible and reversible while the double
+ * decoration a stray force rule can cause is neither.
+ *
+ * @param {{suppress?: Record<string, string>, force?: Record<string, string>}} [raw={}]
+ * @returns {{suppress: Record<string, string>, force: Record<string, string>}}
  */
-export function sanitizeWindowRules(rawRules = {}) {
+export function sanitizeWindowRules({suppress = {}, force = {}} = {}) {
+    const clean = {
+        suppress: sanitizeRuleGroup(suppress, RuleDirection.SUPPRESS),
+        force: sanitizeRuleGroup(force, RuleDirection.FORCE),
+    };
+
+    for (const key of Object.keys(clean.force)) {
+        const colliding = lookupRuleKey(clean.suppress, key);
+        if (!colliding)
+            continue;
+        console.warn(`[csd-fixer] "${key}" is in both rule groups; keeping the suppression`);
+        delete clean.force[key];
+    }
+
+    return clean;
+}
+
+function sanitizeRuleGroup(rawRules, direction) {
     if (!rawRules || typeof rawRules !== 'object')
         return {};
 
     const clean = {};
     const seenLowerKeys = new Map();
 
-    for (const [key, val] of Object.entries(rawRules)) {
-        if (typeof val !== 'string')
-            continue;
-
+    for (const [key, value] of Object.entries(rawRules)) {
         if (!VALID_RULE_KEY_PATTERN.test(key)) {
-            console.warn(`[csd-fixer] Dropping invalid window rule key: "${key}"`);
+            console.warn(`[csd-fixer] Dropping invalid ${direction} rule key: "${key}"`);
             continue;
         }
 
-        const normalizedMode = normalizeRuleMode(val);
-        if (!normalizedMode) {
-            console.warn(`[csd-fixer] Dropping window rule with invalid mode: "${val}" for key "${key}"`);
+        const axes = parseRuleAxes(value);
+        if (!axes) {
+            console.warn(`[csd-fixer] Dropping ${direction} rule with invalid value: "${value}" for key "${key}"`);
             continue;
         }
 
         const lowerKey = key.toLowerCase();
         if (seenLowerKeys.has(lowerKey)) {
             const existingKey = seenLowerKeys.get(lowerKey);
-            console.warn(`[csd-fixer] Dropping case-colliding window rule key "${key}" (conflicts with "${existingKey}")`);
+            console.warn(`[csd-fixer] Dropping case-colliding ${direction} rule key "${key}" (conflicts with "${existingKey}")`);
             continue;
         }
 
         seenLowerKeys.set(lowerKey, key);
-        clean[key] = normalizedMode;
+        clean[key] = buildRuleValue(axes);
     }
 
     return clean;
+}
+
+/** Case-insensitive key lookup, because WM_CLASS casing varies between toolkits. */
+function lookupRuleKey(group, key) {
+    if (Object.prototype.hasOwnProperty.call(group, key))
+        return key;
+
+    const lowerKey = key.toLowerCase();
+    return Object.keys(group).find(storedKey => storedKey.toLowerCase() === lowerKey) ?? null;
 }
 
 /**
@@ -453,25 +510,28 @@ export function parseRuleKey(key) {
 }
 
 /**
- * Resolves the exclusion mode for a window by matching its canonical window-kind
- * fingerprint against the stored rules. There is no specificity hierarchy and no
- * app-wide fallback: a rule applies if and only if the window kind matches,
- * so an exclusion can never silently spread to other windows of the app.
+ * Resolves the rule that applies to a window, by matching its canonical
+ * window-kind fingerprint against both rule groups.
  *
- * wmClass comparison is case-insensitive (both directions); the fingerprint
- * must match exactly.
+ * There is no specificity hierarchy and no app-wide fallback: a rule applies if
+ * and only if the window kind matches, so it can never silently spread to other
+ * windows of the same application. Suppressions are checked first, matching the
+ * conflict rule enforced by sanitizeWindowRules().
  *
- * @param {string} wmClass - Window WM_CLASS / app id
- * @param {Record<string, string>} [windowRules={}] - Active rules dictionary
+ * wmClass comparison is case-insensitive (both directions); the fingerprint must
+ * match exactly.
+ *
+ * @param {string} wmClass - Window identity (WM_CLASS / app id / resolver result)
+ * @param {{suppress?: Record<string, string>, force?: Record<string, string>}} [rules={}]
  * @param {object} [options={}]
  * @param {string} [options.clientType='wayland'] - 'wayland' | 'x11'
  * @param {number} [options.windowType=WindowType.NORMAL] - Meta.WindowType
  * @param {boolean} [options.hasParent=false] - Whether window has parent (transient)
  * @param {boolean} [options.allowsResize=true] - Whether window allows resizing
  * @param {boolean} [options.isAttachedDialog=false] - Whether modal dialog attached to parent
- * @returns {string|null} ExclusionTarget mode or null if no rule matched
+ * @returns {{direction: string, axes: Set<string>}|null} null when no rule matched
  */
-export function resolveRule(wmClass, windowRules = {}, options = {}) {
+export function resolveRule(wmClass, {suppress = {}, force = {}} = {}, options = {}) {
     if (!wmClass)
         return null;
 
@@ -493,13 +553,18 @@ export function resolveRule(wmClass, windowRules = {}, options = {}) {
     if (!key)
         return null;
 
-    if (Object.prototype.hasOwnProperty.call(windowRules, key))
-        return windowRules[key];
+    const suppressedKey = lookupRuleKey(suppress, key);
+    if (suppressedKey) {
+        const axes = parseRuleAxes(suppress[suppressedKey]);
+        if (axes)
+            return {direction: RuleDirection.SUPPRESS, axes};
+    }
 
-    const lowerKey = key.toLowerCase();
-    for (const [storedKey, val] of Object.entries(windowRules)) {
-        if (storedKey.toLowerCase() === lowerKey)
-            return val;
+    const forcedKey = lookupRuleKey(force, key);
+    if (forcedKey) {
+        const axes = parseRuleAxes(force[forcedKey]);
+        if (axes)
+            return {direction: RuleDirection.FORCE, axes};
     }
 
     return null;
@@ -524,7 +589,7 @@ export function resolveRule(wmClass, windowRules = {}, options = {}) {
  * @property {boolean} [allowsResize=true] - Whether window allows resizing
  * @property {boolean} [hasTileMatch=false] - Whether window is snap-tiled with an adjacent matching window
  * @property {string} [wmClass] - Window WM_CLASS / app ID
- * @property {Record<string, string>} [windowRules={}] - Exclusion rules
+ * @property {{suppress?: Record<string, string>, force?: Record<string, string>}} [rules={}] - Both rule groups
  * @property {boolean} [preferCrispText=false] - Subpixel crisp text setting
  * @property {number} [insetThreshold] - Mutter CSD minimum margin threshold
  */
@@ -549,71 +614,58 @@ export function evaluateWindowActions({
     allowsResize = true,
     hasTileMatch = false,
     wmClass,
-    windowRules = {},
+    rules = {},
     preferCrispText = false,
     insetThreshold = MUTTER_CSD_MIN_INSET_THRESHOLD,
 }) {
-    // 1. Base geometric criteria (whether window lacks CSD)
-    // Note on X11 / XWayland precedence:
-    // shouldDecorate suppresses decorations on X11 windows that lack custom frame extents (insets <= 0)
-    // because Mutter's C core natively renders their shadows (meta-window-actor-x11.c:has_shadow).
-    // X11 windows declaring custom frame extents (e.g. resize grips) lack native shadows and are decorated.
-    // Rule matching is intentionally executed AFTER base criteria: custom rules cannot force decorations
-    // onto standard X11 windows, preventing duplicate shadow rendering.
-    const base = shouldDecorate({
-        bufferWidth, bufferHeight, frameWidth, frameHeight,
-        scale: geometryScale,
-        isMaximized, isFullscreen,
-        hasSsd,
-        isX11,
-        windowType,
-        insetThreshold,
+    // 1. Structural eligibility. No rule may override these.
+    const eligibility = checkDecorationEligibility({windowType, isMaximized, isFullscreen, hasSsd});
+    if (!eligibility.eligible)
+        return {applyShadow: false, applyClip: false, reason: eligibility.reason};
+
+    // 2. Inferred baseline: what we would do with no rule at all.
+    const {w, h} = computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight, geometryScale);
+    const baseline = inferDecorationBaseline({
+        isX11, sideW: w / 2, sideH: h / 2, insetThreshold,
     });
 
-    if (!base.apply) {
-        return {
-            applyShadow: false,
-            applyClip: false,
-            reason: base.reason,
-        };
-    }
-
-    // 2. Rule evaluation: exact window-kind fingerprint match
-    const rule = resolveRule(wmClass, windowRules, {
+    // 3. User rule: moves every axis it names in one direction, leaving the rest
+    //    to the baseline. This is the one place a rule may turn an axis back ON.
+    const rule = resolveRule(wmClass, rules, {
         clientType: isX11 ? CLIENT_TYPE_TOKEN_X11 : CLIENT_TYPE_TOKEN_WAYLAND,
         windowType,
         hasParent: Boolean(hasParent),
         allowsResize,
         isAttachedDialog,
     });
-    const canonicalRule = normalizeRuleMode(rule);
 
-    if (canonicalRule === ExclusionTarget.ALL) {
-        return {
-            applyShadow: false,
-            applyClip: false,
-            reason: `disabled-by-rule(${wmClass}:all)`,
-        };
+    let shadow = baseline.shadow;
+    let corners = baseline.corners;
+    if (rule) {
+        const forced = rule.direction === RuleDirection.FORCE;
+        if (rule.axes.has(RuleAxis.SHADOW))
+            shadow = forced;
+        if (rule.axes.has(RuleAxis.CORNERS))
+            corners = forced;
     }
 
-    // 3. Shadow and clip evaluation
-    // Snap-tiled window shadow suppression:
-    // Emulates Mutter C core (meta-window-actor-x11.c:392) for Wayland clients without CSD:
-    // "If we have two snap-tiled windows, we don't want the shadow to obstruct the other window."
-    // Suppresses shadow when two windows are snap-tiled adjacent to each other.
-    const applyShadow = canonicalRule !== ExclusionTarget.SHADOW && !hasTileMatch;
-    const applyClip = canonicalRule === ExclusionTarget.CLIP
-        ? false
-        : shouldClipWindow({preferCrispText, scale: monitorScale});
+    // 4. State modifiers are applied last, on top of both the baseline and any
+    //    rule, because they are visual policies rather than inferences about who
+    //    already paints what:
+    //      - a snap-tiled neighbour would be obstructed by our shadow
+    //        (meta-window-actor-x11.c: "If we have two snap-tiled windows, we
+    //        don't want the shadow to obstruct the other window.")
+    //      - corner clipping is what blurs text under fractional scaling
+    const shadowBeforeTiling = shadow;
+    shadow = shadow && !hasTileMatch;
+    corners = corners && shouldClipWindow({preferCrispText, scale: monitorScale});
 
-    let reason = canonicalRule ? `rule-applied(${wmClass}:${canonicalRule})` : base.reason;
-    if (hasTileMatch && !applyShadow && canonicalRule !== ExclusionTarget.SHADOW)
+    let reason = rule
+        ? `rule-applied(${wmClass}:${rule.direction}:${buildRuleValue(rule.axes)})`
+        : baseline.reason;
+    if (shadowBeforeTiling && !shadow)
         reason = `tile-match(suppress-shadow,${reason})`;
 
-    return {
-        applyShadow,
-        applyClip,
-        reason,
-    };
+    return {applyShadow: shadow, applyClip: corners, reason};
 }
 

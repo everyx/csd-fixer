@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: csd-fixer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-11 09:31+0800\n"
+"POT-Creation-Date: 2026-09-11 19:00+0800\n"
 "PO-Revision-Date: 2026-09-08 22:50+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Simplified) <i18n-zh@googlegroups.com>\n"
@@ -16,94 +16,117 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: src/prefs.js:20
-msgid "Disable all"
-msgstr "全部排除"
+#: src/prefs.js:29
+msgid "Shadow"
+msgstr "阴影"
 
-#: src/prefs.js:21
-msgid "Disable corners"
-msgstr "排除圆角"
+#: src/prefs.js:29
+msgid "Corners"
+msgstr "圆角"
 
-#: src/prefs.js:22
-msgid "Disable shadow"
-msgstr "排除阴影"
-
-#: src/prefs.js:106 src/prefs.js:114
+#: src/prefs.js:120 src/prefs.js:128
 msgid "OK"
 msgstr "确定"
 
-#: src/prefs.js:126
+#: src/prefs.js:148
 msgid "General"
 msgstr "常规"
 
-#: src/prefs.js:133
+#: src/prefs.js:154
 msgid "Display & Rendering"
 msgstr "显示与渲染"
 
-#: src/prefs.js:134
+#: src/prefs.js:155
 msgid "Control window decoration behavior across screen scales"
 msgstr "控制窗口装饰在不同屏幕缩放下的渲染行为"
 
-#: src/prefs.js:139
+#: src/prefs.js:160
 msgid "Prioritize Crisp Text"
 msgstr "优先保证文字清晰"
 
-#: src/prefs.js:140
+#: src/prefs.js:161
 msgid ""
 "Skip rounded corners on fractional scale monitors (retaining shadow) to "
 "avoid text blur and resampling overhead"
 msgstr ""
 "在分数缩放屏幕上免除圆角（保留阴影），消除重采样带来的字体模糊与性能损耗"
 
-#: src/prefs.js:147
-msgid "Inspect Window…"
-msgstr "拾取窗口…"
-
-#: src/prefs.js:149
-msgid ""
-"Click an on-screen window to automatically detect and add exclusion rule"
-msgstr "点击屏幕上的窗口以自动识别并添加排除规则"
-
-#: src/prefs.js:153
-msgid "Application Exclusion Rules"
-msgstr "应用排除规则"
-
-#: src/prefs.js:154
-msgid ""
-"Configure individual exclusions for specific windows (disable all, skip "
-"corners, or skip shadow)"
-msgstr "为特定窗口单独配置禁用项（禁用全部、禁用圆角或禁用阴影）"
+#: src/prefs.js:173
+msgid "Suppress Rules"
+msgstr "屏蔽规则"
 
 #: src/prefs.js:174
-msgid "No Special Rules"
-msgstr "暂无特殊规则"
+msgid ""
+"Windows CSD Fixer leaves alone. A switch turned on means that decoration is "
+"not drawn."
+msgstr "CSD Fixer 不处理的窗口。打开某个开关表示不绘制该装饰。"
 
 #: src/prefs.js:175
-msgid ""
-"All normal windows without server-side decorations will have native shadow "
-"and rounded corners applied by default"
-msgstr "所有未包含服务端边框的普通窗口将默认添加原生阴影与圆角剪裁"
+msgid "Suppress Window…"
+msgstr "屏蔽窗口…"
 
-#: src/prefs.js:234
+#: src/prefs.js:177
+msgid "Click an on-screen window to stop decorating it"
+msgstr "点击屏幕上的窗口，停止为它补装饰"
+
+#: src/prefs.js:178
+msgid "No Suppress Rules"
+msgstr "暂无屏蔽规则"
+
+#: src/prefs.js:182
+msgid "Force Rules"
+msgstr "强制规则"
+
+#: src/prefs.js:183
+msgid ""
+"Windows CSD Fixer decorates even when detection assumes Mutter or the "
+"application already drew something. A switch turned on means that decoration "
+"is forced on."
+msgstr "即使自动判定认为 Mutter 或应用已经画过，CSD Fixer 仍会为该窗口绘制装饰。打开某个开关表示强制绘制该装饰。"
+
+#: src/prefs.js:184
+msgid "Force Window…"
+msgstr "强制窗口…"
+
+#: src/prefs.js:186
+msgid "Click an on-screen window to decorate it despite detection"
+msgstr "点击屏幕上的窗口，无视自动判定强制补装饰"
+
+#: src/prefs.js:187
+msgid "No Force Rules"
+msgstr "暂无强制规则"
+
+#: src/prefs.js:264
 msgid "Remove Rule"
 msgstr "删除规则"
 
-#: src/prefs.js:259
+#: src/prefs.js:316
 msgid "Window Inspection Failed"
 msgstr "窗口拾取失败"
 
-#: src/prefs.js:260
+#: src/prefs.js:317
 msgid ""
 "Could not connect to CSD Fixer extension. Please ensure the extension is "
 "enabled."
 msgstr "无法连接到 CSD Fixer 扩展，请确认该扩展已在 GNOME 扩展中启用。"
 
-#: src/prefs.js:281
-#, javascript-format
-msgid "Rule for \"%s\" already exists"
-msgstr "“%s”的规则已存在"
+#: src/prefs.js:333
+msgid "Window Not Recognized"
+msgstr "无法识别窗口"
 
-#: src/prefs.js:292
+#: src/prefs.js:334
+msgid "CSD Fixer could not identify this window, so no rule was created."
+msgstr "CSD Fixer 无法识别这个窗口，因此没有创建规则。"
+
+#: src/prefs.js:347
+msgid "Rule Not Saved"
+msgstr "规则未保存"
+
+#: src/prefs.js:348
+msgid "CSD Fixer could not store a rule for this window."
+msgstr "CSD Fixer 无法为这个窗口保存规则。"
+
+#: src/prefs.js:354
 #, javascript-format
 msgid "Added rule for \"%s\""
 msgstr "已为“%s”添加排除规则"

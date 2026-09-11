@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-11 09:31+0800\n"
+"POT-Creation-Date: 2026-09-11 19:00+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,93 +17,116 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: src/prefs.js:20
-msgid "Disable all"
+#: src/prefs.js:29
+msgid "Shadow"
 msgstr ""
 
-#: src/prefs.js:21
-msgid "Disable corners"
+#: src/prefs.js:29
+msgid "Corners"
 msgstr ""
 
-#: src/prefs.js:22
-msgid "Disable shadow"
-msgstr ""
-
-#: src/prefs.js:106 src/prefs.js:114
+#: src/prefs.js:120 src/prefs.js:128
 msgid "OK"
 msgstr ""
 
-#: src/prefs.js:126
+#: src/prefs.js:148
 msgid "General"
 msgstr ""
 
-#: src/prefs.js:133
+#: src/prefs.js:154
 msgid "Display & Rendering"
 msgstr ""
 
-#: src/prefs.js:134
+#: src/prefs.js:155
 msgid "Control window decoration behavior across screen scales"
 msgstr ""
 
-#: src/prefs.js:139
+#: src/prefs.js:160
 msgid "Prioritize Crisp Text"
 msgstr ""
 
-#: src/prefs.js:140
+#: src/prefs.js:161
 msgid ""
 "Skip rounded corners on fractional scale monitors (retaining shadow) to "
 "avoid text blur and resampling overhead"
 msgstr ""
 
-#: src/prefs.js:147
-msgid "Inspect Window…"
-msgstr ""
-
-#: src/prefs.js:149
-msgid ""
-"Click an on-screen window to automatically detect and add exclusion rule"
-msgstr ""
-
-#: src/prefs.js:153
-msgid "Application Exclusion Rules"
-msgstr ""
-
-#: src/prefs.js:154
-msgid ""
-"Configure individual exclusions for specific windows (disable all, skip "
-"corners, or skip shadow)"
+#: src/prefs.js:173
+msgid "Suppress Rules"
 msgstr ""
 
 #: src/prefs.js:174
-msgid "No Special Rules"
+msgid ""
+"Windows CSD Fixer leaves alone. A switch turned on means that decoration is "
+"not drawn."
 msgstr ""
 
 #: src/prefs.js:175
-msgid ""
-"All normal windows without server-side decorations will have native shadow "
-"and rounded corners applied by default"
+msgid "Suppress Window…"
 msgstr ""
 
-#: src/prefs.js:234
+#: src/prefs.js:177
+msgid "Click an on-screen window to stop decorating it"
+msgstr ""
+
+#: src/prefs.js:178
+msgid "No Suppress Rules"
+msgstr ""
+
+#: src/prefs.js:182
+msgid "Force Rules"
+msgstr ""
+
+#: src/prefs.js:183
+msgid ""
+"Windows CSD Fixer decorates even when detection assumes Mutter or the "
+"application already drew something. A switch turned on means that decoration "
+"is forced on."
+msgstr ""
+
+#: src/prefs.js:184
+msgid "Force Window…"
+msgstr ""
+
+#: src/prefs.js:186
+msgid "Click an on-screen window to decorate it despite detection"
+msgstr ""
+
+#: src/prefs.js:187
+msgid "No Force Rules"
+msgstr ""
+
+#: src/prefs.js:264
 msgid "Remove Rule"
 msgstr ""
 
-#: src/prefs.js:259
+#: src/prefs.js:316
 msgid "Window Inspection Failed"
 msgstr ""
 
-#: src/prefs.js:260
+#: src/prefs.js:317
 msgid ""
 "Could not connect to CSD Fixer extension. Please ensure the extension is "
 "enabled."
 msgstr ""
 
-#: src/prefs.js:281
-#, javascript-format
-msgid "Rule for \"%s\" already exists"
+#: src/prefs.js:333
+msgid "Window Not Recognized"
 msgstr ""
 
-#: src/prefs.js:292
+#: src/prefs.js:334
+msgid "CSD Fixer could not identify this window, so no rule was created."
+msgstr ""
+
+#: src/prefs.js:347
+msgid "Rule Not Saved"
+msgstr ""
+
+#: src/prefs.js:348
+msgid "CSD Fixer could not store a rule for this window."
+msgstr ""
+
+#: src/prefs.js:354
 #, javascript-format
 msgid "Added rule for \"%s\""
 msgstr ""

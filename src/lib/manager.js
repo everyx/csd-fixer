@@ -28,7 +28,7 @@ import {
     isWindowMaximized,
     isWindowTiled,
 } from './detector.js';
-import {getWindowRules} from './settings.js';
+import {getWindowRules, SETTINGS_KEY_SUPPRESS_RULES, SETTINGS_KEY_FORCE_RULES} from './settings.js';
 import {resolveWindowIdentity} from './window.js';
 import {styleForWindow} from './style.js';
 import {RoundedClipEffect} from '../effects/clipEffect.js';
@@ -44,6 +44,7 @@ export class Manager {
         this._settings = ext.getSettings();
         this._windows = new Map();  // Meta.Window -> decorations state
         this._signals = [];
+        this._rules = null;         // cached {suppress, force}, invalidated on settings change
     }
 
     enable() {
@@ -64,8 +65,11 @@ export class Manager {
 
         // GSettings changes -> full re-evaluation (only relevant core keys)
         this._settingsHandlerIds = [];
-        for (const key of ['window-rules', 'prefer-crisp-text']) {
-            const id = this._settings.connect(`changed::${key}`, () => this._reconcile());
+        for (const key of [SETTINGS_KEY_SUPPRESS_RULES, SETTINGS_KEY_FORCE_RULES, 'prefer-crisp-text']) {
+            const id = this._settings.connect(`changed::${key}`, () => {
+                this._rules = null;
+                this._reconcile();
+            });
             this._settingsHandlerIds.push(id);
         }
 
@@ -92,6 +96,7 @@ export class Manager {
         this._disconnectSignals(this._signals);
         this._settingsHandlerIds?.forEach(id => this._settings.disconnect(id));
         this._settingsHandlerIds = [];
+        this._rules = null;
     }
 
     // ---------- Internal ----------
@@ -293,6 +298,16 @@ export class Manager {
         return global.window_group;
     }
 
+    /**
+     * Rules are read once per reconcile batch rather than once per window, and
+     * re-read only when the underlying settings keys change.
+     */
+    get _windowRules() {
+        if (!this._rules)
+            this._rules = getWindowRules(this._settings);
+        return this._rules;
+    }
+
     /** Re-orders all shadow actors below corresponding windows after restack */
     _restackShadows() {
         for (const [win, state] of this._windows) {
@@ -346,7 +361,7 @@ export class Manager {
             wmClass,
 
             // Preferences & rules
-            windowRules: getWindowRules(this._settings),
+            rules: this._windowRules,
             preferCrispText: this._settings.get_boolean('prefer-crisp-text'),
         });
     }
