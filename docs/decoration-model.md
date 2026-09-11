@@ -129,6 +129,25 @@ and `{radius 8, opacity 64}` unfocused, so its unfocused shadow only weakens and
 It keeps both cached and swaps between them with no transition, and recomputes lazily when
 the window shape or focus changes.
 
+Two things that look like shortcuts are not, and it saves time to know why:
+
+- **St has no CSS transitions.** The shell's CSS engine parses no `transition` property,
+  so `transition: box-shadow 200ms ease-out` cannot be written for it; the only
+  `ClutterTransition` in `src/st/` belongs to `st-adjustment.c`, which animates a value
+  from JS. The fade therefore has to be driven from our own code.
+- **St's `box-shadow` is a different blur, and no cheaper.** It is pre-rendered into a
+  cached pipeline the way ours is (`_st_create_shadow_pipeline` in
+  `st-theme-node-drawing.c`, painted through a `ClutterPipelineNode` in the same file), but
+  the blurring is St's own, not GTK4's, and the shell's own theme never uses the property.
+  Drawing through it would give up the reason the shader was transpiled from GSK. It would
+  not be faster either: both approaches blit a baked texture, and ours is baked once per
+  *style* rather than per node, so a resize costs nothing at all.
+
+The shader earns its place as a *bake* and not as a per-frame cost. The first version ran
+it over the padded rectangle every frame, with an offscreen that size per window (8.6 MiB
+at 1920x1080), which is what fidelity cost. Baking reduced it to one 145x145 buffer per
+style for the whole session; what runs per frame is eight textured rectangles.
+
 ## What is not introspectable at all
 
 `has_shadow()` also gates on ARGB32 windows, shaped windows, and
