@@ -30,6 +30,9 @@ const BAKE_ORIGIN = 2;
 
 const NO_SHADOW = Object.freeze({blur: 0, spread: 0, alpha: 0});
 
+/** Cogl's `COGL_BUFFER_BIT_COLOR`, which the GIR does not expose as an enum. */
+const CLEAR_COLOR_BUFFER = 1;
+
 /** Cogl's opacity is the fragment shader's job; the pipeline colour stays out of it. */
 const opaqueWhite = () => new Cogl.Color({red: 255, green: 255, blue: 255, alpha: 255});
 
@@ -62,19 +65,23 @@ export function shadowGeometry(radius) {
  * result is the corner scaled down, which is the right shape for a window that is all
  * corner, and keeps one code path for every size.
  *
- * @param {{corner: number, buffer: number}} geometry - shadowGeometry() output
+ * @param {{corner: number, window: number, buffer: number}} geometry - shadowGeometry() output
  * @param {number} width - Padded rect width
  * @param {number} height - Padded rect height
  * @returns {Array<{x1: number, y1: number, x2: number, y2: number, s1: number, t1: number, s2: number, t2: number}>}
  */
-export function shadowSlices({corner, buffer}, width, height) {
+export function shadowSlices({corner, window, buffer}, width, height) {
     const c = Math.min(corner, width / 2, height / 2);
     const o = BAKE_ORIGIN;
     const near = o / buffer;
     const span = corner / buffer;
     const strip = 1 / buffer;
     const far = (buffer - corner - 1) / buffer;
-    const edge = (o + corner) / buffer;
+    // The edge strips have to come from the middle of the canonical window's edges, not
+    // from where the corner blocks end: a corner reaches about 3 sigma along the edge it
+    // meets, so a strip taken at the corner boundary carries a profile the corner has
+    // pulled tighter, and the stretched shadow comes out darker at the edge and shorter.
+    const edge = (o + SHADOW_PAD + window / 2) / buffer;
     const right = width - c;
     const bottom = height - c;
 
@@ -181,6 +188,11 @@ function bake(context, radius, shadows) {
     pipeline.set_layer_texture(0, Cogl.Texture2D.new_with_size(context, 1, 1));
 
     framebuffer.orthographic(0, 0, buffer, buffer, -1, 1);
+    // The shader returns before writing anything for the window's interior (the hollow
+    // mask), and an offscreen texture is not zeroed: without this, the pixels inside the
+    // mask keep whatever the driver handed over, and the slices sample them wherever a
+    // rounded corner leaves them visible.
+    framebuffer.clear4f(CLEAR_COLOR_BUFFER, 0, 0, 0, 0);
     framebuffer.draw_textured_rectangle(pipeline, 0, 0, buffer, buffer, 0, 0, 1, 1);
     context.flush();
 
