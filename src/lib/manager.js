@@ -25,7 +25,6 @@ import St from 'gi://St';
 
 import {
     evaluateWindowActions,
-    isDialogWindow,
     isWindowMaximized,
     isWindowTiled,
 } from './detector.js';
@@ -284,7 +283,6 @@ export class Manager {
         const allowsResize = Boolean(win.allows_resize?.());
         const isAttachedDialog = Boolean(win.is_attached_dialog?.());
         const windowType = win.get_window_type();
-        const isDialog = isDialogWindow({windowType, hasParent, isAttachedDialog});
         const isMaximized = isWindowMaximized(win);
         const hasTileMatch = Boolean(win.get_tile_match?.());
         const title = win.get_title?.() ?? null;
@@ -302,8 +300,8 @@ export class Manager {
             hasSsd,
             isX11,
             windowType,
-            isDialog,
             hasParent,
+            isAttachedDialog,
             allowsResize,
             hasTileMatch,
             title,

@@ -427,8 +427,9 @@ export function resolveRule(wmClass, windowRules = {}, options = {}) {
  * @property {boolean} [hasSsd=false] - Whether native server-side decorations exist
  * @property {boolean} [isX11=false] - Whether client is X11 / XWayland
  * @property {number} [windowType=WindowType.NORMAL] - Wayland/Meta window type
- * @property {boolean} [isDialog=false] - Whether window is a dialog
  * @property {boolean} [hasParent=false] - Whether window has transient parent
+ * @property {boolean} [isAttachedDialog=false] - Whether modal dialog attached to parent
+ * @property {boolean} [allowsResize=true] - Whether window allows resizing
  * @property {boolean} [hasTileMatch=false] - Whether window is snap-tiled with an adjacent matching window
  * @property {string|null} [title=null] - Window title
  * @property {string} [wmClass] - Window WM_CLASS / app ID
@@ -452,8 +453,8 @@ export function evaluateWindowActions({
     hasSsd = false,
     isX11 = false,
     windowType = WindowType.NORMAL,
-    isDialog = false,
     hasParent = false,
+    isAttachedDialog = false,
     allowsResize = true,
     hasTileMatch = false,
     title = null,
@@ -489,10 +490,11 @@ export function evaluateWindowActions({
     // 2. Rule evaluation (native properties & composite fingerprint matching)
     const isWinDialog = isDialogWindow({
         windowType,
-        hasParent: Boolean(isDialog || hasParent),
+        hasParent,
+        isAttachedDialog,
     });
     const rule = resolveRule(wmClass, windowRules, {
-        hasParent: Boolean(hasParent || isDialog),
+        hasParent: Boolean(hasParent),
         allowsResize,
         isDialog: isWinDialog,
         title,
