@@ -1,10 +1,6 @@
 /**
- * Shell-side window helpers.
- *
- * Separated from detector.js because gathering identity candidates needs
- * Shell.WindowTracker and the live window list, neither of which exists in the
- * pure, unit-tested detector module nor in the Gtk preferences process. The
- * decision itself (which candidate wins) is pure and lives in detector.js.
+ * Shell-side window helpers: gathering the identity candidates that rules.js chooses
+ * between. Not pure - it needs Shell.WindowTracker and the live window list.
  */
 
 import Shell from 'gi://Shell';
@@ -32,15 +28,10 @@ function listWindows() {
 }
 
 /**
- * Resolves a stable application identity for a window.
- *
- * Windows that declare nothing (notably some XWayland ones) are identified from
- * a sibling of the same process: a popup shares its parent application, so the
- * main window's WM_CLASS describes both. Resolving through siblings keeps the
- * identity stable across restarts without reading /proc or guessing toolkits.
- *
- * The picker and the runtime rule matcher must use this same resolver, otherwise
- * a rule created for a picked window could never match it at runtime.
+ * Resolves a stable application identity for a window. The picker and the runtime
+ * must both use this resolver, otherwise a rule created for a picked window could
+ * never match it at runtime. The order the candidates are weighed in is in
+ * docs/rule-model.md.
  *
  * @param {object} win - Meta.Window instance
  * @returns {string} Identity, or '' when the window cannot be identified at all

@@ -1,24 +1,18 @@
 /**
- * Style state machine: selects decoration parameters based on window state.
- * Strictly tracks native GNOME (libadwaita window.csd).
- * Pure logic module, unit-testable.
+ * Picks the decoration parameters for a window state, tracking libadwaita's
+ * window.csd. Pure logic module, unit-testable.
  */
 
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
 
 /**
- * Returns decoration parameters for the given window state.
+ * Returns the decoration parameters for a window state: {radius, shadows, outline} -
+ * the corner radius, up to three shadow layers ({blur, spread, alpha, color}), and
+ * libadwaita's outline highlight. The precedence between states is in
+ * docs/decoration-model.md.
  *
- * Returns {radius, shadows, outline}:
- *   radius    corner radius (px)
- *   shadows   shadow layers [{blur, spread, alpha, color?}] (<= 3)
- *   outline   window outline highlight {color: [r,g,b], alpha} (libadwaita outline)
- *
- * State parameters: focused / maximized / fullscreen / tiled / highContrast.
- * Precedence matches libadwaita CSS selectors:
- *   fullscreen > maximized > tiled > focused|backdrop
- * High contrast replaces shadow set (upstream @media prefers-contrast: more),
- * and deepens outline (7% -> 30%).
+ * @param {object} winState - focused / maximized / fullscreen / tiled / highContrast
+ * @returns {{radius: number, shadows: Array<object>, outline: object|null}}
  */
 export function styleForWindow(winState) {
     const {window} = ADWAITA_STYLE;

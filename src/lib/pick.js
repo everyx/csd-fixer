@@ -1,9 +1,8 @@
 /**
- * The picker's contract, shared by the two processes that use it.
- *
- * The extension serves it (inspector.js) and the prefs window calls it, so both
- * the D-Bus coordinates and the shape of the returned dictionary live here - in a
- * module the prefs process can import without pulling in shell-only code.
+ * The picker's contract, shared by the two processes that use it: the D-Bus
+ * coordinates, and the dictionary the picker returns. Its place in the two-process
+ * split is in docs/architecture.md, and it lives in its own module so the prefs
+ * process can import it without pulling in shell-only code.
  *
  * Pure logic module: no shell globals, unit-testable.
  */

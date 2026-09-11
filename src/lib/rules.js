@@ -1,11 +1,6 @@
 /**
- * The window-kind rule model: what a rule names and how it is written down.
- *
- * A rule is keyed by an application identity plus five structural attributes of
- * the window ("kind"), and it moves named decoration axes in one direction. This
- * module owns that vocabulary end to end - parsing, canonical rendering, matching
- * and the sanitising that keeps stored rules trustworthy - so the picker, the
- * runtime and the settings layer cannot disagree about what a key means.
+ * The window-kind rule model: keys, values, matching and sanitising. What a key
+ * means, and the invariants the two groups rely on, are in docs/rule-model.md.
  *
  * Pure logic module: no shell globals, unit-testable.
  */
@@ -75,9 +70,8 @@ function decodeIdentity(token) {
 /** Shell wraps windows it cannot attribute to an app in a per-window app object. */
 const WINDOW_BACKED_APP_ID_PATTERN = /^window:\d+$/;
 /**
- * Reports whether a Shell app id is a per-window placeholder rather than a real
- * application identity. It embeds a session-local sequence number, so it cannot
- * address anything across restarts.
+ * Whether a Shell app id is a per-window placeholder rather than a real identity: it
+ * embeds a session-local sequence number (docs/rule-model.md).
  *
  * @param {string} appId
  * @returns {boolean}
@@ -86,11 +80,10 @@ export function isWindowBackedAppId(appId) {
     return WINDOW_BACKED_APP_ID_PATTERN.test(appId);
 }
 /**
- * Picks the identity a rule should be keyed on, from the candidates gathered off
- * a window and its siblings.
- *
- * Pure so it can be unit-tested; gathering the candidates needs Shell APIs and
- * lives in window.js.
+ * Picks the identity a rule should be keyed on, from the candidates gathered off a
+ * window and its siblings. Pure so it can be unit-tested; gathering them needs Shell
+ * APIs and lives in window.js, and the order they are weighed in is in
+ * docs/rule-model.md.
  *
  * @param {object} [candidates={}]
  * @param {string} [candidates.declared=''] - Identity the window declares itself
@@ -111,13 +104,9 @@ export function chooseWindowIdentity({declared = '', peer = '', tracked = '', pi
     return pid > 0 ? `pid-${pid}` : '';
 }
 /**
- * Canonical window fingerprint: the stable structural attributes that define a
- * window "kind" for exclusion rules. The picker and the runtime matcher derive
- * keys from the same fields and compare them as canonical strings, so a rule
- * always targets exactly the kind of window the user picked.
- *
- * Field order is part of the format. There is deliberately no app-wide form:
- * an exclusion never generalizes to every window of an application.
+ * Canonical window fingerprint: the attributes that define a window "kind". There is
+ * deliberately no app-wide form, and field order is part of the format
+ * (docs/rule-model.md).
  */
 const FP_CLIENT_TYPE = 'client_type';
 const FP_WINDOW_TYPE = 'window_type';
@@ -164,20 +153,14 @@ export function buildRuleKey(wmClass, {
         `${FP_ATTACHED_DIALOG}=${boolString(isAttachedDialog)}`,
     ].join(',');
 
-    // The key grammar reserves ':' and whitespace as delimiters, so encode the
-    // identity instead of assuming it is already key-safe. Realistic identities
-    // (WM_CLASS, Flatpak id, reverse-DNS app id) pass through byte-for-byte;
-    // only exotic ones are escaped, and parseRuleKey() decodes them back.
+    // ':' and whitespace are delimiters in the key grammar, so the identity is
+    // encoded rather than assumed key-safe; parseRuleKey() decodes it back.
     return `${encodeURIComponent(wmClass)}:${specifier}`;
 }
 /**
- * Validates and sanitizes both rule groups read from settings.
- *
- * Drops malformed keys and values and drops case-colliding duplicate keys so the
- * result is deterministic. It also enforces the invariant the two groups rely
- * on: a window kind belongs to at most one of them. On collision the suppression
- * wins, because under-decorating is visible and reversible while the double
- * decoration a stray force rule can cause is neither.
+ * Validates and sanitizes both rule groups read from settings: malformed keys and
+ * values are dropped, case-colliding duplicates collapse, and a kind found in both
+ * groups keeps its suppression (docs/rule-model.md).
  *
  * @param {{suppress?: Record<string, string>, force?: Record<string, string>}} [raw={}]
  * @returns {{suppress: Record<string, string>, force: Record<string, string>}}
@@ -244,12 +227,10 @@ export function lookupRuleKey(group, key) {
     return Object.keys(group).find(storedKey => storedKey.toLowerCase() === lowerKey) ?? null;
 }
 /**
- * Returns the rules with `key` moved into `direction`, naming `axes`.
- *
- * A window kind lives in exactly one group, so the other group loses it - under
- * whichever spelling it stored. The picker and the effectiveness check both go
- * through here, so the rule that looked worth adding is the rule that gets
- * stored.
+ * Returns the rules with `key` moved into `direction`, naming `axes`. A kind lives in
+ * exactly one group, so the other group loses it - under whichever spelling it
+ * stored. The picker and the effectiveness check both go through here, so the rule
+ * that looked worth adding is the rule that gets stored.
  *
  * @param {{suppress?: Record<string, string>, force?: Record<string, string>}} [rules={}]
  * @param {string} direction - RuleDirection
@@ -274,12 +255,9 @@ export function withRule({suppress = {}, force = {}} = {}, direction, key, axes)
     return moved;
 }
 /**
- * Splits a rule key into base application wmClass, its fingerprint specifier,
- * and the parsed property values. Strict: invalid keys yield an empty result so
- * parser and validator can never disagree.
- *
- * E.g. "wechat:client_type=wayland,window_type=0,has_parent=false,allows_resize=true,attached_dialog=false"
- *   -> { baseWmClass: "wechat", specifier: "client_type=...", properties: {client_type:'wayland', window_type:0, ...} }
+ * Splits a rule key into its identity, its fingerprint specifier, and the parsed
+ * property values. Strict: invalid keys yield an empty result, so parser and
+ * validator can never disagree (grammar in docs/rule-model.md).
  *
  * @param {string} key - Rule key string
  * @returns {{ baseWmClass: string, specifier: string|null, properties: Record<string, string|number|boolean>|null }}
@@ -309,16 +287,10 @@ export function parseRuleKey(key) {
     return {baseWmClass, specifier, properties};
 }
 /**
- * Resolves the rule that applies to a window, by matching its canonical
- * window-kind fingerprint against both rule groups.
- *
- * There is no specificity hierarchy and no app-wide fallback: a rule applies if
- * and only if the window kind matches, so it can never silently spread to other
- * windows of the same application. Suppressions are checked first, matching the
- * conflict rule enforced by sanitizeWindowRules().
- *
- * wmClass comparison is case-insensitive (both directions); the fingerprint must
- * match exactly.
+ * Resolves the rule that applies to a window, matching its canonical window-kind
+ * fingerprint against both groups. Suppressions are checked first, as
+ * sanitizeWindowRules() enforces; the identity comparison is case-insensitive in
+ * both directions, while the fingerprint must match exactly (docs/rule-model.md).
  *
  * @param {string} wmClass - Window identity (WM_CLASS / app id / resolver result)
  * @param {{suppress?: Record<string, string>, force?: Record<string, string>}} [rules={}]

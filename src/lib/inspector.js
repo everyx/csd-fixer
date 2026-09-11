@@ -1,15 +1,8 @@
 /**
- * Interactive Window Inspector and D-Bus Service.
- *
- * Benchmarked against KDE KWin's window selection and property detection pipeline:
- * - KWin: InputRedirection::startInteractiveWindowSelection + clientToVariantMap (src/input.cpp, src/dbusinterface.cpp)
- * - Mutter / GNOME Shell: Main.pushModal + global.stage.set_cursor_type + Clutter event grab
- *
- * D-Bus Interface:
- *   Bus Name:  org.gnome.Shell.Extensions.CsdFixer
- *   Path:      /org/gnome/Shell/Extensions/CsdFixer
- *   Interface: org.gnome.Shell.Extensions.CsdFixer
- *   Method:    PickWindow() -> a{ss}
+ * The interactive picker: it dims the screen, lets the user click a window, and
+ * answers the prefs process over the D-Bus method defined in lib/pick.js. How it
+ * fits the two-process split, and the selection mechanics it borrows from KWin and
+ * from GNOME's own, are in docs/architecture.md.
  */
 
 import Clutter from 'gi://Clutter';

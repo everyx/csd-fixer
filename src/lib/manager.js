@@ -1,22 +1,9 @@
 /**
- * Manager - core extension state machine.
+ * Manager - core extension state machine: it watches window lifecycle, focus and
+ * display changes, and reconciles the decoration effects attached to each window.
  *
- * Responsibilities:
- *   - Monitors window creation/destruction/state changes (idempotent: re-evaluates -> compares -> adds/removes effects)
- *   - Reads GSettings (corner radius, text clarity prioritization, window exclusion rules)
- *   - Attaches decoration effects to matching windows (effects/shadow modules)
- * Shell version compatibility matrix (45 → 50, verified via live GJS typelib and Mutter C source):
- *  - win.get_client_type()               : 45–50 stable method (returns Meta.WindowClientType).
- *  - win.decorated                       : 45–50 GObject property (boolean: whether window has frame/SSD).
- *  - win.is_client_decorated             : Non-existent on Meta.Window (GTK internal concept only).
- *  - win.is_maximized()                  : 45–50 stable method (canonical C meta_window_is_maximized).
- *  - win.get_tile_match()                : 45–50 stable method (returns adjacent matching tile window).
- *  - global.display?.get_monitor_scale   : 45–50 display scale method, optional chaining for safety.
- *  - global.backend?.get_monitor_manager : 45–50 monitor manager, optional chaining for safety.
- *
- * Design constraints:
- *   - All window state evaluation delegates to detector.evaluateWindowActions (pure function, unit-testable)
- *   - enable/disable are idempotent; zero leftovers after disable (no signal leaks, no orphaned actors)
+ * The Shell/Mutter surface this depends on, and the working rules it follows, are
+ * in docs/shell-compatibility.md.
  */
 
 import GLib from 'gi://GLib';
@@ -120,22 +107,15 @@ export class Manager {
     }
 
     /**
-     * Connects a signal and records the [object, id] handle in the specified array.
-     *
-     * Semantics & Error Handling:
-     * - Global / Extension-level signals (safe = false, default):
-     *   Core signals (e.g. global.display, wm) must succeed. Any failure indicates a fatal API
-     *   mismatch and should bubble up immediately.
-     * - Window / Actor-level signals (safe = true):
-     *   Certain signals (e.g. highest-scale-monitor-changed) vary across Mutter versions (45-50),
-     *   or the window/actor may unmanage concurrently during connection. Safe mode silently
-     *   ignores failures to guarantee stability across different Mutter releases.
+     * Connects a signal and records the [object, id] handle in `list`.
      *
      * @param {Array<[object, number]>} list - Target signal registration list
      * @param {object} obj - Object emitting signal
      * @param {string} signal - Signal name
      * @param {Function} handler - Signal callback
-     * @param {boolean} [safe=false] - Whether to silently swallow connection errors
+     * @param {boolean} [safe=false] - Swallow a failed connection: for window- and
+     *   actor-level signals, which vary across Shell versions and may be gone by the
+     *   time we connect (docs/shell-compatibility.md)
      */
     _connect(list, obj, signal, handler, safe = false) {
         try {
@@ -321,7 +301,6 @@ export class Manager {
         }
     }
 
-    /** Reads full window state -> passes to detector.evaluateWindowActions */
     /**
      * Everything the decoration decision depends on, read from a live window.
      * Shared with ruleWouldChangeKind() so a rule is judged against the same

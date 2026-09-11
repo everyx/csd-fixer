@@ -4,9 +4,9 @@ Background for `src/lib/detector.js`. The decisions live in the code; this recor
 the model they implement, and the places where it deliberately diverges from what
 Mutter does, so a change there does not have to rediscover them.
 
-> ego-lint warns when a file is more than half comments, and `detector.js` sits
-> right on that line: it is mostly policy, and policy wants reasons. Rationale
-> that is not needed at the call site belongs here.
+> ego-lint warns when a file is more than half comments. `detector.js` is mostly
+> policy, and policy wants reasons, so it sits near that line: rationale the call
+> site does not need belongs here rather than in the module.
 
 ## Four layers, applied in order
 
@@ -60,6 +60,21 @@ monitor scale instead. GJS cannot read that scale:
 the GIR. The margin is therefore left as it comes, which on such a backend reads
 larger than it is — never smaller — so the error stays on the side of declining to
 draw.
+
+## Which style applies
+
+`style.js` turns a window state into the parameters we draw, tracking libadwaita's
+`window.csd` so a decorated window looks like a native one. The precedence mirrors
+libadwaita's own CSS selectors:
+
+    fullscreen > maximized > tiled > focused | backdrop
+
+The result is `{radius, shadows, outline}`: the corner radius, up to three shadow
+layers (`{blur, spread, alpha, color}`), and the outline libadwaita paints around a
+decorated window. Fullscreen, maximized and tiled windows get neither outline nor
+shadows — they are flush with the screen edge, where a shadow would be a line on it.
+High contrast — upstream's `@media (prefers-contrast: more)` — replaces the shadow set
+and deepens the outline from 7% to 30%.
 
 ## What is not introspectable at all
 
