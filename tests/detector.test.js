@@ -318,6 +318,13 @@ describe('parseRuleKey', () => {
         expect(parseRuleKey('')).toEqual({baseWmClass: '', specifier: null, properties: null});
         expect(parseRuleKey(null)).toEqual({baseWmClass: '', specifier: null, properties: null});
     });
+
+    it('returns empty result for invalid keys', () => {
+        expect(parseRuleKey('wechat:foo=bar')).toEqual({baseWmClass: '', specifier: null, properties: null});
+        expect(parseRuleKey('wechat:has_parent=false,allows_resize=true')).toEqual({baseWmClass: '', specifier: null, properties: null});
+        expect(parseRuleKey('wechat:has_parent=false,allows_resize=false')).toEqual({baseWmClass: '', specifier: null, properties: null});
+        expect(parseRuleKey('wechat:allows_resize=true,has_parent=true')).toEqual({baseWmClass: '', specifier: null, properties: null});
+    });
 });
 
 describe('rule key contract & round-trip', () => {
@@ -365,6 +372,11 @@ describe('sanitizeWindowRules', () => {
             'wechat': ExclusionTarget.CLIP,
             'invalid:key:too:many:colons': ExclusionTarget.ALL,
             'has space': ExclusionTarget.CLIP,
+            'wechat:foo=bar': ExclusionTarget.ALL,
+            'wechat:has_parent=invalid,allows_resize=true': ExclusionTarget.ALL,
+            'wechat:has_parent=false,allows_resize=true': ExclusionTarget.ALL,
+            'wechat:has_parent=false,allows_resize=false': ExclusionTarget.ALL,
+            'wechat:allows_resize=true,has_parent=true': ExclusionTarget.ALL,
             'valid_app': 123,
         };
         expect(sanitizeWindowRules(input)).toEqual({

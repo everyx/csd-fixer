@@ -10,7 +10,9 @@
         Dictionary mapping window identifier to exclusion rule mode.
         Key format (composite static fingerprint):
         - 'app': matches all windows of this app (e.g. 'wechat')
-        - 'app:dialog': matches child dialogs/transient windows of this app (e.g. 'wechat:dialog')
+        - 'app:has_parent=true,allows_resize=false': matches non-resizable child popups (e.g. exit dialogs)
+        - 'app:has_parent=true,allows_resize=true': matches resizable child windows/views (e.g. article browsers)
+        - 'app:dialog': legacy fallback for child dialogs/transient windows (e.g. 'wechat:dialog')
         - 'app:title=...': matches windows with specific title (e.g. 'wechat:title=Exit')
         Value modes:
         - 'all': disable all decorations (no shadow, no corners)

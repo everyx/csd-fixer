@@ -231,7 +231,19 @@ export function isDialogWindow({
            isAttachedDialog;
 }
 
-export const VALID_RULE_KEY_PATTERN = /^[^\s:]+(?::(?:dialog|title=.+|[a-z_]+=[^,\s:]+(?:,[a-z_]+=[^,\s:]+)*))?$/;
+export const NATIVE_PROP_PARENT = 'has_parent';
+export const NATIVE_PROP_RESIZE = 'allows_resize';
+
+export const NATIVE_RULE_PARENT = `${NATIVE_PROP_PARENT}=true`;
+export const NATIVE_RULE_RESIZE_TRUE = `${NATIVE_PROP_RESIZE}=true`;
+export const NATIVE_RULE_RESIZE_FALSE = `${NATIVE_PROP_RESIZE}=false`;
+
+export const NATIVE_SPECIFIER_PREFIX = `${NATIVE_RULE_PARENT},${NATIVE_PROP_RESIZE}=`;
+
+const NATIVE_SPECIFIERS_PATTERN = `${NATIVE_RULE_PARENT},${NATIVE_PROP_RESIZE}=(?:true|false)`;
+export const VALID_RULE_KEY_PATTERN = new RegExp(
+    `^[^\\s:]+(?::(?:dialog|title=.+|${NATIVE_SPECIFIERS_PATTERN}))?$`
+);
 
 /**
  * Builds a deterministic canonical rule key from window properties.
@@ -251,7 +263,8 @@ export function buildRuleKey(wmClass, {hasParent = false, allowsResize = true} =
     if (!hasParent)
         return wmClass;
 
-    return `${wmClass}:has_parent=true,allows_resize=${Boolean(allowsResize)}`;
+    const resizeProp = allowsResize ? NATIVE_RULE_RESIZE_TRUE : NATIVE_RULE_RESIZE_FALSE;
+    return `${wmClass}:${NATIVE_RULE_PARENT},${resizeProp}`;
 }
 
 /**
@@ -269,7 +282,7 @@ export function sanitizeWindowRules(rawRules = {}) {
     const seenLowerKeys = new Map();
 
     for (const [key, val] of Object.entries(rawRules)) {
-        if (typeof key !== 'string' || typeof val !== 'string')
+        if (typeof val !== 'string')
             continue;
 
         if (!VALID_RULE_KEY_PATTERN.test(key)) {
@@ -299,12 +312,17 @@ export function sanitizeWindowRules(rawRules = {}) {
 
 /**
  * Splits a rule key into base application wmClass, optional specifier, and parsed properties.
+ * Strict whitelist-backed: returns empty result for invalid keys to ensure parser and validator consistency.
+ *
  * E.g. "wechat:has_parent=true,allows_resize=false" -> { baseWmClass: "wechat", specifier: "...", properties: { has_parent: true, allows_resize: false } }
  *      "wechat:dialog" -> { baseWmClass: "wechat", specifier: "dialog", properties: null }
  *      "wechat" -> { baseWmClass: "wechat", specifier: null, properties: null }
+ *
+ * @param {string} key - Rule key string
+ * @returns {{ baseWmClass: string, specifier: string|null, properties: Record<string, boolean>|null }}
  */
 export function parseRuleKey(key) {
-    if (!key || typeof key !== 'string')
+    if (!key || typeof key !== 'string' || !VALID_RULE_KEY_PATTERN.test(key))
         return {baseWmClass: '', specifier: null, properties: null};
 
     const colonIdx = key.indexOf(':');
@@ -315,22 +333,12 @@ export function parseRuleKey(key) {
     const specifier = key.slice(colonIdx + 1);
 
     let properties = null;
-    if (specifier !== 'dialog' && !specifier.startsWith('title=')) {
-        properties = {};
-        const pairs = specifier.split(',');
-        for (const pair of pairs) {
-            const eqIdx = pair.indexOf('=');
-            if (eqIdx !== -1) {
-                const pKey = pair.slice(0, eqIdx);
-                const pVal = pair.slice(eqIdx + 1);
-                let parsedVal = pVal;
-                if (pVal === 'true')
-                    parsedVal = true;
-                else if (pVal === 'false')
-                    parsedVal = false;
-                properties[pKey] = parsedVal;
-            }
-        }
+    if (specifier.startsWith(NATIVE_SPECIFIER_PREFIX)) {
+        const resizeVal = specifier.slice(NATIVE_SPECIFIER_PREFIX.length) === 'true';
+        properties = {
+            [NATIVE_PROP_PARENT]: true,
+            [NATIVE_PROP_RESIZE]: resizeVal,
+        };
     }
 
     return {
@@ -378,7 +386,7 @@ export function resolveRule(wmClass, windowRules = {}, options = {}) {
 
     // 1. Native property-based exact match for child windows
     if (hasParent)
-        candidates.push(`${wmClass}:has_parent=true,allows_resize=${Boolean(allowsResize)}`);
+        candidates.push(buildRuleKey(wmClass, {hasParent: true, allowsResize}));
 
     // 2. Exact title rule (legacy / escape-hatch support)
     if (title && typeof title === 'string' && title.trim().length > 0)
