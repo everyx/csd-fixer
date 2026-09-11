@@ -9,6 +9,7 @@ import {
     isWindowMaximized, isWindowTiled,
     resolveRule, evaluateWindowActions,
     parseRuleKey, buildRuleKey, isDialogWindow, sanitizeWindowRules,
+    extractWindowProperties,
 } from '../src/lib/detector.js';
 import {
     getWindowRules,
@@ -854,6 +855,43 @@ describe('isWindowTiled', () => {
     it('handles null/undefined gracefully', () => {
         expect(isWindowTiled(null)).toBeFalse();
         expect(isWindowTiled(undefined)).toBeFalse();
+    });
+});
+
+describe('extractWindowProperties', () => {
+    it('extracts all inspection properties from mock window', () => {
+        const mockWin = {
+            get_wm_class: () => 'com.tencent.wechat',
+            get_title: () => 'WeChat',
+            get_transient_for: () => ({}),
+            allows_resize: () => false,
+        };
+        expect(extractWindowProperties(mockWin)).toEqual({
+            wmClass: 'com.tencent.wechat',
+            title: 'WeChat',
+            hasParent: 'true',
+            allowsResize: 'false',
+        });
+    });
+
+    it('falls back to get_sandboxed_app_id when wm_class is unavailable', () => {
+        const flatpakWin = {
+            get_sandboxed_app_id: () => 'org.signal.Signal',
+            get_title: () => 'Signal',
+            get_transient_for: () => null,
+            allows_resize: () => true,
+        };
+        expect(extractWindowProperties(flatpakWin)).toEqual({
+            wmClass: 'org.signal.Signal',
+            title: 'Signal',
+            hasParent: 'false',
+            allowsResize: 'true',
+        });
+    });
+
+    it('handles null and undefined safely', () => {
+        expect(extractWindowProperties(null)).toEqual({});
+        expect(extractWindowProperties(undefined)).toEqual({});
     });
 });
 

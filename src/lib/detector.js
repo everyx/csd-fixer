@@ -199,11 +199,42 @@ export function isWindowTiled(win, options = {}) {
 }
 
 /**
- * D-Bus interface identifiers for interactive window inspection.
- * Stored in pure module to avoid importing Shell/Clutter/Meta in prefs.js.
+ * D-Bus communication coordinates for the Window Inspector service.
+ * Shared between the Shell extension process (InspectorService) and the
+ * Preferences process (prefs.js). Kept in this pure JS module because prefs.js
+ * runs in a separate Gtk process and cannot import inspector.js (which requires
+ * Shell-only resource:///org/gnome/shell/ui/main.js).
  */
 export const INSPECTOR_DBUS_NAME = 'org.gnome.Shell.Extensions.CsdFixer';
 export const INSPECTOR_DBUS_PATH = '/org/gnome/Shell/Extensions/CsdFixer';
+
+/**
+ * Extracts normalized inspection properties dictionary from a window instance.
+ * Serves as the pure adapter bridging Meta.Window native properties to rule key inputs:
+ * produces {wmClass, title, hasParent, allowsResize} consumed by buildRuleKey().
+ *
+ * Placed in detector.js as a pure function to allow unit testing without Shell UI dependencies
+ * and to ensure strict contract symmetry with buildRuleKey().
+ *
+ * @param {object} win - Window instance
+ * @returns {Record<string, string>}
+ */
+export function extractWindowProperties(win) {
+    if (!win)
+        return {};
+
+    const wmClass = win.get_wm_class?.() ?? win.get_sandboxed_app_id?.() ?? '';
+    const title = win.get_title?.() ?? '';
+    const hasParent = Boolean(win.get_transient_for?.());
+    const allowsResize = Boolean(win.allows_resize?.());
+
+    return {
+        wmClass,
+        title,
+        'hasParent': hasParent ? 'true' : 'false',
+        'allowsResize': allowsResize ? 'true' : 'false',
+    };
+}
 
 /**
  * Determines whether a window acts as a dialog/transient window.

@@ -20,7 +20,11 @@ import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-import {INSPECTOR_DBUS_NAME, INSPECTOR_DBUS_PATH, isDialogWindow} from './detector.js';
+import {
+    INSPECTOR_DBUS_NAME,
+    INSPECTOR_DBUS_PATH,
+    extractWindowProperties,
+} from './detector.js';
 
 const INSPECTOR_DBUS_IFACE_XML = `
 <node>
@@ -63,7 +67,7 @@ export class InspectorService {
     }
 
     /**
-     * D-Bus method: PickWindowAsync
+     * D-Bus method: PickWindow (implemented via GJS async naming convention `PickWindowAsync`)
      */
     PickWindowAsync(_params, invocation) {
         if (this._pendingInvocation) {
@@ -166,7 +170,11 @@ export class InspectorService {
 
         // 4. Modal grab and crosshair cursor
         this._activeGrab = Main.pushModal(this._overlay);
-        global.stage.set_cursor_type(Clutter.CursorType.CROSSHAIR);
+        try {
+            global.stage?.set_cursor_type?.(Clutter.CursorType.CROSSHAIR);
+        } catch {
+            // Ignore if stage is unmanaging or cursor cannot be updated
+        }
     }
 
     _finishInteractivePick(win) {
@@ -184,23 +192,7 @@ export class InspectorService {
             return;
         }
 
-        const wmClass = win.get_wm_class?.() ?? win.get_sandboxed_app_id?.() ?? '';
-        const title = win.get_title?.() ?? '';
-        const windowType = win.get_window_type?.() ?? Meta.WindowType.NORMAL;
-        const hasParent = Boolean(win.get_transient_for?.());
-        const allowsResize = Boolean(win.allows_resize?.());
-        const isAttachedDialog = Boolean(win.is_attached_dialog?.());
-        const isDialog = isDialogWindow({windowType, hasParent, isAttachedDialog});
-
-        const properties = {
-            wmClass,
-            title,
-            'isDialog': isDialog ? 'true' : 'false',
-            'hasParent': hasParent ? 'true' : 'false',
-            'allowsResize': allowsResize ? 'true' : 'false',
-            'windowType': String(windowType),
-        };
-
+        const properties = extractWindowProperties(win);
         invocation.return_value(new GLib.Variant('(a{ss})', [properties]));
     }
 
