@@ -2,28 +2,35 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
+Gives GNOME's rounded corners and drop shadows to undecorated windows.
+
 ![CSD Fixer Preview](assets/preview.webp)
 
-Seamlessly bring native GNOME rounded corners, subtle inner highlights, and soft drop shadows to non-CSD applications under GNOME (such as WeChat Linux, Qt apps, and Electron), while intelligently avoiding double shadows on Mutter-managed X11 windows.
+## What it does
 
----
+- **Fills the gaps, nothing else.** Decorates windows that neither draw their own decoration
+  nor get one from Mutter: WeChat, most Qt and Electron apps, frameless X11 clients. Two
+  shadows can't stack on one window.
+- **Native GNOME experience.** Rounded corners, shadow and outline match a GNOME window in
+  every state: focused, backdrop, tiled, maximized, fullscreen, high contrast. The values
+  come from libadwaita.
+- **Stays sharp under fractional scaling.** An option drops the rounding and keeps the
+  shadow, for sharper text.
 
-## ✨ Features
+## Rules
 
-- **🎨 Native Look & Feel**: Pixel-perfect visual parity with official GNOME / libadwaita windows. Automatically adapts to active, backdrop, tiled, maximized, and high-contrast desktop states.
-- **⚡ Seamless Animations**: Shadows and inner highlights smoothly fade in and out alongside window open, close, and minimize animations with zero visual lag or edge popping.
-- **🛠️ Precise Window Rules**: Pick any on-screen window to write a rule that targets exactly that window kind. **Suppress rules** remove the shadow and/or the rounded corners; **force rules** apply them even where detection assumes Mutter or the application already drew something. A rule never spills over to the rest of the application.
-- **🔍 Crisp Text on Fractional Scaling**: Built-in option to prioritize font clarity on fractional scale displays by omitting corner clipping while preserving native shadows.
-- **🌐 Full Multilingual Support**: Built with standard gettext (i18n), automatically matching your system language (English, Simplified Chinese, Traditional Chinese).
+- **Force Rules.** Use its pick button on a window that's still square, because it draws
+  its own decoration or because CSD Fixer can't tell, and the rule covers that window kind
+  from then on.
+- **Suppress Rules.** The reverse: pick a window that has a decoration, and the rule
+  strips it for that kind.
+- **Per window kind, not per app.** A rule made for one of WeChat's dialogs does not apply
+  to its main window.
 
----
+## Installation
 
-## 🚀 Installation
+GNOME Shell 45–50, Wayland or X11.
 
-### From GNOME Extensions (Recommended)
-Install **CSD Fixer** directly from [extensions.gnome.org](https://extensions.gnome.org/) *(coming soon)*.
-
-### Manual Installation
 ```sh
 git clone https://github.com/everyx/csd-fixer.git
 cd csd-fixer
@@ -31,39 +38,12 @@ pnpm install
 pnpm run install-ext
 ```
 
----
+extensions.gnome.org: soon.
 
-## 🛠️ Development
+## Development
 
-```sh
-# Run unit tests. Requires jasmine-gjs on PATH - it is not an npm package:
-#   git clone --depth 1 https://github.com/ptomato/jasmine-gjs.git
-#   meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
-pnpm test
-
-# Run headless E2E automated test (lifecycle, resize/move stress, zero-warning audit)
-pnpm run test:e2e
-
-# Verify style, shader, and locale consistency with upstream
-pnpm run check-style
-
-# Run official EGO review static analysis (override EGO_LINT to point at your checkout)
-pnpm run ego-lint
-
-# Build distributable extension package into dist/
-pnpm run pack
-
-# Verify extension package with official Shexli analyzer
-pnpm run shexli
-```
-
-`pnpm install` points git at `.githooks/`, so a commit runs the checks CI runs —
-lint, generated-file and catalogue consistency, the unit tests, and ego-lint — and
-a push additionally packs the extension. A commit that would fail CI therefore
-cannot be made, and each one stays valid on its own. Either hook can be skipped
-with `--no-verify` when that is what you mean.
-
----
+- **Commits run the CI checks.** `pnpm install` points git at `.githooks/`.
+- **Model docs.** [docs/development.md](docs/development.md).
 
 ## License
 

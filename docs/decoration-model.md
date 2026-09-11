@@ -10,6 +10,14 @@ Mutter does, so a change there does not have to rediscover them.
 
 ## Four layers, applied in order
 
+```
+can we decorate it?   window type, maximized, already server-decorated   ── no ──▶ leave it
+is it already drawn?  declared margins, X11 native shadow                ── yes ─▶ leave it
+your rules?           suppress / force, moving only the axes they name
+any policy?           tiled neighbour, crisp text on fractional scaling
+                      └───────────────────────────────▶ draw
+```
+
 1. **Structural eligibility** — `checkDecorationEligibility()`. Window type,
    maximized/fullscreen, server-side decorations. These are facts about the
    window, and a user rule must never override them.
