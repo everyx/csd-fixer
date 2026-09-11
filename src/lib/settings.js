@@ -8,7 +8,7 @@
  */
 
 import GLib from 'gi://GLib';
-import {sanitizeWindowRules} from './detector.js';
+import {sanitizeWindowRules} from './rules.js';
 
 /** Windows this extension must not decorate; key -> axes to suppress. */
 export const SETTINGS_KEY_SUPPRESS_RULES = 'suppress-rules';

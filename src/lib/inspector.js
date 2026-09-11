@@ -23,9 +23,9 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {
     INSPECTOR_DBUS_NAME,
     INSPECTOR_DBUS_PATH,
-    RuleDirection,
     extractWindowProperties,
-} from './detector.js';
+} from './pick.js';
+import {RuleDirection} from './rules.js';
 import {resolveWindowIdentity} from './window.js';
 
 const INSPECTOR_DBUS_IFACE_XML = `

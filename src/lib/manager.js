@@ -25,11 +25,11 @@ import St from 'gi://St';
 
 import {
     evaluateWindowActions,
-    extractWindowProperties,
     isWindowMaximized,
     isWindowTiled,
     pickedRuleWouldChange,
 } from './detector.js';
+import {extractWindowProperties} from './pick.js';
 import {getWindowRules, SETTINGS_KEY_SUPPRESS_RULES, SETTINGS_KEY_FORCE_RULES} from './settings.js';
 import {resolveWindowIdentity} from './window.js';
 import {styleForWindow} from './style.js';

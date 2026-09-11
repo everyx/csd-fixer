@@ -9,7 +9,7 @@
 
 import Shell from 'gi://Shell';
 
-import {chooseWindowIdentity} from './detector.js';
+import {chooseWindowIdentity} from './rules.js';
 
 /**
  * Reads what a window declares about its own application identity, most

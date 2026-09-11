@@ -4,20 +4,22 @@ import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk';
 
 import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
+import {WindowType} from './lib/mutterRules.generated.js';
 import {
     RuleAxis,
     RuleDirection,
-    WindowType,
     RULE_AXIS_ORDER,
-    buildRuleKeyFromProperties,
     buildRuleValue,
     parseRuleAxes,
     parseRuleKey,
     lookupRuleKey,
     withRule,
+} from './lib/rules.js';
+import {
     INSPECTOR_DBUS_NAME,
     INSPECTOR_DBUS_PATH,
-} from './lib/detector.js';
+    buildRuleKeyFromProperties,
+} from './lib/pick.js';
 import {
     getWindowRules,
     setWindowRules,
