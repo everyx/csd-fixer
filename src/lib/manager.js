@@ -28,8 +28,8 @@ import {
     isDialogWindow,
     isWindowMaximized,
     isWindowTiled,
-    sanitizeWindowRules,
 } from './detector.js';
+import {getWindowRules} from './settings.js';
 import {styleForWindow} from './style.js';
 import {RoundedClipEffect} from '../effects/clipEffect.js';
 import {SdfShadowEffect} from '../effects/shadowEffect.js';
@@ -166,16 +166,6 @@ export class Manager {
                 this._reconcile();
                 return GLib.SOURCE_REMOVE;
             });
-    }
-
-    _getWindowRules() {
-        try {
-            const v = this._settings.get_value('window-rules');
-            const raw = v ? v.deep_unpack() : {};
-            return sanitizeWindowRules(raw);
-        } catch {
-            return {};
-        }
     }
 
     /** Gets physical/logical scale factor for window's monitor (supports fractional scale 1.25, 1.333, etc.) */
@@ -320,7 +310,7 @@ export class Manager {
             wmClass,
 
             // Preferences & rules
-            windowRules: this._getWindowRules(),
+            windowRules: getWindowRules(this._settings),
             preferCrispText: this._settings.get_boolean('prefer-crisp-text'),
         });
     }

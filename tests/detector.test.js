@@ -10,6 +10,10 @@ import {
     resolveRule, evaluateWindowActions,
     parseRuleKey, buildRuleKey, isDialogWindow, sanitizeWindowRules,
 } from '../src/lib/detector.js';
+import {
+    getWindowRules,
+    setWindowRules,
+} from '../src/lib/settings.js';
 
 describe('computeInsets', () => {
     it('buffer == frame (scale = 1) -> zero insets', () => {
@@ -421,6 +425,56 @@ describe('sanitizeWindowRules', () => {
         expect(sanitizeWindowRules(null)).toEqual({});
         expect(sanitizeWindowRules(undefined)).toEqual({});
         expect(sanitizeWindowRules('string')).toEqual({});
+    });
+});
+
+describe('getWindowRules', () => {
+    it('unpacks and sanitizes from mock settings', () => {
+        const mockSettings = {
+            get_value: (key) => {
+                if (key === 'window-rules') {
+                    return {
+                        deep_unpack: () => ({
+                            'wechat': 'disable-clip',
+                            'bad:foo=bar': 'all',
+                        }),
+                    };
+                }
+                return null;
+            },
+        };
+        expect(getWindowRules(mockSettings)).toEqual({
+            'wechat': ExclusionTarget.CLIP,
+        });
+    });
+
+    it('returns empty object on null or throwing settings', () => {
+        expect(getWindowRules(null)).toEqual({});
+        expect(getWindowRules({})).toEqual({});
+        expect(getWindowRules({
+            get_value: () => {
+                throw new Error('boom');
+            },
+        })).toEqual({});
+    });
+
+    it('setWindowRules sanitizes and serializes into GSettings variant', () => {
+        let savedKey = null;
+        let savedVariant = null;
+        const mockSettings = {
+            set_value: (key, val) => {
+                savedKey = key;
+                savedVariant = val;
+            },
+        };
+        setWindowRules(mockSettings, {
+            'wechat': 'all',
+            'invalid:key': 'clip',
+        });
+        expect(savedKey).toBe('window-rules');
+        expect(savedVariant.deep_unpack()).toEqual({
+            'wechat': ExclusionTarget.ALL,
+        });
     });
 });
 

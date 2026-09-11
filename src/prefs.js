@@ -1,6 +1,5 @@
 import Adw from 'gi://Adw';
 import Gio from 'gi://Gio';
-import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk';
 
 import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
@@ -8,10 +7,13 @@ import {
     ExclusionTarget,
     buildRuleKey,
     parseRuleKey,
-    sanitizeWindowRules,
     INSPECTOR_DBUS_NAME,
     INSPECTOR_DBUS_PATH,
 } from './lib/detector.js';
+import {
+    getWindowRules,
+    setWindowRules,
+} from './lib/settings.js';
 
 function getRuleModes() {
     return [
@@ -67,27 +69,6 @@ function findAppInfoByWmClass(wmClass, appsList) {
         (a.id.endsWith('.desktop') && a.id.slice(0, -8).toLowerCase() === lower) ||
         (a.app.get_startup_wm_class && a.app.get_startup_wm_class()?.toLowerCase() === lower)
     ) || null;
-}
-
-/**
- * Read window-rules dictionary from GSettings
- */
-function getWindowRules(settings) {
-    try {
-        const v = settings.get_value('window-rules');
-        const raw = v ? v.deep_unpack() : {};
-        return sanitizeWindowRules(raw);
-    } catch {
-        return {};
-    }
-}
-
-/**
- * Save window-rules dictionary to GSettings
- */
-function setWindowRules(settings, rules) {
-    const variant = new GLib.Variant('a{ss}', rules);
-    settings.set_value('window-rules', variant);
 }
 
 /**
