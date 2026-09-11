@@ -1,5 +1,5 @@
 /**
- * CSD Fixer - restores GNOME native rounded corners and drop shadows to non-CSD applications.
+ * CSD Fixer - restores GNOME native rounded corners and drop shadows to undecorated windows.
  *
  * Architecture (module responsibilities):
  *   detector  determines whether a window needs decoration (geometry criteria)

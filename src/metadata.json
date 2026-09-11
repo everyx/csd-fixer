@@ -1,7 +1,7 @@
 {
     "uuid": "csd-fixer@everyx.github.io",
     "name": "CSD Fixer",
-    "description": "Native GNOME rounded corners and drop shadows for non-CSD applications.",
+    "description": "Native GNOME rounded corners and drop shadows for undecorated windows.",
     "url": "https://github.com/everyx/csd-fixer",
     "shell-version": [
         "45",
