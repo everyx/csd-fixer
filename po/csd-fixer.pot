@@ -8,125 +8,162 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-11 19:07+0800\n"
+"POT-Creation-Date: 2026-09-11 21:52+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "Language: \n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Type: text/plain; charset=CHARSET\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: src/prefs.js:29
+#: src/prefs.js:28
 msgid "Shadow"
 msgstr ""
 
-#: src/prefs.js:29
+#: src/prefs.js:28
 msgid "Corners"
 msgstr ""
 
-#: src/prefs.js:125 src/prefs.js:133
+#: src/prefs.js:39
+msgid "dialog"
+msgstr ""
+
+#: src/prefs.js:40
+msgid "modal dialog"
+msgstr ""
+
+#: src/prefs.js:41
+msgid "utility window"
+msgstr ""
+
+#: src/prefs.js:45
+msgid "window"
+msgstr ""
+
+#: src/prefs.js:61
+msgid "Fixed-size"
+msgstr ""
+
+#: src/prefs.js:61
+msgid "Resizable"
+msgstr ""
+
+#: src/prefs.js:62
+msgid "X11"
+msgstr ""
+
+#: src/prefs.js:62
+msgid "Wayland"
+msgstr ""
+
+#: src/prefs.js:66
+msgid "with no parent"
+msgstr ""
+
+#: src/prefs.js:68
+msgid "attached to its parent"
+msgstr ""
+
+#: src/prefs.js:70
+msgid "with a parent"
+msgstr ""
+
+#. The template is the translatable unit, so a language can reorder the
+#. sentence; each fragment above is translated on its own.
+#: src/prefs.js:74
+msgid "{size} {server} {type}, {parent}"
+msgstr ""
+
+#: src/prefs.js:180 src/prefs.js:188
 msgid "OK"
 msgstr ""
 
-#: src/prefs.js:153
+#: src/prefs.js:208
 msgid "General"
 msgstr ""
 
-#: src/prefs.js:159
+#: src/prefs.js:214
 msgid "Display & Rendering"
 msgstr ""
 
-#: src/prefs.js:160
+#: src/prefs.js:215
 msgid "Control window decoration behavior across screen scales"
 msgstr ""
 
-#: src/prefs.js:165
+#: src/prefs.js:220
 msgid "Prioritize Crisp Text"
 msgstr ""
 
-#: src/prefs.js:166
+#: src/prefs.js:221
 msgid ""
 "Skip rounded corners on fractional scale monitors (retaining shadow) to "
 "avoid text blur and resampling overhead"
 msgstr ""
 
-#: src/prefs.js:178
+#: src/prefs.js:233
 msgid "Suppress Rules"
 msgstr ""
 
-#: src/prefs.js:179
-msgid ""
-"Windows CSD Fixer leaves alone. A switch turned on means that decoration is "
-"not drawn."
+#: src/prefs.js:234
+msgid "Turn a decoration on to suppress it for these windows."
 msgstr ""
 
-#: src/prefs.js:180
-msgid "Suppress Window…"
+#: src/prefs.js:235
+msgid "Leave a window undecorated"
 msgstr ""
 
-#: src/prefs.js:182
-msgid "Click an on-screen window to stop decorating it"
+#: src/prefs.js:236
+msgid "Use the button above to leave a window undecorated."
 msgstr ""
 
-#: src/prefs.js:183
-msgid "No Suppress Rules"
-msgstr ""
-
-#: src/prefs.js:187
+#: src/prefs.js:240
 msgid "Force Rules"
 msgstr ""
 
-#: src/prefs.js:188
-msgid ""
-"Windows CSD Fixer decorates even when detection assumes Mutter or the "
-"application already drew something. A switch turned on means that decoration "
-"is forced on."
+#: src/prefs.js:241
+msgid "Turn a decoration on to force it for these windows."
 msgstr ""
 
-#: src/prefs.js:189
-msgid "Force Window…"
+#: src/prefs.js:242
+msgid "Decorate a window anyway"
 msgstr ""
 
-#: src/prefs.js:191
-msgid "Click an on-screen window to decorate it despite detection"
+#: src/prefs.js:243
+msgid "Use the button above to decorate a window anyway."
 msgstr ""
 
-#: src/prefs.js:192
-msgid "No Force Rules"
-msgstr ""
-
-#: src/prefs.js:269
+#: src/prefs.js:328
 msgid "Remove Rule"
 msgstr ""
 
-#: src/prefs.js:321
+#: src/prefs.js:390
 msgid "Window Inspection Failed"
 msgstr ""
 
-#: src/prefs.js:322
+#: src/prefs.js:391
 msgid ""
 "Could not connect to CSD Fixer extension. Please ensure the extension is "
 "enabled."
 msgstr ""
 
-#: src/prefs.js:338
+#: src/prefs.js:413
 msgid "Window Not Recognized"
 msgstr ""
 
-#: src/prefs.js:339
+#: src/prefs.js:414
 msgid "CSD Fixer could not identify this window, so no rule was created."
 msgstr ""
 
-#: src/prefs.js:352
+#: src/prefs.js:437
 msgid "Rule Not Saved"
 msgstr ""
 
-#: src/prefs.js:353
+#: src/prefs.js:438
 msgid "CSD Fixer could not store a rule for this window."
 msgstr ""
 
-#: src/prefs.js:359
+#: src/prefs.js:447
 #, javascript-format
-msgid "Added rule for \"%s\""
+msgid "Moved to %s"
 msgstr ""

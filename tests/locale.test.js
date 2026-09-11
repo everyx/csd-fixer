@@ -43,8 +43,7 @@ describe('i18n multilingual support', () => {
         expect(potContent).toContain('Prioritize Crisp Text');
         expect(potContent).toContain('Suppress Rules');
         expect(potContent).toContain('Force Rules');
-        expect(potContent).toContain('Suppress Window…');
-        expect(potContent).toContain('Force Window…');
+        expect(potContent).toContain('Remove Rule');
         expect(potContent).toContain('msgid "Shadow"');
         expect(potContent).toContain('msgid "Corners"');
     });
@@ -57,12 +56,12 @@ describe('i18n multilingual support', () => {
         expect(poContent).toContain('优先保证文字清晰');
         expect(poContent).toContain('屏蔽规则');
         expect(poContent).toContain('强制规则');
-        expect(poContent).toContain('屏蔽窗口…');
-        expect(poContent).toContain('强制窗口…');
+        expect(poContent).toContain('打开某个装饰开关');
         expect(poContent).toContain('阴影');
         expect(poContent).toContain('圆角');
-        expect(poContent).toContain('暂无屏蔽规则');
-        expect(poContent).toContain('暂无强制规则');
+        expect(poContent).toContain('用上面的按钮拾取');
+        expect(poContent).toContain('无父窗口');
+        expect(poContent).toContain('固定尺寸');
     });
 
     it('zh_TW.po contains complete Traditional Chinese translations', () => {
@@ -72,12 +71,12 @@ describe('i18n multilingual support', () => {
         const poContent = readFile(poFile);
         expect(poContent).toContain('屏蔽規則');
         expect(poContent).toContain('強制規則');
-        expect(poContent).toContain('屏蔽視窗…');
-        expect(poContent).toContain('強制視窗…');
+        expect(poContent).toContain('開啟某個裝飾開關');
         expect(poContent).toContain('陰影');
         expect(poContent).toContain('圓角');
-        expect(poContent).toContain('尚無屏蔽規則');
-        expect(poContent).toContain('尚無強制規則');
+        expect(poContent).toContain('用上面的按鈕選取');
+        expect(poContent).toContain('無父視窗');
+        expect(poContent).toContain('固定尺寸');
     });
 
     it('compiled .mo binary catalogs are valid and non-empty', () => {

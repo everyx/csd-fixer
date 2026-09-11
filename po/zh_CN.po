@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: csd-fixer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-11 19:07+0800\n"
+"POT-Creation-Date: 2026-09-11 21:52+0800\n"
 "PO-Revision-Date: 2026-09-08 22:50+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Simplified) <i18n-zh@googlegroups.com>\n"
@@ -16,119 +16,154 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: src/prefs.js:29
+#: src/prefs.js:28
 msgid "Shadow"
 msgstr "阴影"
 
-#: src/prefs.js:29
+#: src/prefs.js:28
 msgid "Corners"
 msgstr "圆角"
 
-#: src/prefs.js:125 src/prefs.js:133
+#: src/prefs.js:39
+msgid "dialog"
+msgstr "对话框"
+
+#: src/prefs.js:40
+msgid "modal dialog"
+msgstr "模态对话框"
+
+#: src/prefs.js:41
+msgid "utility window"
+msgstr "工具窗口"
+
+#: src/prefs.js:45
+msgid "window"
+msgstr "窗口"
+
+#: src/prefs.js:61
+msgid "Fixed-size"
+msgstr "固定尺寸"
+
+#: src/prefs.js:61
+msgid "Resizable"
+msgstr "可缩放"
+
+#: src/prefs.js:62
+msgid "X11"
+msgstr "X11"
+
+#: src/prefs.js:62
+msgid "Wayland"
+msgstr "Wayland"
+
+#: src/prefs.js:66
+msgid "with no parent"
+msgstr "无父窗口"
+
+#: src/prefs.js:68
+msgid "attached to its parent"
+msgstr "附加到父窗口"
+
+#: src/prefs.js:70
+msgid "with a parent"
+msgstr "有父窗口"
+
+#. The template is the translatable unit, so a language can reorder the
+#. sentence; each fragment above is translated on its own.
+#: src/prefs.js:74
+msgid "{size} {server} {type}, {parent}"
+msgstr "{size}的 {server} {type}，{parent}"
+
+#: src/prefs.js:180 src/prefs.js:188
 msgid "OK"
 msgstr "确定"
 
-#: src/prefs.js:153
+#: src/prefs.js:208
 msgid "General"
 msgstr "常规"
 
-#: src/prefs.js:159
+#: src/prefs.js:214
 msgid "Display & Rendering"
 msgstr "显示与渲染"
 
-#: src/prefs.js:160
+#: src/prefs.js:215
 msgid "Control window decoration behavior across screen scales"
 msgstr "控制窗口装饰在不同屏幕缩放下的渲染行为"
 
-#: src/prefs.js:165
+#: src/prefs.js:220
 msgid "Prioritize Crisp Text"
 msgstr "优先保证文字清晰"
 
-#: src/prefs.js:166
+#: src/prefs.js:221
 msgid ""
 "Skip rounded corners on fractional scale monitors (retaining shadow) to "
 "avoid text blur and resampling overhead"
 msgstr ""
 "在分数缩放屏幕上免除圆角（保留阴影），消除重采样带来的字体模糊与性能损耗"
 
-#: src/prefs.js:178
+#: src/prefs.js:233
 msgid "Suppress Rules"
 msgstr "屏蔽规则"
 
-#: src/prefs.js:179
-msgid ""
-"Windows CSD Fixer leaves alone. A switch turned on means that decoration is "
-"not drawn."
-msgstr "CSD Fixer 不处理的窗口。打开某个开关表示不绘制该装饰。"
+#: src/prefs.js:234
+msgid "Turn a decoration on to suppress it for these windows."
+msgstr "打开某个装饰开关，即对这些窗口屏蔽该装饰。"
 
-#: src/prefs.js:180
-msgid "Suppress Window…"
-msgstr "屏蔽窗口…"
+#: src/prefs.js:235
+msgid "Leave a window undecorated"
+msgstr "让某个窗口不补装饰"
 
-#: src/prefs.js:182
-msgid "Click an on-screen window to stop decorating it"
-msgstr "点击屏幕上的窗口，停止为它补装饰"
+#: src/prefs.js:236
+msgid "Use the button above to leave a window undecorated."
+msgstr "用上面的按钮拾取一个窗口，让它不补装饰。"
 
-#: src/prefs.js:183
-msgid "No Suppress Rules"
-msgstr "暂无屏蔽规则"
-
-#: src/prefs.js:187
+#: src/prefs.js:240
 msgid "Force Rules"
 msgstr "强制规则"
 
-#: src/prefs.js:188
-msgid ""
-"Windows CSD Fixer decorates even when detection assumes Mutter or the "
-"application already drew something. A switch turned on means that decoration "
-"is forced on."
-msgstr ""
-"即使自动判定认为 Mutter 或应用已经画过，CSD Fixer 仍会为该窗口绘制装饰。打开"
-"某个开关表示强制绘制该装饰。"
+#: src/prefs.js:241
+msgid "Turn a decoration on to force it for these windows."
+msgstr "打开某个装饰开关，即对这些窗口强制加上该装饰。"
 
-#: src/prefs.js:189
-msgid "Force Window…"
-msgstr "强制窗口…"
+#: src/prefs.js:242
+msgid "Decorate a window anyway"
+msgstr "强制给某个窗口补装饰"
 
-#: src/prefs.js:191
-msgid "Click an on-screen window to decorate it despite detection"
-msgstr "点击屏幕上的窗口，无视自动判定强制补装饰"
+#: src/prefs.js:243
+msgid "Use the button above to decorate a window anyway."
+msgstr "用上面的按钮拾取一个窗口，强制给它补装饰。"
 
-#: src/prefs.js:192
-msgid "No Force Rules"
-msgstr "暂无强制规则"
-
-#: src/prefs.js:269
+#: src/prefs.js:328
 msgid "Remove Rule"
 msgstr "删除规则"
 
-#: src/prefs.js:321
+#: src/prefs.js:390
 msgid "Window Inspection Failed"
 msgstr "窗口拾取失败"
 
-#: src/prefs.js:322
+#: src/prefs.js:391
 msgid ""
 "Could not connect to CSD Fixer extension. Please ensure the extension is "
 "enabled."
 msgstr "无法连接到 CSD Fixer 扩展，请确认该扩展已在 GNOME 扩展中启用。"
 
-#: src/prefs.js:338
+#: src/prefs.js:413
 msgid "Window Not Recognized"
 msgstr "无法识别窗口"
 
-#: src/prefs.js:339
+#: src/prefs.js:414
 msgid "CSD Fixer could not identify this window, so no rule was created."
 msgstr "CSD Fixer 无法识别这个窗口，因此没有创建规则。"
 
-#: src/prefs.js:352
+#: src/prefs.js:437
 msgid "Rule Not Saved"
 msgstr "规则未保存"
 
-#: src/prefs.js:353
+#: src/prefs.js:438
 msgid "CSD Fixer could not store a rule for this window."
 msgstr "CSD Fixer 无法为这个窗口保存规则。"
 
-#: src/prefs.js:359
+#: src/prefs.js:447
 #, javascript-format
-msgid "Added rule for \"%s\""
-msgstr "已为“%s”添加排除规则"
+msgid "Moved to %s"
+msgstr "已移动到“%s”"

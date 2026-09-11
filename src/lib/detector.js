@@ -474,8 +474,13 @@ function sanitizeRuleGroup(rawRules, direction) {
     return clean;
 }
 
-/** Case-insensitive key lookup, because WM_CLASS casing varies between toolkits. */
-function lookupRuleKey(group, key) {
+/**
+ * Finds the key a rule group actually stores for `key`, ignoring case: the same
+ * application can report its identity with different casing from one window to
+ * the next, and the settings layer already collapses those onto one kind.
+ * Returns null when the group holds no rule for it.
+ */
+export function lookupRuleKey(group, key) {
     if (Object.prototype.hasOwnProperty.call(group, key))
         return key;
 

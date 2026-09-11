@@ -7,10 +7,12 @@ import {ExtensionPreferences, gettext as _} from 'resource:///org/gnome/Shell/Ex
 import {
     RuleAxis,
     RuleDirection,
+    WindowType,
     buildRuleKey,
     buildRuleValue,
     parseRuleAxes,
     parseRuleKey,
+    lookupRuleKey,
     INSPECTOR_DBUS_NAME,
     INSPECTOR_DBUS_PATH,
 } from './lib/detector.js';
@@ -22,9 +24,6 @@ import {
 /** Decorations a single rule can name, in display order. */
 const AXES = [RuleAxis.SHADOW, RuleAxis.CORNERS];
 
-/** A freshly picked window starts by targeting both decorations. */
-const PICK_DEFAULT_AXES = [RuleAxis.SHADOW, RuleAxis.CORNERS];
-
 function axisLabel(axis) {
     return axis === RuleAxis.SHADOW ? _('Shadow') : _('Corners');
 }
@@ -33,8 +32,64 @@ function describeAxes(axes) {
     return AXES.filter(axis => axes.has(axis)).map(axisLabel).join(' · ');
 }
 
+// The nouns are thunks because this table is built while the module loads, before
+// the prefs process has bound the gettext domain - a plain _() here would capture
+// the untranslated string.
+const WINDOW_TYPE_NOUNS = new Map([
+    [WindowType.DIALOG, () => _('dialog')],
+    [WindowType.MODAL_DIALOG, () => _('modal dialog')],
+    [WindowType.UTILITY, () => _('utility window')],
+]);
+
+function windowTypeNoun(windowType) {
+    return (WINDOW_TYPE_NOUNS.get(windowType) ?? (() => _('window')))();
+}
+
+/**
+ * Describes what windows a rule matches, as a sentence.
+ *
+ * A rule is an exact conjunction of the five structural attributes, so all of
+ * them have to be named: naming only the unusual ones would hide part of what
+ * the rule matches. The two parent-related attributes fold into one phrase,
+ * because an attached dialog always has a parent and so they cannot vary
+ * independently.
+ */
+function windowKindSentence(properties) {
+    if (!properties)
+        return '';
+
+    const size = properties.allows_resize === false ? _('Fixed-size') : _('Resizable');
+    const server = properties.client_type === 'x11' ? _('X11') : _('Wayland');
+
+    let parent;
+    if (!properties.has_parent)
+        parent = _('with no parent');
+    else if (properties.attached_dialog)
+        parent = _('attached to its parent');
+    else
+        parent = _('with a parent');
+
+    // The template is the translatable unit, so a language can reorder the
+    // sentence; each fragment above is translated on its own.
+    return _('{size} {server} {type}, {parent}')
+        .replace('{size}', size)
+        .replace('{server}', server)
+        .replace('{type}', windowTypeNoun(properties.window_type))
+        .replace('{parent}', parent);
+}
+
 function otherDirection(direction) {
     return direction === RuleDirection.FORCE ? RuleDirection.SUPPRESS : RuleDirection.FORCE;
+}
+
+/**
+ * Adw group and row labels are parsed as Pango markup, and both translated text
+ * and application names can contain '&' or '<'. Escape them so they stay literal;
+ * Adw.Toast and Adw.AlertDialog take plain text and must not be escaped. A bare
+ * Gtk.Label defaults to use-markup=FALSE, so it takes raw text as well.
+ */
+function asMarkup(text) {
+    return GLib.markup_escape_text(String(text), -1);
 }
 
 /** 'org.gnome.Nautilus.desktop' -> 'org.gnome.Nautilus' */
@@ -156,14 +211,14 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
         window.add(page);
 
         const renderGroup = new Adw.PreferencesGroup({
-            title: _('Display & Rendering'),
-            description: _('Control window decoration behavior across screen scales'),
+            title: asMarkup(_('Display & Rendering')),
+            description: asMarkup(_('Control window decoration behavior across screen scales')),
         });
         page.add(renderGroup);
 
         const crispRow = new Adw.SwitchRow({
-            title: _('Prioritize Crisp Text'),
-            subtitle: _('Skip rounded corners on fractional scale monitors (retaining shadow) to avoid text blur and resampling overhead'),
+            title: asMarkup(_('Prioritize Crisp Text')),
+            subtitle: asMarkup(_('Skip rounded corners on fractional scale monitors (retaining shadow) to avoid text blur and resampling overhead')),
         });
         settings.bind('prefer-crisp-text', crispRow, 'active', Gio.SettingsBindFlags.DEFAULT);
         renderGroup.add(crispRow);
@@ -176,20 +231,16 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
             {
                 direction: RuleDirection.SUPPRESS,
                 title: _('Suppress Rules'),
-                description: _('Windows CSD Fixer leaves alone. A switch turned on means that decoration is not drawn.'),
-                buttonLabel: _('Suppress Window…'),
-                buttonIcon: 'action-unavailable-symbolic',
-                buttonTooltip: _('Click an on-screen window to stop decorating it'),
-                emptyLabel: _('No Suppress Rules'),
+                description: _('Turn a decoration on to suppress it for these windows.'),
+                buttonTooltip: _('Leave a window undecorated'),
+                emptyHint: _('Use the button above to leave a window undecorated.'),
             },
             {
                 direction: RuleDirection.FORCE,
                 title: _('Force Rules'),
-                description: _('Windows CSD Fixer decorates even when detection assumes Mutter or the application already drew something. A switch turned on means that decoration is forced on.'),
-                buttonLabel: _('Force Window…'),
-                buttonIcon: 'starred-symbolic',
-                buttonTooltip: _('Click an on-screen window to decorate it despite detection'),
-                emptyLabel: _('No Force Rules'),
+                description: _('Turn a decoration on to force it for these windows.'),
+                buttonTooltip: _('Decorate a window anyway'),
+                emptyHint: _('Use the button above to decorate a window anyway.'),
             },
         ];
 
@@ -226,9 +277,14 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
             const rules = getWindowRules(settings)[view.meta.direction];
             const entries = Object.entries(rules);
 
+            // A count saves opening a group just to see whether it holds anything.
+            view.group.title = entries.length > 0
+                ? `${asMarkup(view.meta.title)} <span size="small" alpha="55%">· ${entries.length}</span>`
+                : asMarkup(view.meta.title);
+
             if (entries.length === 0) {
                 const emptyRow = new Adw.ActionRow({
-                    title: view.meta.emptyLabel,
+                    title: asMarkup(view.meta.emptyHint),
                     sensitive: false,
                 });
                 view.group.add(emptyRow);
@@ -236,36 +292,39 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
                 return;
             }
 
-            for (const [ruleKey, value] of entries)
-                view.rows.push(buildRuleRow(view, ruleKey, value));
+            for (const [ruleKey, value] of entries) {
+                const row = buildRuleRow(view, ruleKey, value);
+                view.group.add(row);
+                view.rows.push(row);
+            }
         };
 
         const buildRuleRow = (view, ruleKey, value) => {
-            const {baseWmClass} = parseRuleKey(ruleKey);
+            const {baseWmClass, properties} = parseRuleKey(ruleKey);
             const appInfo = findAppInfoByWmClass(baseWmClass, installedApps);
+            const name = appInfo?.name || baseWmClass || ruleKey;
             const activeAxes = parseRuleAxes(value) ?? new Set();
 
             const row = new Adw.ExpanderRow({
-                title: appInfo?.name || baseWmClass || ruleKey,
-                subtitle: ruleKey,
+                title: asMarkup(name),
+                subtitle: asMarkup(windowKindSentence(properties)),
+                subtitle_lines: 2,
+                tooltip_text: ruleKey,
             });
 
             row.add_prefix(appInfo?.icon
                 ? new Gtk.Image({gicon: appInfo.icon, pixel_size: 32})
                 : new Gtk.Image({icon_name: 'window-new-symbolic', pixel_size: 24}));
 
-            // Collapsed summary, so the row still says what it does before expanding.
-            const summary = new Gtk.Label({
-                label: describeAxes(activeAxes),
-                css_classes: ['dim-label'],
-                valign: Gtk.Align.CENTER,
-            });
-            row.add_suffix(summary);
-
+            // AdwExpanderRow.add_suffix() *prepends* (gtk_box_prepend in
+            // adw-expander-row.c), so these two calls read in reverse of how the
+            // widgets end up: delete first, summary second, giving
+            // "[summary] [delete] [expand arrow]".
             const deleteButton = new Gtk.Button({
                 icon_name: 'user-trash-symbolic',
                 css_classes: ['flat', 'destructive-action'],
                 valign: Gtk.Align.CENTER,
+                margin_start: 6,
                 tooltip_text: _('Remove Rule'),
             });
             deleteButton.connect('clicked', () => {
@@ -274,14 +333,23 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
             });
             row.add_suffix(deleteButton);
 
+            // Which decorations the rule touches, next to the buttons.
+            const summary = new Gtk.Label({
+                label: describeAxes(activeAxes),
+                css_classes: ['dim-label'],
+                valign: Gtk.Align.CENTER,
+                margin_start: 12,
+            });
+            row.add_suffix(summary);
+
+            // One switch per decoration: a whole row is the hit target, and the
+            // label is associated for free, which a bare switch beside a label
+            // would not be.
             for (const axis of AXES) {
-                const toggle = new Gtk.Switch({
+                const toggle = new Adw.SwitchRow({
+                    title: asMarkup(axisLabel(axis)),
                     active: activeAxes.has(axis),
-                    valign: Gtk.Align.CENTER,
                 });
-                const switchRow = new Adw.ActionRow({title: axisLabel(axis)});
-                switchRow.add_suffix(toggle);
-                switchRow.activatable_widget = toggle;
 
                 toggle.connect('notify::active', () => {
                     const axes = parseRuleAxes(
@@ -301,13 +369,14 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
                         summary.label = describeAxes(axes);
                 });
 
-                row.add_row(switchRow);
+                row.add_row(toggle);
             }
 
             return row;
         };
 
-        const pickInto = direction => {
+        const pickInto = meta => {
+            const {direction} = meta;
             window.set_visible(false);
             inspectWindow((err, props) => {
                 if (!windowAlive)
@@ -323,7 +392,13 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
                     return;
                 }
 
-                const ruleKey = props?.wmClass
+                // An empty result is how the inspector reports a cancelled pick
+                // (Escape, right-click) and one abandoned because the extension was
+                // being disabled. Neither is a failure, so say nothing.
+                if (!props || Object.keys(props).length === 0)
+                    return;
+
+                const ruleKey = props.wmClass
                     ? buildRuleKey(props.wmClass, {
                         clientType: props.clientType,
                         windowType: Number(props.windowType),
@@ -341,13 +416,23 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
                 }
 
                 const rules = getWindowRules(settings);
+                const otherGroup = otherDirection(direction);
+
+                // The settings layer treats keys that differ only in case as the
+                // same window kind, and so must this: the same app can report its
+                // identity with a different case from one window to the next.
+                const existing = lookupRuleKey(rules[otherGroup], ruleKey);
+                const moved = Boolean(existing);
+
                 // A kind lives in exactly one group: adding here removes it there.
-                delete rules[otherDirection(direction)][ruleKey];
-                rules[direction][ruleKey] = buildRuleValue(PICK_DEFAULT_AXES);
+                if (existing)
+                    delete rules[otherGroup][existing];
+                // A freshly picked window starts by targeting both decorations.
+                rules[direction][ruleKey] = buildRuleValue(AXES);
                 setWindowRules(settings, rules);
 
                 // Never claim success on a write the settings layer rejected.
-                if (!Object.prototype.hasOwnProperty.call(getWindowRules(settings)[direction], ruleKey)) {
+                if (!lookupRuleKey(getWindowRules(settings)[direction], ruleKey)) {
                     showError(window,
                         _('Rule Not Saved'),
                         _('CSD Fixer could not store a rule for this window.'));
@@ -355,22 +440,25 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
                 }
 
                 renderAll();
-                window.add_toast(new Adw.Toast({
-                    title: _('Added rule for "%s"').replace('%s', ruleKey),
-                }));
+
+                // The new row is visible straight away, so only a move needs
+                // saying: that row just disappeared from the other group.
+                if (moved)
+                    window.add_toast(new Adw.Toast({title: _('Moved to %s').replace('%s', meta.title)}));
             });
         };
 
         for (const meta of groupMeta) {
             const pickButton = new Gtk.Button({
-                label: meta.buttonLabel,
-                icon_name: meta.buttonIcon,
+                icon_name: 'find-location-symbolic',
                 tooltip_text: meta.buttonTooltip,
+                valign: Gtk.Align.CENTER,
+                margin_start: 18,
             });
 
             const group = new Adw.PreferencesGroup({
-                title: meta.title,
-                description: meta.description,
+                title: asMarkup(meta.title),
+                description: asMarkup(meta.description),
                 header_suffix: pickButton,
             });
             page.add(group);
@@ -378,7 +466,7 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
             const view = {meta, group, rows: []};
             views.push(view);
 
-            pickButton.connect('clicked', () => pickInto(meta.direction));
+            pickButton.connect('clicked', () => pickInto(meta));
         }
 
         renderAll();
