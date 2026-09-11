@@ -253,7 +253,7 @@ export class Manager {
         if (wantShadow !== hasShadow) {
             if (wantShadow) {
                 state.shadowFx = new SdfShadowEffect();
-                state.shadow = new ShadowActor(actor, this._windowGroup);
+                state.shadow = new ShadowActor(actor, global.window_group);
                 state.shadow.actor.add_effect(state.shadowFx);
                 state.shadow.onRelayout((w, h) => {
                     const style = this._styleOf(win);
@@ -297,10 +297,6 @@ export class Manager {
             this._reconcileWindow(win);
     }
 
-    get _windowGroup() {
-        return global.window_group;
-    }
-
     /**
      * Rules are read once per reconcile batch rather than once per window, and
      * re-read only when the underlying settings keys change.
@@ -319,7 +315,7 @@ export class Manager {
             const actor = win.get_compositor_private();
             if (!actor)
                 continue;
-            this._windowGroup.set_child_below_sibling(state.shadow.actor, actor);
+            global.window_group.set_child_below_sibling(state.shadow.actor, actor);
         }
     }
 

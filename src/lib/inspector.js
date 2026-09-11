@@ -211,8 +211,15 @@ export class InspectorService {
     }
 
     _cleanupPickUI() {
-        if (this._activeGrab) {
-            Main.popModal(this._activeGrab);
+        // popModal() raises 'incorrect pop' when the grab was already released by
+        // the actor-destroy hook. The cursor and overlay must be restored either
+        // way, otherwise a stuck crosshair and a stale overlay leak out.
+        try {
+            if (this._activeGrab)
+                Main.popModal(this._activeGrab);
+        } catch (e) {
+            logError(e, '[csd-fixer] Failed to release the window picker grab');
+        } finally {
             this._activeGrab = null;
         }
 
@@ -222,14 +229,10 @@ export class InspectorService {
             // Ignore if stage is unmanaging
         }
 
-        if (this._highlight) {
-            this._highlight.destroy();
-            this._highlight = null;
-        }
+        this._highlight?.destroy();
+        this._highlight = null;
 
-        if (this._overlay) {
-            this._overlay.destroy();
-            this._overlay = null;
-        }
+        this._overlay?.destroy();
+        this._overlay = null;
     }
 }

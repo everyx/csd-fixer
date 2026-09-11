@@ -20,16 +20,20 @@ export const CLIENT_TYPE_TOKEN_WAYLAND = 'wayland';
 export const CLIENT_TYPE_TOKEN_X11 = 'x11';
 
 /**
- * Window CSD detection: determines whether a window lacks self-drawn client-side decorations.
+ * Window decoration detection and the window-rule model.
  *
- * Criteria strictly align with Mutter source code (meta-shadow-factory.c / meta-window-actor-x11.c):
- * 1. Window type: normal / dialog / modal dialog / utility (aligns with Mutter default_shadow_classes).
- * 2. State exclusions: fullscreen and maximized windows do not receive shadows (aligns with meta_window_is_maximized/fullscreen).
- * 3. Server-side decorations (SSD): if Mutter already provides a native frame/titlebar, skip (aligns with has_frame).
- * 4. Shadow extent threshold: Mutter defines the minimum normal window shadow radius as 8px (spread 21px).
- *    - Client side margin < 8px (e.g. 4px resize grip declared by WeChat/Chromium, or pure square 0px):
- *      Geometrically insufficient to contain a normal shadow; classified as lacking CSD shadows, requiring native decorations.
- *    - Client side margin >= 8px (e.g. GTK4/Adwaita extending 24~40px): classified as having true CSD shadow, skipped.
+ * Decoration is decided per axis (shadow, corners), in four layers:
+ * 1. Structural eligibility - window type, maximized/fullscreen, server-side
+ *    decorations. These are facts about the window; no rule may override them.
+ * 2. Inferred baseline - whether the client already draws a shadow (content
+ *    margins) or, for X11, whether Mutter draws one itself. Both axes answer
+ *    alike here, because every case is about the window as a whole.
+ * 3. User rules - 'suppress-rules' / 'force-rules' move the axes they name and
+ *    leave the others to the baseline. This is the only layer that may turn an
+ *    axis back on.
+ * 4. State modifiers - snap-tiled windows lose the shadow (matches Mutter, so
+ *    the shadow does not obstruct the neighbour), and corner clipping is skipped
+ *    under fractional scaling when the user prefers crisp text.
  *
  * Pure logic module: independent of shell global objects, unit-testable.
  */

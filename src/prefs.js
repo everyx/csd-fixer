@@ -37,6 +37,11 @@ function otherDirection(direction) {
     return direction === RuleDirection.FORCE ? RuleDirection.SUPPRESS : RuleDirection.FORCE;
 }
 
+/** 'org.gnome.Nautilus.desktop' -> 'org.gnome.Nautilus' */
+function stripDesktopSuffix(id) {
+    return id.endsWith('.desktop') ? id.slice(0, -8) : id;
+}
+
 /**
  * Enumerate installed desktop application metadata
  */
@@ -55,7 +60,7 @@ function getInstalledApps() {
 
         let wmClass = startupWmClass;
         if (!wmClass && id)
-            wmClass = id.endsWith('.desktop') ? id.slice(0, -8) : id;
+            wmClass = stripDesktopSuffix(id);
         if (!wmClass && executable)
             wmClass = executable.split('/').pop();
 
@@ -80,7 +85,7 @@ function findAppInfoByWmClass(wmClass, appsList) {
     return appsList.find(a =>
         a.wmClass.toLowerCase() === lower ||
         a.id.toLowerCase() === lower ||
-        (a.id.endsWith('.desktop') && a.id.slice(0, -8).toLowerCase() === lower) ||
+        (a.id.endsWith('.desktop') && stripDesktopSuffix(a.id).toLowerCase() === lower) ||
         (a.app.get_startup_wm_class && a.app.get_startup_wm_class()?.toLowerCase() === lower)
     ) || null;
 }
