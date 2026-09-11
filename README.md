@@ -12,7 +12,7 @@ Seamlessly bring native GNOME rounded corners, subtle inner highlights, and soft
 
 - **🎨 Native Look & Feel**: Pixel-perfect visual parity with official GNOME / libadwaita windows. Automatically adapts to active, backdrop, tiled, maximized, and high-contrast desktop states.
 - **⚡ Seamless Animations**: Shadows and inner highlights smoothly fade in and out alongside window open, close, and minimize animations with zero visual lag or edge popping.
-- **🛠️ Granular App Rules**: Automatically inspect and add rules for any on-screen window via interactive picker, with per-window controls (disable all, skip shadow, or skip corners).
+- **🛠️ Precise Window Rules**: Pick any on-screen window to write a rule that targets exactly that window kind. **Suppress rules** remove the shadow and/or the rounded corners; **force rules** apply them even where detection assumes Mutter or the application already drew something. A rule never spills over to the rest of the application.
 - **🔍 Crisp Text on Fractional Scaling**: Built-in option to prioritize font clarity on fractional scale displays by omitting corner clipping while preserving native shadows.
 - **🌐 Full Multilingual Support**: Built with standard gettext (i18n), automatically matching your system language (English, Simplified Chinese, Traditional Chinese).
 
@@ -36,7 +36,9 @@ pnpm run install-ext
 ## 🛠️ Development
 
 ```sh
-# Run unit tests
+# Run unit tests. Requires jasmine-gjs on PATH - it is not an npm package:
+#   git clone --depth 1 https://github.com/ptomato/jasmine-gjs.git
+#   meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 pnpm test
 
 # Run headless E2E automated test (lifecycle, resize/move stress, zero-warning audit)
@@ -45,7 +47,7 @@ pnpm run test:e2e
 # Verify style, shader, and locale consistency with upstream
 pnpm run check-style
 
-# Run official EGO review static analysis
+# Run official EGO review static analysis (override EGO_LINT to point at your checkout)
 pnpm run ego-lint
 
 # Build distributable extension package into dist/
@@ -59,4 +61,4 @@ pnpm run shexli
 
 ## License
 
-GPL-3.0-or-later
+GPL-2.0-or-later
