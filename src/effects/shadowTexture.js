@@ -118,6 +118,37 @@ export function shadowPipeline(context, radius, shadows) {
     return pipeline;
 }
 
+/**
+ * A pipeline that draws one style's baked buffer with its own opacity.
+ *
+ * The sharing is on the texture, which is what costs memory; a pipeline per window lets
+ * a window cross-fade between two styles without touching another window's colours. Cogl
+ * compiles the program once per source, so the extra pipeline is a small state object.
+ *
+ * @param {Cogl.Context} context - Cogl context, which only exists inside a paint
+ * @param {number} radius - Corner radius the shadow is drawn with
+ * @param {Array<object>} shadows - Style shadow layers
+ * @returns {Cogl.Pipeline|null} null when the buffer could not be allocated
+ */
+export function shadowPipelineFor(context, radius, shadows) {
+    const source = shadowPipeline(context, radius, shadows);
+    if (!source)
+        return null;
+
+    const pipeline = Cogl.Pipeline.new(context);
+    pipeline.set_layer_texture(0, source.get_layer_texture(0));
+    return pipeline;
+}
+
+/**
+ * Sets a shadow pipeline's opacity, 0 to 1. The colour stays opaque white; only its
+ * alpha changes, and Cogl's premultiplied blend scales the baked shadow by it.
+ */
+export function setPipelineOpacity(pipeline, opacity) {
+    const alpha = Math.round(Math.max(0, Math.min(1, opacity)) * 255);
+    pipeline.set_color(new Cogl.Color({red: 255, green: 255, blue: 255, alpha}));
+}
+
 function bake(context, radius, shadows) {
     const {buffer, window} = shadowGeometry(radius);
 

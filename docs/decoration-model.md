@@ -110,6 +110,25 @@ typelib has `BlurEffect` and nothing else): a window that decorates itself also 
 itself and arrives with alpha, so the compositor has nothing left to clip. Decorating
 windows that do not round themselves is what makes an offscreen pass inherent here.
 
+## How a style change is drawn
+
+A change is cross-faded over 200ms with CSS `ease-out`, which is what the source of these
+numbers does: libadwaita's backdrop rule declares `transition: box-shadow
+$backdrop_transition`, and `$backdrop_transition` is `200ms ease-out`.
+
+Upstream also makes the *biggest* shadow layer **transparent** in the backdrop state, with
+the comment "to enforce that the shadow extents don't change when we go to backdrop, to
+prevent jumping windows". That is why the backdrop set looks like it loses its shadow:
+the visible one becomes the smaller remaining layer, and the reserved space stays put. Our
+padding is fixed for the same reason, so a change never resizes the shadow.
+
+Mutter's own window shadows behave differently, and the difference is worth knowing
+because it is not the model we follow: `default_shadow_classes[]`
+(`src/x11/meta-shadow-factory.c`) gives a normal window `{radius 10, opacity 128}` focused
+and `{radius 8, opacity 64}` unfocused, so its unfocused shadow only weakens and tightens.
+It keeps both cached and swaps between them with no transition, and recomputes lazily when
+the window shape or focus changes.
+
 ## What is not introspectable at all
 
 `has_shadow()` also gates on ARGB32 windows, shaped windows, and

@@ -1,35 +1,82 @@
 /**
  * ShadowActor: the shadow of one window, drawn from a baked texture.
  *
- * Geometry is the compositor's job. Four Clutter.BindConstraint sync the padded rect
- * with the window actor and seven property bindings carry opacity, visibility, pivot,
- * scale and translation through the map, close and minimize animations, so neither a
- * frame nor a resize costs any JavaScript.
+ * Geometry is the compositor's job. Four Clutter.BindConstraint sync the padded rect with
+ * the window actor and seven property bindings carry opacity, visibility, pivot, scale and
+ * translation through the map, close and minimize animations, so neither a frame nor a
+ * resize costs any JavaScript.
  *
- * Painting is eight texture rectangles out of one baked buffer (shadowTexture.js):
- * four corners, four edges stretched from a one-pixel strip, and no middle, because
- * the shader's hollow mask leaves the window's interior transparent.
+ * Painting is eight texture rectangles out of one baked buffer (shadowTexture.js): four
+ * corners, four edges stretched from a one-pixel strip, and no middle, because the
+ * shader's hollow mask leaves the window's interior transparent.
+ *
+ * A style change cross-fades rather than cutting, which is what libadwaita does: its
+ * backdrop rule declares `transition: box-shadow 200ms ease-out`, and it makes the biggest
+ * shadow layer transparent in backdrop on purpose so the extents stay put. A window switch
+ * moves focus several times before it holds still, and without the fade every one of those
+ * turns into a visible pop.
  */
 
 import Clutter from 'gi://Clutter';
+import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 
-import {shadowGeometry, shadowPipeline, shadowSlices, SHADOW_PAD} from './shadowTexture.js';
+import {
+    setPipelineOpacity,
+    shadowGeometry,
+    shadowPipelineFor,
+    shadowSlices,
+    SHADOW_PAD,
+} from './shadowTexture.js';
 
 export {SHADOW_PAD};
+
+/** libadwaita's `$backdrop_transition`. */
+const FADE_MS = 200;
+
+/** The curve it is timed with: CSS `ease-out`, as a unit cubic Bézier. */
+const EASE_OUT = [0, 0, 0.58, 1];
+
+/** Frame interval the fade is stepped at; the fade stops itself when it reaches the end. */
+const FADE_STEP_MS = 16;
+
+/**
+ * A unit cubic Bézier evaluated the way CSS does: solve for the parameter whose x is the
+ * input, then read y. Four Newton steps land well inside a pixel's worth of alpha.
+ *
+ * @param {number} t - Progress along the curve, 0 to 1
+ * @param {number[]} curve - x1, y1, x2, y2
+ * @returns {number}
+ */
+function bezier(t, [x1, y1, x2, y2]) {
+    const at = (u, p1, p2) => 3 * (1 - u) ** 2 * u * p1 + 3 * (1 - u) * u ** 2 * p2 + u ** 3;
+    let u = t;
+    for (let i = 0; i < 4; i++) {
+        const slope = 3 * (1 - u) ** 2 * x1 + 6 * (1 - u) * u * (x2 - x1) + 3 * u ** 2 * (1 - x2);
+        if (slope === 0)
+            break;
+        u -= (at(u, x1, x2) - t) / slope;
+    }
+    return at(Math.max(0, Math.min(1, u)), y1, y2);
+}
 
 /** Properties that carry the shadow through the window's own animations. */
 const SYNCED_PROPERTIES = [
     'opacity', 'visible', 'pivot-point', 'scale-x', 'scale-y', 'translation-x', 'translation-y',
 ];
 
+/** One style being drawn: its baked pipeline, and the geometry for the current size. */
+function styleKey(radius, shadows) {
+    return `${radius}|${shadows.map(s => `${s.blur},${s.spread},${s.alpha}`).join(';')}`;
+}
+
 export const ShadowActor = GObject.registerClass({
     GTypeName: 'CsdFixerShadowActor',
 }, class ShadowActor extends Clutter.Actor {
     /**
      * @param {Clutter.Actor} windowActor - Actor of the window being decorated
-     * @param {Clutter.Actor} container - Container actor (windowGroup), which the
-     *   shadow is inserted below
+     * @param {Clutter.Actor} container - Container actor (windowGroup), which the shadow
+     *   is inserted below
      */
     _init(windowActor, container) {
         super._init({name: 'CsdFixerShadowActor', reactive: false, opacity: 255});
@@ -37,11 +84,10 @@ export const ShadowActor = GObject.registerClass({
         this._windowActor = windowActor;
         this._container = container;
         this._style = null;
-        this._pipeline = null;
-        this._laidOutWidth = -1;
-        this._laidOutHeight = -1;
-        this._slices = [];
-        this._boxes = [];
+        this._outgoing = null;
+        this._progress = 1;
+        this._elapsed = FADE_MS;
+        this._fadeId = 0;
 
         for (const [coordinate, offset] of [
             [Clutter.BindCoordinate.X, -SHADOW_PAD],
@@ -60,51 +106,132 @@ export const ShadowActor = GObject.registerClass({
     }
 
     /**
-     * Draw this shadow: corner radius and shadow layers, already resolved for the
-     * window's state. The bake happens at the first paint after this, because the
-     * Cogl context does not exist outside one.
+     * Draw this shadow: corner radius and shadow layers, already resolved for the window's
+     * state. The bake happens at the first paint of a style, because the Cogl context does
+     * not exist outside a paint.
      *
      * @param {{radius: number, shadows: Array<object>}} style
      */
-    setShadowStyle(style) {
-        this._style = style;
-        this._pipeline = null;
+    setShadowStyle({radius, shadows}) {
+        const key = styleKey(radius, shadows);
+        if (this._style && this._style.key === key)
+            return;
+
+        if (!this._style) {
+            this._style = {key, radius, shadows, pipeline: null};
+            this._progress = 1;
+            this.queue_redraw();
+            return;
+        }
+
+        // A change arriving mid-fade keeps whichever side is more visible as the one fading
+        // out, so a burst of focus changes reads as one movement instead of a series of
+        // jumps. Its weight carries over, so the fade never pops back to full.
+        const keepStyle = this._progress >= 0.5;
+        const kept = keepStyle ? this._style : this._outgoing?.style;
+        let keptWeight = 0;
+        if (keepStyle)
+            keptWeight = this._progress;
+        else if (this._outgoing)
+            keptWeight = (1 - this._progress) * this._outgoing.weight;
+
+        this._outgoing = kept ? {style: kept, weight: keptWeight} : null;
+        this._style = {key, radius, shadows, pipeline: null};
+        this._progress = 0;
+
+        if (this._outgoing)
+            this._startFade();
+        else
+            this._finishFade();
     }
 
     vfunc_paint_node(node, paintContext) {
         if (!this._style)
             return;
 
-        if (!this._pipeline) {
-            this._pipeline = shadowPipeline(paintContext.get_framebuffer().get_context(),
-                this._style.radius, this._style.shadows);
-        }
-        if (!this._pipeline)
+        const context = paintContext.get_framebuffer().get_context();
+        const pipeline = this._pipelineFor(context, this._style);
+        if (!pipeline)
             return;
 
-        if (this._laidOutWidth !== this.width || this._laidOutHeight !== this.height)
-            this._relayout();
+        if (this._outgoing && this._progress < 1) {
+            const {style, weight} = this._outgoing;
+            const outgoing = this._pipelineFor(context, style);
+            if (outgoing) {
+                setPipelineOpacity(outgoing, (1 - this._progress) * weight);
+                this._addRects(node, outgoing, style);
+            }
+        }
 
-        const pipelineNode = new Clutter.PipelineNode(this._pipeline);
+        setPipelineOpacity(pipeline, this._outgoing ? this._progress : 1);
+        this._addRects(node, pipeline, this._style);
+
+        if (this._outgoing && this._progress >= 1)
+            this._finishFade();
+    }
+
+    /** Adds the eight texture rectangles of one style to the paint node. */
+    _addRects(node, pipeline, style) {
+        this._relayout(style);
+
+        const pipelineNode = new Clutter.PipelineNode(pipeline);
         node.add_child(pipelineNode);
-        for (let i = 0; i < this._slices.length; i++) {
-            const slice = this._slices[i];
-            const box = this._boxes[i];
+        for (let i = 0; i < style.slices.length; i++) {
+            const slice = style.slices[i];
+            const box = style.boxes[i];
             box.set_origin(slice.x1, slice.y1);
             box.set_size(slice.x2 - slice.x1, slice.y2 - slice.y1);
             pipelineNode.add_texture_rectangle(box, slice.s1, slice.t1, slice.s2, slice.t2);
         }
     }
 
+    _pipelineFor(context, style) {
+        if (!style.pipeline)
+            style.pipeline = shadowPipelineFor(context, style.radius, style.shadows);
+        return style.pipeline;
+    }
+
     /** Destination boxes follow the actor's size; the sources never change. */
-    _relayout() {
-        this._slices = shadowSlices(shadowGeometry(this._style.radius), this.width, this.height);
-        this._boxes = this._slices.map(() => new Clutter.ActorBox());
-        this._laidOutWidth = this.width;
-        this._laidOutHeight = this.height;
+    _relayout(style) {
+        if (style.slices && style.width === this.width && style.height === this.height)
+            return;
+        style.slices = shadowSlices(shadowGeometry(style.radius), this.width, this.height);
+        style.boxes = style.slices.map(() => new Clutter.ActorBox());
+        style.width = this.width;
+        style.height = this.height;
+    }
+
+    _startFade() {
+        if (this._fadeId)
+            return;
+        this._elapsed = 0;
+        this._fadeId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, FADE_STEP_MS, () => {
+            this._elapsed += FADE_STEP_MS;
+            this._progress = bezier(Math.min(1, this._elapsed / FADE_MS), EASE_OUT);
+            if (this._elapsed >= FADE_MS)
+                this._finishFade();
+            else
+                this.queue_redraw();
+            return this._fadeId ? GLib.SOURCE_CONTINUE : GLib.SOURCE_REMOVE;
+        });
+        this.queue_redraw();
+    }
+
+    _finishFade() {
+        if (this._fadeId) {
+            GLib.Source.remove(this._fadeId);
+            this._fadeId = 0;
+        }
+        this._outgoing = null;
+        this._progress = 1;
+        this.queue_redraw();
     }
 
     destroy() {
+        if (this._fadeId) {
+            GLib.Source.remove(this._fadeId);
+            this._fadeId = 0;
+        }
         for (const binding of this._bindings)
             binding.unbind();
         this._bindings = [];
@@ -113,7 +240,8 @@ export const ShadowActor = GObject.registerClass({
         } catch {
             // Window actor already destroyed: its signals went with it
         }
-        this._pipeline = null;
+        this._style = null;
+        this._outgoing = null;
         try {
             this._container?.remove_child(this);
         } catch {
