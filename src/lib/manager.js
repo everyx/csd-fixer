@@ -29,7 +29,7 @@ import {
     isWindowTiled,
 } from './detector.js';
 import {getWindowRules} from './settings.js';
-import {getEffectiveWmClass} from './window.js';
+import {resolveWindowIdentity} from './window.js';
 import {styleForWindow} from './style.js';
 import {RoundedClipEffect} from '../effects/clipEffect.js';
 import {SdfShadowEffect} from '../effects/shadowEffect.js';
@@ -316,7 +316,7 @@ export class Manager {
         const hasSsd = Boolean(win.decorated);
         const clientType = win.get_client_type?.();
         const isX11 = clientType === CLIENT_TYPE_X11;
-        const wmClass = getEffectiveWmClass(win);
+        const wmClass = resolveWindowIdentity(win);
         const geometryScale = actor.get_geometry_scale?.() ?? 1;
         const monitorScale = this._getMonitorScale(win);
         const hasParent = Boolean(win.get_transient_for?.());

@@ -229,6 +229,56 @@ function boolString(value) {
     return value ? 'true' : 'false';
 }
 
+/** Decodes a rule-key identity, tolerating keys that were never encoded. */
+function decodeIdentity(token) {
+    try {
+        return decodeURIComponent(token);
+    } catch {
+        return token;
+    }
+}
+
+/** Shell wraps windows it cannot attribute to an app in a per-window app object. */
+const WINDOW_BACKED_APP_ID_PATTERN = /^window:\d+$/;
+
+/**
+ * Reports whether a Shell app id is a per-window placeholder rather than a real
+ * application identity. It embeds a session-local sequence number, so it cannot
+ * address anything across restarts.
+ *
+ * @param {string} appId
+ * @returns {boolean}
+ */
+export function isWindowBackedAppId(appId) {
+    return WINDOW_BACKED_APP_ID_PATTERN.test(appId);
+}
+
+/**
+ * Picks the identity a rule should be keyed on, from the candidates gathered off
+ * a window and its siblings.
+ *
+ * Pure so it can be unit-tested; gathering the candidates needs Shell APIs and
+ * lives in window.js.
+ *
+ * @param {object} [candidates={}]
+ * @param {string} [candidates.declared=''] - Identity the window declares itself
+ * @param {string} [candidates.peer=''] - Identity declared by a sibling process window
+ * @param {string} [candidates.tracked=''] - Shell.WindowTracker's app id
+ * @param {number} [candidates.pid=-1] - Owning process id
+ * @returns {string} Identity, or '' when nothing identifies the window
+ */
+export function chooseWindowIdentity({declared = '', peer = '', tracked = '', pid = -1} = {}) {
+    if (declared)
+        return declared;
+    if (peer)
+        return peer;
+    if (tracked && !isWindowBackedAppId(tracked))
+        return tracked;
+    // Last resort: two windows of one process share it, but it changes when the
+    // process restarts, so a rule built on it only lives as long as the session.
+    return pid > 0 ? `pid-${pid}` : '';
+}
+
 /**
  * Extracts the normalized inspection properties dictionary for the picker.
  * Values are strings because the dictionary crosses D-Bus as `a{ss}`; prefs.js
@@ -316,7 +366,11 @@ export function buildRuleKey(wmClass, {
         `${FP_ATTACHED_DIALOG}=${boolString(isAttachedDialog)}`,
     ].join(',');
 
-    return `${wmClass}:${specifier}`;
+    // The key grammar reserves ':' and whitespace as delimiters, so encode the
+    // identity instead of assuming it is already key-safe. Realistic identities
+    // (WM_CLASS, Flatpak id, reverse-DNS app id) pass through byte-for-byte;
+    // only exotic ones are escaped, and parseRuleKey() decodes them back.
+    return `${encodeURIComponent(wmClass)}:${specifier}`;
 }
 
 /**
@@ -378,7 +432,7 @@ export function parseRuleKey(key) {
         return {baseWmClass: '', specifier: null, properties: null};
 
     const colonIdx = key.indexOf(':');
-    const baseWmClass = key.slice(0, colonIdx);
+    const baseWmClass = decodeIdentity(key.slice(0, colonIdx));
     const specifier = key.slice(colonIdx + 1);
 
     const properties = {};

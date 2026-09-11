@@ -10,6 +10,7 @@ import {
     resolveRule, evaluateWindowActions,
     parseRuleKey, buildRuleKey, sanitizeWindowRules,
     extractWindowProperties, WindowClientType,
+    chooseWindowIdentity, isWindowBackedAppId,
 } from '../src/lib/detector.js';
 import {
     getWindowRules,
@@ -302,6 +303,22 @@ describe('rule key contract & round-trip', () => {
             const parsed = parseRuleKey(key);
             expect(`${parsed.baseWmClass}:${parsed.specifier}`).toBe(key);
         }
+    });
+
+    it('escapes identities the key grammar would otherwise split or drop', () => {
+        // A bare 'window:5' used to build a key the validator rejected, so the
+        // rule was silently discarded instead of ever matching.
+        const colonKey = buildRuleKey('window:5');
+        expect(colonKey.startsWith('window%3A5:')).toBeTrue();
+        expect(parseRuleKey(colonKey).baseWmClass).toBe('window:5');
+
+        const spacedKey = buildRuleKey('my app');
+        expect(parseRuleKey(spacedKey).baseWmClass).toBe('my app');
+    });
+
+    it('leaves ordinary identities byte-for-byte', () => {
+        expect(buildRuleKey('wechat').startsWith('wechat:')).toBeTrue();
+        expect(buildRuleKey('org.gnome.Nautilus').startsWith('org.gnome.Nautilus:')).toBeTrue();
     });
 
     it('prefs-generated keys match resolveRule for the picked kind only', () => {
@@ -827,6 +844,37 @@ describe('extractWindowProperties', () => {
     it('handles null and undefined safely', () => {
         expect(extractWindowProperties(null)).toEqual({});
         expect(extractWindowProperties(undefined)).toEqual({});
+    });
+});
+
+describe('chooseWindowIdentity', () => {
+    it('prefers what the window declares itself', () => {
+        const chosen = chooseWindowIdentity({declared: 'wechat', peer: 'other', tracked: 'x.desktop', pid: 1});
+        expect(chosen).toBe('wechat');
+    });
+
+    it('falls back to a sibling process window when the window declares nothing', () => {
+        const chosen = chooseWindowIdentity({peer: 'wechat', tracked: 'snap.wechat', pid: 1});
+        expect(chosen).toBe('wechat');
+    });
+
+    it('uses the tracker id when it names a real application', () => {
+        expect(chooseWindowIdentity({tracked: 'wechat.desktop', pid: 42})).toBe('wechat.desktop');
+    });
+
+    it('rejects Shell window-backed placeholder ids', () => {
+        expect(isWindowBackedAppId('window:5')).toBeTrue();
+        expect(isWindowBackedAppId('wechat.desktop')).toBeFalse();
+        expect(chooseWindowIdentity({tracked: 'window:5', pid: 42})).toBe('pid-42');
+    });
+
+    it('falls back to a process identity when nothing names the application', () => {
+        expect(chooseWindowIdentity({pid: 42})).toBe('pid-42');
+    });
+
+    it('returns empty when nothing identifies the window', () => {
+        expect(chooseWindowIdentity({})).toBe('');
+        expect(chooseWindowIdentity({pid: -1})).toBe('');
     });
 });
 
