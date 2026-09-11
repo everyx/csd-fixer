@@ -95,6 +95,8 @@ export class InspectorService {
             if (activeWorkspace && !win.is_on_all_workspaces?.() && !win.located_on_workspace?.(activeWorkspace))
                 continue;
 
+            // Runtime typelib enum: numeric values must align with src/lib/mutterRules.generated.js
+            // (verified against upstream Mutter headers by tools/gen-mutter.mjs).
             const type = win.get_window_type?.() ?? Meta.WindowType.NORMAL;
             if (type === Meta.WindowType.DESKTOP || type === Meta.WindowType.DOCK)
                 continue;

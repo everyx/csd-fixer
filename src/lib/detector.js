@@ -1,6 +1,9 @@
 import {
     MUTTER_CSD_MIN_INSET_THRESHOLD,
+    WindowType,
 } from './mutterRules.generated.js';
+
+export {WindowType};
 
 /**
  * Window CSD detection: determines whether a window lacks self-drawn client-side decorations.
@@ -88,21 +91,6 @@ export function shouldDecorate({
 
     return {apply: true, reason: `no-csd(insets=${sideW.toFixed(1)}x${sideH.toFixed(1)} < ${insetThreshold})`};
 }
-
-/**
- * Wayland window type constants (Meta.WindowType, mutter src/meta/common.h).
- */
-export const WindowType = {
-    NORMAL: 0,
-    DESKTOP: 1,
-    DOCK: 2,
-    DIALOG: 3,
-    MODAL_DIALOG: 4,
-    TOOLBAR: 5,
-    MENU: 6,
-    UTILITY: 7,
-    SPLASHSCREEN: 8,
-};
 
 /**
  * Checks whether the scaling factor is fractional (non-integer).
