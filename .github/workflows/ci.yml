@@ -54,6 +54,11 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: ZviBaratz/gnome-extension-reviewer
+          # Pinned: the tool's `main` has broken this job twice - an unbound
+          # variable on the "may pass with comments" path (any single warning
+          # aborted the job) and, before that, a grep that fails the step under
+          # `set -e`. Bump deliberately and re-read the verdict logic when you do.
+          ref: v0.1.31
           path: .ego-lint
 
       - name: Install GLib schema compiler
@@ -63,10 +68,13 @@ jobs:
 
       - name: Run ego-lint compliance checks
         run: |
-          # Workaround upstream bug in ZviBaratz/gnome-extension-reviewer:
-          # Under `set -eo pipefail`, when an extension has 0 warnings, `grep "^WARN|"` exits with 1,
-          # aborting the script right before verdict evaluation.
-          sed -i 's/grep "\^WARN|" "\$RESULTS_FILE"/grep "\^WARN|" "\$RESULTS_FILE" 2>\/dev\/null || true/g' .ego-lint/skills/ego-lint/scripts/ego-lint.sh
+          # Upstream bug in the pinned release: under `set -eo pipefail` the
+          # verdict's `grep "^WARN|"` exits 1 when an extension has no warnings at
+          # all, which fails the step before the verdict is printed. Tolerate the
+          # empty result while keeping the count fed by the pipeline.
+          sed -i -e 's/grep "\^WARN|" "\$RESULTS_FILE" | cut/grep "\^WARN|" "\$RESULTS_FILE" 2>\/dev\/null | cut/' \
+                 -e 's/| sort -u | wc -l)/| sort -u | wc -l || true)/' \
+                 .ego-lint/skills/ego-lint/scripts/ego-lint.sh
           bash .ego-lint/ego-lint --show all src/
 
   test:
