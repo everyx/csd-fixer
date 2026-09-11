@@ -8,11 +8,13 @@ import {
     RuleAxis,
     RuleDirection,
     WindowType,
-    buildRuleKey,
+    RULE_AXIS_ORDER,
+    buildRuleKeyFromProperties,
     buildRuleValue,
     parseRuleAxes,
     parseRuleKey,
     lookupRuleKey,
+    withRule,
     INSPECTOR_DBUS_NAME,
     INSPECTOR_DBUS_PATH,
 } from './lib/detector.js';
@@ -22,7 +24,7 @@ import {
 } from './lib/settings.js';
 
 /** Decorations a single rule can name, in display order. */
-const AXES = [RuleAxis.SHADOW, RuleAxis.CORNERS];
+const AXES = RULE_AXIS_ORDER;
 
 function axisLabel(axis) {
     return axis === RuleAxis.SHADOW ? _('Shadow') : _('Corners');
@@ -398,20 +400,26 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
                 if (!props || Object.keys(props).length === 0)
                     return;
 
-                const ruleKey = props.wmClass
-                    ? buildRuleKey(props.wmClass, {
-                        clientType: props.clientType,
-                        windowType: Number(props.windowType),
-                        hasParent: props.hasParent === 'true',
-                        allowsResize: props.allowsResize === 'true',
-                        isAttachedDialog: props.isAttachedDialog === 'true',
-                    })
-                    : '';
+                const ruleKey = buildRuleKeyFromProperties(props);
 
                 if (!ruleKey) {
-                    showError(window,
-                        _('Window Not Recognized'),
-                        _('CSD Fixer could not identify this window, so no rule was created.'));
+                    window.add_toast(new Adw.Toast({
+                        title: _('No rule added: this window could not be identified.'),
+                    }));
+                    return;
+                }
+
+                // The extension judged this against the same evaluator that will
+                // later apply the rule: if it changes nothing, say so instead of
+                // adding a row that misrepresents what it does. Nothing needs
+                // deciding here, so it is a toast and not a dialog - the outcome
+                // is simply "no rule", and no acknowledgement is owed. An absent
+                // answer means an extension too old to judge, and the rule goes
+                // in.
+                if (props[`${direction}Effect`] === 'false') {
+                    window.add_toast(new Adw.Toast({
+                        title: _('No rule added: it would have no effect on a window of this kind.'),
+                    }));
                     return;
                 }
 
@@ -425,17 +433,13 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
                 const moved = Boolean(existing);
 
                 // A kind lives in exactly one group: adding here removes it there.
-                if (existing)
-                    delete rules[otherGroup][existing];
-                // A freshly picked window starts by targeting both decorations.
-                rules[direction][ruleKey] = buildRuleValue(AXES);
-                setWindowRules(settings, rules);
+                setWindowRules(settings, withRule(rules, direction, ruleKey, AXES));
 
                 // Never claim success on a write the settings layer rejected.
                 if (!lookupRuleKey(getWindowRules(settings)[direction], ruleKey)) {
-                    showError(window,
-                        _('Rule Not Saved'),
-                        _('CSD Fixer could not store a rule for this window.'));
+                    window.add_toast(new Adw.Toast({
+                        title: _('No rule added: the rule could not be saved.'),
+                    }));
                     return;
                 }
 
