@@ -84,6 +84,37 @@ shadows — they are flush with the screen edge, where a shadow would be a line 
 High contrast — upstream's `@media (prefers-contrast: more)` — replaces the shadow set
 and deepens the outline from 7% to 30%.
 
+## What the decoration costs
+
+Two offscreen passes, both per decorated window rather than per session:
+
+| Effect | Attached to | Buffer | At 1920x1080 |
+|---|---|---|---|
+| `clipEffect.js` | the window actor | window size + 3px | ~8.3 MB |
+| `shadowEffect.js` | the padded shadow actor | window size + 2x28px | ~8.5 MB |
+
+The clip pass is skipped when there is nothing to clip (radius 0 and no outline) and
+the shadow pass exists only while a shadow is drawn.
+
+Mutter pays far less for its own window shadows, and the difference is structural:
+`MetaShadow` (`src/x11/meta-shadow-factory.c`) is a `CoglTexture` rendered once into
+memory and painted as a nine-slice, borders unscaled and middle stretched, so it
+costs kilobytes and no per-frame shader work. Our shadow is an SDF evaluated over the
+padded rectangle every frame. Its fragment shader does return before the shadow maths
+for the pixels the hollow mask discards, which is the ~98% of the rectangle that is
+window interior, so what remains is the fill rate and the buffer itself.
+
+Moving the shadow to a nine-slice would bring it back to Mutter's footprint. It is
+not done because it trades statelessness for a cache that has to be invalidated on
+every size, radius, shadow-set and high-contrast change. Nothing in the design blocks
+it.
+
+There is no equivalent shortcut for the clip pass. Shell 45-50 ships no rounded-clip
+effect (the typelib has `BlurEffect` and nothing else), and Mutter never needs one: a
+window that decorates itself also rounds itself and arrives with alpha, so the
+compositor has nothing left to clip. Decorating windows that do not round themselves
+is what makes an offscreen pass inherent to this extension.
+
 ## What is not introspectable at all
 
 `has_shadow()` also gates on ARGB32 windows, shaped windows, and

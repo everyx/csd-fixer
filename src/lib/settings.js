@@ -37,8 +37,24 @@ export function getWindowRules(settings) {
  */
 export function setWindowRules(settings, rules) {
     const clean = sanitizeWindowRules(rules);
-    settings.set_value(SETTINGS_KEY_SUPPRESS_RULES, new GLib.Variant('a{ss}', clean.suppress));
-    settings.set_value(SETTINGS_KEY_FORCE_RULES, new GLib.Variant('a{ss}', clean.force));
+    writeRuleGroup(settings, SETTINGS_KEY_SUPPRESS_RULES, clean.suppress);
+    writeRuleGroup(settings, SETTINGS_KEY_FORCE_RULES, clean.force);
+}
+
+/**
+ * Writes one group, unless it already holds exactly these rules. Every write
+ * notifies the Shell side, which then re-evaluates every tracked window, so
+ * changing one group must not cost the same as changing both.
+ */
+function writeRuleGroup(settings, key, group) {
+    const value = new GLib.Variant('a{ss}', group);
+    try {
+        if (settings?.get_value?.(key)?.equal(value))
+            return;
+    } catch {
+        // Unreadable key: writing it is the way back to a known state.
+    }
+    settings.set_value(key, value);
 }
 
 function readRuleGroup(settings, key) {

@@ -19,15 +19,24 @@ import Shell from 'gi://Shell';
 
 import {DECLARATIONS, CODE} from './shadowShader.generated.js';
 
+/** Padding for a shadow layer a window does not have. */
+const NO_SHADOW = Object.freeze({blur: 0, spread: 0, alpha: 0});
+
 export const SdfShadowEffect = GObject.registerClass({
     GTypeName: 'CsdFixerSdfShadowEffect',
 }, class SdfShadowEffect extends Shell.GLSLEffect {
     _init() {
         super._init();
-        for (const [k, n] of [['_uWinSize', 'uWinSize'], ['_uRadius', 'uRadius'],
-            ['_uShadow1', 'uShadow1'], ['_uShadow2', 'uShadow2'],
-            ['_uShadow3', 'uShadow3'], ['_uPad', 'uPad']])
+        for (const [k, n] of [['_uWinSize', 'uWinSize'], ['_uRadius', 'uRadius'], ['_uPad', 'uPad']])
             this[k] = this.get_uniform_location(n);
+        this._uShadow = ['uShadow1', 'uShadow2', 'uShadow3']
+            .map(name => this.get_uniform_location(name));
+
+        this._lastWinW = -1;
+        this._lastWinH = -1;
+        this._lastRadius = -1;
+        this._lastPad = -1;
+        this._lastShadows = undefined;
     }
 
     vfunc_build_pipeline() {
@@ -36,23 +45,29 @@ export const SdfShadowEffect = GObject.registerClass({
     }
 
     /**
-     * Update shadow parameters (window size / radius / padding / shadow layers, <= 3 layers).
+     * Update shadow parameters (window size / radius / padding / shadow layers, <= 3
+     * layers). Returns without touching the pipeline when nothing changed: an upload
+     * dirties Cogl's pipeline state, and the repaint schedules a compositor frame.
      */
     setParams(winW, winH, radius, pad, shadows) {
+        if (this._lastWinW === winW && this._lastWinH === winH &&
+            this._lastRadius === radius && this._lastPad === pad &&
+            this._lastShadows === shadows)
+            return;
+
+        this._lastWinW = winW;
+        this._lastWinH = winH;
+        this._lastRadius = radius;
+        this._lastPad = pad;
+        this._lastShadows = shadows;
+
         this.set_uniform_float(this._uWinSize, 2, [winW, winH]);
         this.set_uniform_float(this._uRadius, 1, [radius]);
         this.set_uniform_float(this._uPad, 2, [pad, pad]);
 
-        const zeros = [
-            {blur: 0, spread: 0, alpha: 0},
-            {blur: 0, spread: 0, alpha: 0},
-            {blur: 0, spread: 0, alpha: 0},
-        ];
-        const layers = [...shadows.slice(0, 3), ...zeros.slice(shadows.length)];
         for (let i = 0; i < 3; i++) {
-            const s = layers[i];
-            this.set_uniform_float(this[`_uShadow${i + 1}`], 4,
-                [s.blur, s.spread, s.alpha, 0]);
+            const s = shadows[i] ?? NO_SHADOW;
+            this.set_uniform_float(this._uShadow[i], 4, [s.blur, s.spread, s.alpha, 0]);
         }
         this.queue_repaint();
     }

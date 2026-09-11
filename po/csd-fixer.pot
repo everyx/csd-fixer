@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-11 22:59+0800\n"
+"POT-Creation-Date: 2026-09-12 04:26+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -133,33 +133,33 @@ msgstr ""
 msgid "Use the button above to decorate a window anyway."
 msgstr ""
 
-#: src/prefs.js:332
+#: src/prefs.js:338
 msgid "Remove Rule"
 msgstr ""
 
-#: src/prefs.js:394
+#: src/prefs.js:400
 msgid "Window Inspection Failed"
 msgstr ""
 
-#: src/prefs.js:395
+#: src/prefs.js:401
 msgid ""
 "Could not connect to CSD Fixer extension. Please ensure the extension is "
 "enabled."
 msgstr ""
 
-#: src/prefs.js:409
+#: src/prefs.js:415
 msgid "No rule added: this window could not be identified."
 msgstr ""
 
-#: src/prefs.js:423
+#: src/prefs.js:429
 msgid "No rule added: it would have no effect on a window of this kind."
 msgstr ""
 
-#: src/prefs.js:443
+#: src/prefs.js:449
 msgid "No rule added: the rule could not be saved."
 msgstr ""
 
-#: src/prefs.js:453
+#: src/prefs.js:459
 #, javascript-format
 msgid "Moved to %s"
 msgstr ""

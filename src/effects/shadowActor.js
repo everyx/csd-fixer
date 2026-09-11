@@ -20,7 +20,6 @@
 
 import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
-import St from 'gi://St';
 
 /** Shadow padding: max blur 14 (sigma=7) + spread 5 = 26px (3*sigma), +2 safety margin */
 export const SHADOW_PAD = 28;
@@ -36,11 +35,10 @@ export class ShadowActor {
         this._container = container;
         this._destroyed = false;
 
-        this._actor = new St.Bin({
+        this._actor = new Clutter.Actor({
             name: 'CsdFixerShadowActor',
             reactive: false,
             opacity: 255,
-            style: 'background-color: transparent;',
         });
 
         // Position and size tracking: X/Y/WIDTH/HEIGHT 4D constraints synchronized natively by Clutter C core

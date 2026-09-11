@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: csd-fixer\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-11 22:59+0800\n"
+"POT-Creation-Date: 2026-09-12 04:26+0800\n"
 "PO-Revision-Date: 2026-09-08 22:50+0800\n"
 "Last-Translator: everyx\n"
 "Language-Team: Chinese (Traditional) <zh-l10n@lists.linux.org.tw>\n"
@@ -133,34 +133,34 @@ msgstr "強制為某個視窗加上裝飾"
 msgid "Use the button above to decorate a window anyway."
 msgstr "用上面的按鈕選取一個視窗，強制為它加上裝飾。"
 
-#: src/prefs.js:332
+#: src/prefs.js:338
 msgid "Remove Rule"
 msgstr "刪除規則"
 
-#: src/prefs.js:394
+#: src/prefs.js:400
 msgid "Window Inspection Failed"
 msgstr "視窗選取失敗"
 
-#: src/prefs.js:395
+#: src/prefs.js:401
 msgid ""
 "Could not connect to CSD Fixer extension. Please ensure the extension is "
 "enabled."
 msgstr ""
 "無法連線至 CSD Fixer 擴充套件，請確認該擴充套件已在 GNOME 擴充套件中啟用。"
 
-#: src/prefs.js:409
+#: src/prefs.js:415
 msgid "No rule added: this window could not be identified."
 msgstr "未新增規則：無法識別這個視窗。"
 
-#: src/prefs.js:423
+#: src/prefs.js:429
 msgid "No rule added: it would have no effect on a window of this kind."
 msgstr "未新增規則：這條規則對此類視窗不會有任何效果。"
 
-#: src/prefs.js:443
+#: src/prefs.js:449
 msgid "No rule added: the rule could not be saved."
 msgstr "未新增規則：規則未能儲存。"
 
-#: src/prefs.js:453
+#: src/prefs.js:459
 #, javascript-format
 msgid "Moved to %s"
 msgstr "已移動到「%s」"

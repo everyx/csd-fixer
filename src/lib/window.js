@@ -22,10 +22,19 @@ function readDeclaredIdentity(win) {
 }
 
 /** Every mapped window, used to find a sibling of the same process. */
-function listWindows() {
-    const actors = global.get_window_actors?.() ?? [];
-    return actors.map(a => a.meta_window ?? a.metaWindow).filter(Boolean);
+function listWindowActors() {
+    return global.get_window_actors?.() ?? [];
 }
+
+/**
+ * A window's fallback identity, keyed by the declared identity it was derived from.
+ *
+ * Only answers that did not come from the pid fallback are kept: that one is what a
+ * window gets while the app tracker is still catching up, and remembering it would
+ * freeze a rule onto a session-local identity. The declared identity is part of the
+ * key because it is the input that arrives late and has to invalidate the answer.
+ */
+const fallbackIdentities = new WeakMap();
 
 /**
  * Resolves a stable application identity for a window. The picker and the runtime
@@ -37,15 +46,23 @@ function listWindows() {
  * @returns {string} Identity, or '' when the window cannot be identified at all
  */
 export function resolveWindowIdentity(win) {
+    if (!win)
+        return '';
+
     const declared = readDeclaredIdentity(win);
     if (declared)
         return declared;
 
-    const pid = win?.get_pid?.() ?? -1;
+    const remembered = fallbackIdentities.get(win);
+    if (remembered && remembered.declared === declared)
+        return remembered.identity;
+
+    const pid = win.get_pid?.() ?? -1;
     let peer = '';
     if (pid > 0) {
-        for (const candidate of listWindows()) {
-            if (candidate === win || candidate?.get_pid?.() !== pid)
+        for (const actor of listWindowActors()) {
+            const candidate = actor.meta_window ?? actor.metaWindow;
+            if (!candidate || candidate === win || candidate.get_pid?.() !== pid)
                 continue;
             peer = readDeclaredIdentity(candidate);
             if (peer)
@@ -60,5 +77,8 @@ export function resolveWindowIdentity(win) {
         // WindowTracker is unusable while the session is tearing down.
     }
 
-    return chooseWindowIdentity({declared, peer, tracked, pid});
+    const identity = chooseWindowIdentity({declared, peer, tracked, pid});
+    if (identity && !identity.startsWith('pid-'))
+        fallbackIdentities.set(win, {declared, identity});
+    return identity;
 }

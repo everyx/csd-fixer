@@ -255,9 +255,15 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
         };
 
         // Rows are torn down from inside their own widgets' signal handlers, so
-        // defer the rebuild to idle time rather than destroying the emitter.
+        // defer the rebuild to idle time rather than destroying the emitter. One
+        // pending rebuild is enough: it reads the rules when it runs, not here.
+        let renderScheduled = false;
         const scheduleRenderAll = () => {
+            if (renderScheduled)
+                return;
+            renderScheduled = true;
             GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                renderScheduled = false;
                 if (windowAlive)
                     renderAll();
                 return GLib.SOURCE_REMOVE;

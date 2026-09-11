@@ -61,6 +61,12 @@ export const RoundedClipEffect = GObject.registerClass({
         this._uSize = this.get_uniform_location('uSize');
         this._uRadius = this.get_uniform_location('uRadius');
         this._uOutline = this.get_uniform_location('uOutline');
+
+        // -1 rather than 0: no real window reaches it, so the first call always uploads.
+        this._lastWidth = -1;
+        this._lastHeight = -1;
+        this._lastRadius = -1;
+        this._lastOutline = undefined;
     }
 
     vfunc_build_pipeline() {
@@ -70,8 +76,21 @@ export const RoundedClipEffect = GObject.registerClass({
 
     /**
      * Update clipping parameters (size/radius/outline; disabled when outline is null).
+     *
+     * Uploading a uniform is not free: it dirties Cogl's pipeline state, and the
+     * repaint schedules a compositor frame. A reconciliation runs on every window
+     * event, so most calls carry the parameters already in the pipeline.
      */
     setParams(width, height, radius, outline) {
+        if (this._lastWidth === width && this._lastHeight === height &&
+            this._lastRadius === radius && this._lastOutline === outline)
+            return;
+
+        this._lastWidth = width;
+        this._lastHeight = height;
+        this._lastRadius = radius;
+        this._lastOutline = outline;
+
         this.set_uniform_float(this._uSize, 2, [width, height]);
         this.set_uniform_float(this._uRadius, 1, [radius]);
         const u = outline

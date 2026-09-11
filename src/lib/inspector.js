@@ -86,6 +86,9 @@ export class InspectorService {
 
     _findTargetWindow(stageX, stageY) {
         const actors = global.get_window_actors?.() ?? [];
+        // Hoisted: this runs on every pointer motion, and the active workspace cannot
+        // change between the first and the last window of one hit test.
+        const activeWorkspace = global.workspace_manager?.get_active_workspace?.();
         for (let i = actors.length - 1; i >= 0; i--) {
             const winActor = actors[i];
             const win = winActor.meta_window ?? winActor.metaWindow;
@@ -94,7 +97,6 @@ export class InspectorService {
             if (winActor.is_mapped && !winActor.is_mapped())
                 continue;
 
-            const activeWorkspace = global.workspace_manager?.get_active_workspace?.();
             if (activeWorkspace && !win.is_on_all_workspaces?.() && !win.located_on_workspace?.(activeWorkspace))
                 continue;
 
