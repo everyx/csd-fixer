@@ -35,6 +35,59 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 
 Either can be skipped with `--no-verify` when that is what you mean.
 
+## Measuring in the nested session
+
+`tools/dev.sh shell` starts the headless shell with `--unsafe-mode`, which exposes
+`org.gnome.Shell.Eval`. Together with the session bus address in the shell's
+`/proc/<pid>/environ` (the way `get_dbus_bus()` in `tools/test-e2e.sh` reads it), that
+is enough to measure the effects from outside, with no probe code added to the
+extension:
+
+```sh
+PID=$(cat /tmp/csd-fixer-dev/shell.pid)
+BUS=$(tr '\0' '\n' < /proc/$PID/environ | grep '^DBUS_SESSION_BUS_ADDRESS=' | cut -d= -f2-)
+gdbus call --address "$BUS" --dest org.gnome.Shell --object-path /org/gnome/Shell \
+    --method org.gnome.Shell.Eval 'global.get_window_actors().length + " windows"'
+```
+
+Four things about it cost time to find:
+
+- **The stage has to be shown, all of it.** `tools/dev-shell.sh` calls
+  `global.window_group.show()`, which is not enough: without the GDM activation flow
+  nothing below the stage is painted, so an offscreen effect never allocates its
+  framebuffer (`get_texture()` comes back null) and actors report a stale allocation
+  instead of their geometry. Walking the stage and calling `show()` on every actor
+  fixes it.
+- **`Eval` takes one line.** GVariant decodes a `\n` in the argument into a real
+  newline before the shell evals the string, so a multi-line script fails with
+  `SyntaxError: "" string literal contains an unescaped line break`. Join with a
+  separator and split the answer afterwards, and use double quotes throughout: a file
+  or a heredoc cannot see how the wrapper quotes what it is given.
+- **The framebuffer it allocates is readable.**
+  `Clutter.OffscreenEffect.get_texture()` returns the real offscreen: the actor's
+  allocation plus 3px, in `RGBA8888_PREMULTIPLIED`, so 4 bytes per pixel. That is
+  where the footprint in [decoration-model.md](decoration-model.md) comes from;
+  measured sizes match the derived ones to the byte.
+- **Per-frame cost is measurable without a profiler.** `ClutterStage` emits
+  `before-paint` and `after-paint`; a `GLib.timeout_add(..., 16, ...)` that calls
+  `global.stage.queue_redraw()` keeps frames coming, and enabling or disabling the
+  extension within one session gives the share that belongs to the decoration.
+
+Timings from this rig do not transfer. It is a headless virtual monitor on whatever
+driver the developer happens to run, so only the difference between two runs in the
+same session means anything, and that is all the comparison needs.
+
+The subject for visual work is any window the detector decorates. `tools/probe-window.js`
+is one: a GTK4 window with its own decoration turned off, fixed size, theme background,
+so two screenshots of one session are comparable.
+
+```sh
+./tools/dev.sh app gjs tools/probe-window.js
+```
+
+Prototype actors must be destroyed and any `GLib` sources removed before
+`tools/dev.sh stop`, otherwise the next run inherits them.
+
 ## Documents
 
 | Document | Contents |
