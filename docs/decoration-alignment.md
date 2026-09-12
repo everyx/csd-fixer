@@ -16,8 +16,8 @@ Two things are drawn, and they have different mechanisms:
 
 | Part | Where it lives | Notes |
 | --- | --- | --- |
-| Rounded clip + inner outline | `ClipEffect` on the window actor | skipped entirely under some settings, see below |
-| Shadow | `CsdFixerShadowActor`, a **sibling** of the window actor | one baked 145x145 texture per style, nine-slice |
+| Rounded clip + inner outline | `RoundedClipEffect` on the window actor | skipped entirely under some settings, see below |
+| Shadow | `CsdFixerShadowActor` (`ShadowActor`), a **sibling** of the window actor | one baked 145x145 texture per style, 8-slice |
 
 Because the shadow is a sibling and the clip is an effect, a window-scoped screenshot
 (`ScreenshotWindow`) can never contain the shadow. Only a full-desktop screenshot shows both.
@@ -131,7 +131,7 @@ compared against native libadwaita. Two apparent discrepancies were analyzed and
   client's own Wayland surface via GTK4/GSK; in CSD Fixer, the window content and shadow
   live on separate Mutter Clutter actors, subject to Mutter's offscreen clipping and
   fractional blitting.
-- **Trade-off**: When `prefer-crisp-text` is enabled, `ClipEffect` is deliberately omitted
+- **Trade-off**: When `prefer-crisp-text` is enabled, `RoundedClipEffect` is deliberately omitted
   under fractional scaling to avoid resampling blur on client window content.
 
 ### 2. First shadow pixel darkness (185 vs native 198-200)

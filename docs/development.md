@@ -17,6 +17,7 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 
 | Command | What it does |
 |---|---|
+| `pnpm run lint` | ESLint static syntax and style checks for `src/` |
 | `pnpm test` | unit tests, run under gjs |
 | `pnpm run test:e2e` | headless end-to-end run in a nested session: lifecycle, resize/move stress, a zero-warning audit of the log |
 | `pnpm run benchmark` | visual decoration attenuation benchmark against 1.0x golden baseline |

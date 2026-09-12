@@ -78,9 +78,11 @@ libadwaita's own CSS selectors:
     fullscreen > maximized > tiled > focused | backdrop
 
 The result is `{radius, shadows, outline}`: the corner radius, up to three shadow
-layers (`{blur, spread, alpha, color}`), and the outline libadwaita paints around a
-decorated window. Fullscreen, maximized and tiled windows get neither outline nor
+layers (`{blur, spread, alpha}`), and the outline libadwaita paints around a
+decorated window. Fullscreen and maximized windows get neither outline nor
 shadows — they are flush with the screen edge, where a shadow would be a line on it.
+Tiled windows drop the outline and rounded corners (radius 0), retaining only the 1px
+border shadow unless matched with an adjacent tile.
 High contrast — upstream's `@media (prefers-contrast: more)` — replaces the shadow set
 and deepens the outline from 7% to 30%.
 
@@ -94,7 +96,7 @@ session:
 | clip | `clipEffect.js`, on the window actor | window size + 3px, ~8.3 MB at 1920x1080 |
 | shadow | `shadowTexture.js`, baked once per style | 145x145, ~82 KB, shared by every window |
 
-The clip pass is skipped when there is nothing to clip (radius 0, or no outline) and a
+The clip pass is skipped when there is nothing to clip (radius 0 and no outline) and a
 window with no shadow never touches a baked buffer.
 
 The shadow's buffer is small because a shadow is a blurred rounded rectangle: its pixels
