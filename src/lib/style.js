@@ -7,7 +7,7 @@ import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
 
 /**
  * Returns the decoration parameters for a window state: {radius, shadows, outline} -
- * the corner radius, up to three shadow layers ({blur, spread, alpha, color}), and
+ * the corner radius, up to three shadow layers ({blur, spread, alpha}), and
  * libadwaita's outline highlight. The precedence between states is in
  * docs/decoration-model.md.
  *
