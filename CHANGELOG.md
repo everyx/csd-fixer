@@ -1,5 +1,62 @@
 # Changelog
 
+## [0.2.0](https://github.com/everyx/csd-fixer/compare/csd-fixer-v0.1.0...csd-fixer-v0.2.0) (2026-09-12)
+
+
+### Features
+
+* **benchmark:** add automated CPU and memory performance benchmark ([561c803](https://github.com/everyx/csd-fixer/commit/561c803e896038c366626deb67b305261c7a2d1c))
+* **detector:** benchmark composite static fingerprints against KWin hierarchy ([13515c3](https://github.com/everyx/csd-fixer/commit/13515c3a724955ad02792e0e6482f813e093a361))
+* expand supported GNOME Shell versions to 45-50 ([3f1f3f9](https://github.com/everyx/csd-fixer/commit/3f1f3f91bb762cda9a15a11c741decb662895a31))
+* **inspector:** add interactive window picker over D-Bus service ([b2442da](https://github.com/everyx/csd-fixer/commit/b2442da15b8a7e6110f1a274fd795030449db123))
+* **prefs:** rebuild the rule list around what a rule matches ([b9c2279](https://github.com/everyx/csd-fixer/commit/b9c22790610c4731af7782506d41dafa42fc633e))
+* **prefs:** report a pick that added no rule ([002a5e9](https://github.com/everyx/csd-fixer/commit/002a5e92b2ce0e0e5c3da069172ebbfada5c925a))
+* **prefs:** simplify rules UI with instant inspect workflow ([ec2a425](https://github.com/everyx/csd-fixer/commit/ec2a4254eeabf32df77885fc900f2d295bb51d9f))
+* **rules:** isolate subwindows using native properties and zero-confirmation picker ([c8061c2](https://github.com/everyx/csd-fixer/commit/c8061c261b15c388b231a101924d90a863da996b))
+* **rules:** report whether a picked rule would change anything ([419c4b3](https://github.com/everyx/csd-fixer/commit/419c4b3d1fe8198a087b6d03347167cc96506184))
+* **rules:** split decoration rules into suppress and force groups ([1e59dbe](https://github.com/everyx/csd-fixer/commit/1e59dbebf8b21bd174127b60f2390172ac14bafe))
+
+
+### Bug Fixes
+
+* **detector:** drop the scale factor the content margins never needed ([8249095](https://github.com/everyx/csd-fixer/commit/824909580d5ad730022abdf652300ec0ebd5dc0a))
+* **detector:** narrow X11 native shadow skip to windows without frame extents ([f7edbe8](https://github.com/everyx/csd-fixer/commit/f7edbe853bec459907beeca001b7a685e099b48f))
+* **detector:** skip decoration on Mutter-managed X11 windows to prevent double shadows ([8c23d69](https://github.com/everyx/csd-fixer/commit/8c23d6963311c0299202c8f89a639f02266d6647))
+* **detector:** strictly align window tiling and tile-match behavior with Mutter ([5f0fedc](https://github.com/everyx/csd-fixer/commit/5f0fedcc76abfbb2198e57af5213c561b5d20b1f))
+* harden picker teardown and drop dead plumbing ([fd2dd67](https://github.com/everyx/csd-fixer/commit/fd2dd67e0edde6693f32508c9a8ff5d24c7ca047))
+* **inspector:** resolve app identity for windows without WM_CLASS ([346dba0](https://github.com/everyx/csd-fixer/commit/346dba0a6149bea7a1639e0efadbae105262701a))
+* **manager:** redraw the decoration when the theme switches to high contrast ([496e7f3](https://github.com/everyx/csd-fixer/commit/496e7f3a48643870bbf974b8b7d7cfd9244766f3))
+* **manager:** skip the clip effect when there is nothing to clip ([e8d9029](https://github.com/everyx/csd-fixer/commit/e8d9029e3bb19c94526817a51fb90c6a08823d0e))
+* **rules:** keep rules addressable for windows without WM_CLASS ([f92d7ea](https://github.com/everyx/csd-fixer/commit/f92d7eaad470180948726e12ded8c1fd1f5ef2df))
+* **shadow:** blend layers with alpha-over and hollow outset border ([c2e8a43](https://github.com/everyx/csd-fixer/commit/c2e8a436c6cb8e0a7e9844af2fff7d3a6101dbd9))
+* **shadow:** clear the bake, and take edge strips from the middle of an edge ([f13643b](https://github.com/everyx/csd-fixer/commit/f13643b1c89f4b67e0b4803a509450b138b13a13))
+* **shadow:** cross-fade a style change instead of delaying it ([8770d90](https://github.com/everyx/csd-fixer/commit/8770d904492bed9187e78ba8c02978eeb5e0eb9e))
+* **shadow:** destroy cached pipelines on extension disable ([7e27cc2](https://github.com/everyx/csd-fixer/commit/7e27cc2a132184c593f40fb98b25cba6ab32f72a))
+
+
+### Performance
+
+* **shadow:** bake the shadow once per style instead of per window per frame ([5e9360b](https://github.com/everyx/csd-fixer/commit/5e9360bc57134fc09f4bf9a57778cd3888506ce4))
+* stop redoing work that cannot change the result ([5034a1a](https://github.com/everyx/csd-fixer/commit/5034a1ad29e62681b6fe968aac889ee5f2b057da))
+
+
+### Documentation
+
+* add preview image and update development commands in README ([84d8917](https://github.com/everyx/csd-fixer/commit/84d8917c42a24333d4037f28a451536483f148ff))
+* align decoration model and development docs with current codebase ([822e797](https://github.com/everyx/csd-fixer/commit/822e797f8d0c4068b61c8048380bc43fea30c128))
+* align licence, rule description and dev setup with reality ([0b90a32](https://github.com/everyx/csd-fixer/commit/0b90a329cc18691c1376d6068862a524c4748e45))
+* align style docstring with shadow layer schema ([ccdf504](https://github.com/everyx/csd-fixer/commit/ccdf504546777c49ae63b162642f68d6c7729d85))
+* **detector:** correct X11 native shadow criteria description ([7abbd53](https://github.com/everyx/csd-fixer/commit/7abbd539a9c38de1dadb56afe3731332a539dbd4))
+* **detector:** tighten the commentary the reviewer's density check flags ([c3f82e6](https://github.com/everyx/csd-fixer/commit/c3f82e6e97bdb2df7c0f8b84a8e20957cd5e3dae))
+* **development:** record how to measure the effects in the nested session ([46d522d](https://github.com/everyx/csd-fixer/commit/46d522d18257af278f807ec092690b264f82113c))
+* highlight performance advantages in READMEs ([1b2efa3](https://github.com/everyx/csd-fixer/commit/1b2efa351b99cbf97282be9fb6fb926247b326b6))
+* move the background out of the comments and into docs/ ([5b23d15](https://github.com/everyx/csd-fixer/commit/5b23d15905864f4ca73983cb2ea2211030fbabd4))
+* **readme:** rewrite it for the people who will read it ([772f0d4](https://github.com/everyx/csd-fixer/commit/772f0d41cfff8128a238dbcc018f4bb42c557a3a))
+* record libadwaita decoration alignment measurements and probe tool ([f4b5a38](https://github.com/everyx/csd-fixer/commit/f4b5a382e5613af8d9ba3da34f558f7dbd9b6aa3))
+* record the decoration model outside the module it describes ([6bb79e9](https://github.com/everyx/csd-fixer/commit/6bb79e96acd51f3f98cf290ae117928e3c9843b0))
+* record why the shadow is not drawn or animated through CSS ([378e1bf](https://github.com/everyx/csd-fixer/commit/378e1bfd6d8e729ab82a4bd8071c0439cfdacd6c))
+* refresh rule feature description for the interactive picker ([a593769](https://github.com/everyx/csd-fixer/commit/a593769648678952887e29666f360dcb5d7819da))
+
 ## 0.1.0 (2026-09-09)
 
 
