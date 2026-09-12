@@ -158,10 +158,10 @@ echo "================================================================"
 echo " Analyzing Shell Log for Warnings, Errors, and Criticals"
 echo "================================================================"
 
-python3 - << 'PYEOF'
+python3 - "$LOG" << 'PYEOF'
 import sys, re
 
-log_path = "/tmp/csd-fixer-dev/shell.log"
+log_path = sys.argv[1]
 with open(log_path, "r", errors="ignore") as f:
     lines = f.readlines()
 

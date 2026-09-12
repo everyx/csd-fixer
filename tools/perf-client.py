@@ -4,7 +4,6 @@ CSD Fixer Performance Benchmark Client
 Runs an undecorated GTK4 window in idle or dynamic resize stress mode.
 """
 
-import sys
 import math
 import os
 import argparse

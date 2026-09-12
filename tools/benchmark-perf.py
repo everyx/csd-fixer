@@ -13,7 +13,6 @@ Usage:
 import sys
 import os
 import time
-import math
 import argparse
 import subprocess
 import json

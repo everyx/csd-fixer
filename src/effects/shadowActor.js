@@ -29,8 +29,6 @@ import {
     SHADOW_PAD,
 } from './shadowTexture.js';
 
-export {SHADOW_PAD};
-
 /** libadwaita's `$backdrop_transition`. */
 const FADE_MS = 200;
 

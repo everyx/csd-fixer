@@ -119,7 +119,7 @@ export function destroy() {
  * @param {Array<object>} shadows - Style shadow layers
  * @returns {Cogl.Pipeline|null} null when the buffer could not be allocated
  */
-export function shadowPipeline(context, radius, shadows) {
+function shadowPipeline(context, radius, shadows) {
     const key = `${radius}|${shadows.map(s => `${s.blur},${s.spread},${s.alpha}`).join(';')}`;
     const cached = pipelines.get(key);
     if (cached)

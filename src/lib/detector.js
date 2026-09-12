@@ -243,7 +243,7 @@ export function evaluateWindowActions({
  * @param {{direction: string, key: string, axes: Iterable<string>}} rule
  * @returns {boolean}
  */
-export function ruleWouldChangeActions(params, {direction, key, axes}) {
+function ruleWouldChangeActions(params, {direction, key, axes}) {
     const before = evaluateWindowActions(params);
     const after = evaluateWindowActions({
         ...params,

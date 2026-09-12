@@ -31,5 +31,3 @@ export const ADWAITA_STYLE = {
         },
     },
 };
-
-export {ADWAITA_STYLE as STYLE};

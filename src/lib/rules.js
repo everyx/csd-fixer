@@ -32,7 +32,7 @@ export const RULE_AXIS_ORDER = [RuleAxis.SHADOW, RuleAxis.CORNERS];
 // Parenthesised: a bare `a|b` would let the `^` bind to the first alternative only.
 const RULE_AXIS_PATTERN = `(?:${RULE_AXIS_ORDER.join('|')})`;
 /** A rule value names one or both axes, in canonical order. */
-export const VALID_RULE_VALUE_PATTERN = new RegExp(
+const VALID_RULE_VALUE_PATTERN = new RegExp(
     `^${RULE_AXIS_PATTERN}(?:,${RULE_AXIS_PATTERN})?$`
 );
 /**
@@ -139,7 +139,7 @@ const FINGERPRINT_SPECIFIER_PATTERN = [
     `${FP_ALLOWS_RESIZE}=(?:true|false)`,
     `${FP_ATTACHED_DIALOG}=(?:true|false)`,
 ].join(',');
-export const VALID_RULE_KEY_PATTERN = new RegExp(
+const VALID_RULE_KEY_PATTERN = new RegExp(
     `^[^\\s:]+:${FINGERPRINT_SPECIFIER_PATTERN}$`
 );
 /**
