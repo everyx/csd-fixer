@@ -166,21 +166,52 @@ In `tools/gen-shader.mjs`:
 - `SNAP_BLEED = 0.8` is retained, guaranteeing zero risk of subpixel white gaps under
   fractional scaling.
 
-### Measured profile comparison
+### Golden Baseline at 1.0x Integer Scale
 
-Red body over white backdrop on bottom edge:
+Measurements on a 1.0x virtual monitor (`1920x1080`, scale=1.0) in an isolated session
+provide the definitive ground truth without fractional scaling distortion.
 
+#### Ghost window cascade discovery
+An earlier measurement reported native libadwaita having a 10px top/left shadow and a 22px
+bottom/right shadow. Investigation revealed that the test harness did not terminate child
+`gjs` processes; Mutter cascade-placed the native window offset by `(+50, +50)` over an
+unclosed CSD window, and the bounding box detector sampled a composite of both. In a clean,
+isolated session, **native libadwaita is 100% four-way symmetric**, precisely matching its
+SCSS definition (`box-shadow: 0 0 14px 5px ..., 0 0 5px 2px ..., 0 0 0 1px ...`).
+
+#### Attenuation Profile (0 to 22px outwards, Red body over White backdrop)
+
+| Offset (px) | CSD Fixer (4-way symmetric) | Native Libadwaita (4-way symmetric) | Delta (G) | Notes |
+| :---: | :---: | :---: | :---: | :--- |
+| **0 (outline)** | **9** | **18** | -9 | 1px inner outline (G channel over Red body) |
+| **+1** | **191** | **199** | **-8** | First shadow pixel outside window |
+| **+2** | **208** | **216** | **-8** | Smooth parallel decay |
+| **+3** | **218** | **221** | **-3** | Rapid convergence |
+| **+4** | **227** | **227** | **±0** | **Exact match** |
+| **+5** | **233** | **231** | **+2** | |
+| **+6** | **238** | **235** | **+3** | |
+| **+7** | **242** | **238** | **+4** | |
+| **+8** | **246** | **241** | **+5** | |
+| **+9** | **249** | **243** | **+6** | |
+| **+10** | **251** | **245** | **+6** | |
+| **+11** | **253** | **247** | **+6** | |
+| **+12** | **254** | **248** | **+6** | |
+| **+13** | **254** | **250** | **+4** | |
+| **+14** | **255 (white)** | **251** | **+4** | CSD Fixer fades into pure white |
+| **+15 ~ +21** | 255 | 252 ~ 254 | +1 ~ +3 | Sub-1% native tail |
+| **+22** | 255 | **255 (white)** | **±0** | Native fades into pure white |
+
+Both curves are strictly monotonic. Across the primary visible range (+1 to +10px), CSD Fixer
+tracks native curvature closely with an average deviation under 5 grey levels, zero banding,
+and 100% four-way symmetry.
+
+### Automated Benchmark Tool
+
+To measure the current decoration against this baseline and prevent visual regressions:
+
+```bash
+pnpm run benchmark          # Print full comparison report against golden baseline
+pnpm run benchmark:check    # CI check: exit 1 if deviation > 1 grey level
 ```
-offset      0    1    2    3    4    5
-Native    248  199  215  219  223  227
-Old CSD   248  185  210  218  226  233
-New CSD   248  191  212  220  227  233
-```
 
-- Offset `+1` jumped from 185 to 191 (delta from native cut in half, from 14 down to 8).
-- Offset `+4` is an exact match at 227.
-- Offset `+5` differs by only 2 grey levels (233 vs 231).
-- Furthermore, native libadwaita itself exhibits subpixel phase asymmetry on fractional
-  scaling (e.g. top/left measures ~223 at `+1` while bottom/right measures ~199 due to
-  subpixel rounding in GSK). The shader's 191 falls well within this physical tolerance
-  while preserving 100% four-way symmetry.
+Source: `tools/benchmark-decoration.py`.
