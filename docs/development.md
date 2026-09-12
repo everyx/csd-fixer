@@ -99,6 +99,11 @@ meant to be maximized: a maximized window is one the detector never decorates, s
 background rather than subject. That beats changing the desktop background, which alters
 something outside the session under test.
 
+`CSD_FIXER_BODY=#rrggbb` paints the window body a known colour. Against the white backdrop
+and a black shadow the three channels then separate the body, the 1px outline and the shadow
+in one profile, and a missing corner clip becomes visible — none of which can be seen when
+the window and the background are both white.
+
 Prototype actors must be destroyed and any `GLib` sources removed before
 `tools/dev.sh stop`, otherwise the next run inherits them.
 
@@ -107,6 +112,7 @@ Prototype actors must be destroyed and any `GLib` sources removed before
 | Document | Contents |
 |---|---|
 | [decoration-model.md](decoration-model.md) | how a window's decoration is decided, and where it diverges from Mutter on purpose |
+| [decoration-alignment.md](decoration-alignment.md) | how the decoration is measured against libadwaita, what is verified, and what is still open |
 | [rule-model.md](rule-model.md) | the rule key and value format, the two groups, identity resolution |
 | [architecture.md](architecture.md) | modules, the two processes, the actors |
 | [shell-compatibility.md](shell-compatibility.md) | the Shell/Mutter API surface and the rules we work by |
