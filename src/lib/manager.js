@@ -22,6 +22,7 @@ import {resolveWindowIdentity} from './window.js';
 import {styleForWindow} from './style.js';
 import {RoundedClipEffect} from '../effects/clipEffect.js';
 import {ShadowActor} from '../effects/shadowActor.js';
+import * as shadowTexture from '../effects/shadowTexture.js';
 
 const CLIENT_TYPE_X11 = Meta.WindowClientType.X11;
 
@@ -86,6 +87,7 @@ export class Manager {
         this._settingsHandlerIds?.forEach(id => this._settings.disconnect(id));
         this._settingsHandlerIds = [];
         this._rules = null;
+        shadowTexture.destroy();
     }
 
     /** Keeps the per-window scan reading the same values for a whole batch. */

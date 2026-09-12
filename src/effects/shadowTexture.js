@@ -103,6 +103,14 @@ export function shadowSlices({corner, window, buffer}, width, height) {
 const pipelines = new Map();
 
 /**
+ * Clears the baked pipeline cache. Called when the extension is disabled
+ * so no module-scope pipeline or texture handles survive in memory.
+ */
+export function destroy() {
+    pipelines.clear();
+}
+
+/**
  * The pipeline that draws a shadow style, from the cache or freshly baked. Windows
  * sharing a style share the pipeline.
  *
