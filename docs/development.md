@@ -19,6 +19,10 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 |---|---|
 | `pnpm test` | unit tests, run under gjs |
 | `pnpm run test:e2e` | headless end-to-end run in a nested session: lifecycle, resize/move stress, a zero-warning audit of the log |
+| `pnpm run benchmark` | visual decoration attenuation benchmark against 1.0x golden baseline |
+| `pnpm run benchmark:check` | zero visual regression guard (exits 1 if attenuation profile or symmetry drifts) |
+| `pnpm run benchmark:perf` | CPU and memory footprint benchmark for undecorated windows (Disabled vs Enabled) |
+| `pnpm run benchmark:perf:check` | automated performance budget guard (exits 1 if CPU/RAM regression exceeds budget) |
 | `pnpm run check-style` | re-derives the generated style, shader, Mutter and locale artifacts from their sources and fails if they drifted |
 | `pnpm run ego-lint` | the EGO review tool; `EGO_LINT` overrides which checkout it runs |
 | `pnpm run pack` | builds `dist/<uuid>.zip` |

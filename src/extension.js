@@ -4,9 +4,9 @@
  * Architecture (module responsibilities):
  *   detector  determines whether a window needs decoration (geometry criteria)
  *   style     decoration style state machine (tracks libadwaita window.csd)
- *   effects   rounded clipping + SDF analytical Gaussian shadows (Shell.GLSLEffect)
- *   shadow    shadow actor lifecycle and constraints
+ *   effects   rounded clipping (GLSLEffect) + baked Cogl shadow texture pipeline
  *   manager   state machine responding to window lifecycle, focus, and display changes
+ *   inspector interactive window picker and D-Bus service for preferences
  */
 
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';

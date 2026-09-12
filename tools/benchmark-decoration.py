@@ -34,6 +34,7 @@ def ensure_session():
     if not os.path.exists(PID_FILE):
         print(">> Starting nested shell via dev.sh...")
         subprocess.check_call([os.path.join(ROOT, "tools", "dev.sh"), "shell"])
+        time.sleep(2.0)
     pid = open(PID_FILE).read().strip()
     raw_env = open(f"/proc/{pid}/environ", "rb").read().split(b"\0")
     bus = [x.decode() for x in raw_env if x.startswith(b"DBUS_SESSION_BUS_ADDRESS=")][0].split("=", 1)[1]
@@ -171,54 +172,57 @@ def main():
 
     env = ensure_session()
 
-    print(">> Measuring CSD Fixer decoration profile...")
-    csd = measure_target(False, env)
+    try:
+        print(">> Measuring CSD Fixer decoration profile...")
+        csd = measure_target(False, env)
 
-    # Check symmetry
-    is_symmetric = (csd["bottom"] == csd["top"] == csd["left"] == csd["right"])
-    measured_profile = csd["bottom"]
+        # Check symmetry
+        is_symmetric = (csd["bottom"] == csd["top"] == csd["left"] == csd["right"])
+        measured_profile = csd["bottom"]
 
-    print("\n" + "=" * 76)
-    print("                CSD FIXER DECORATION BENCHMARK REPORT")
-    print("=" * 76)
-    print(f"Window Geometry : {csd['width']}x{csd['height']} (expected 440x280)")
-    print(f"Symmetry Status : {'PASS (100% 4-way symmetric)' if is_symmetric else 'FAIL (edges diverge)'}")
-    print("-" * 76)
+        print("\n" + "=" * 76)
+        print("                CSD FIXER DECORATION BENCHMARK REPORT")
+        print("=" * 76)
+        print(f"Window Geometry : {csd['width']}x{csd['height']} (expected 440x280)")
+        print(f"Symmetry Status : {'PASS (100% 4-way symmetric)' if is_symmetric else 'FAIL (edges diverge)'}")
+        print("-" * 76)
 
-    header = f"{'Offset':<7} | {'Current CSD':<12} | {'Baseline CSD':<13} | {'Baseline Native':<15} | {'CSD Delta':<9}"
-    print(header)
-    print("-" * 76)
+        header = f"{'Offset':<7} | {'Current CSD':<12} | {'Baseline CSD':<13} | {'Baseline Native':<15} | {'CSD Delta':<9}"
+        print(header)
+        print("-" * 76)
 
-    max_rows = 18
-    max_dev = 0
-    for off in range(max_rows):
-        cur = measured_profile[off]
-        base_csd = BASELINE_CSD[off] if off < len(BASELINE_CSD) else 255
-        base_nat = BASELINE_NATIVE[off] if off < len(BASELINE_NATIVE) else 255
-        delta = cur - base_csd
-        if abs(delta) > max_dev:
-            max_dev = abs(delta)
-        delta_str = f"{delta:+d}" if delta != 0 else "0"
-        print(f"{off:<7d} | {cur:<12d} | {base_csd:<13d} | {base_nat:<15d} | {delta_str:<9}")
+        max_rows = 18
+        max_dev = 0
+        for off in range(max_rows):
+            cur = measured_profile[off]
+            base_csd = BASELINE_CSD[off] if off < len(BASELINE_CSD) else 255
+            base_nat = BASELINE_NATIVE[off] if off < len(BASELINE_NATIVE) else 255
+            delta = cur - base_csd
+            if abs(delta) > max_dev:
+                max_dev = abs(delta)
+            delta_str = f"{delta:+d}" if delta != 0 else "0"
+            print(f"{off:<7d} | {cur:<12d} | {base_csd:<13d} | {base_nat:<15d} | {delta_str:<9}")
 
-    print("-" * 76)
-    print(f"Max Deviation from CSD Baseline: {max_dev} gray level(s)")
+        print("-" * 76)
+        print(f"Max Deviation from CSD Baseline: {max_dev} gray level(s)")
 
-    if args.native:
-        print("\n>> Measuring live Native Libadwaita decoration profile...")
-        nat = measure_target(True, env)
-        nat_symmetric = (nat["bottom"] == nat["top"] == nat["left"] == nat["right"])
-        print(f"Native Symmetry : {'PASS (100% 4-way symmetric)' if nat_symmetric else 'FAIL'}")
-        print(f"Native Profile  : {nat['bottom'][:18]}")
+        if args.native:
+            print("\n>> Measuring live Native Libadwaita decoration profile...")
+            nat = measure_target(True, env)
+            nat_symmetric = (nat["bottom"] == nat["top"] == nat["left"] == nat["right"])
+            print(f"Native Symmetry : {'PASS (100% 4-way symmetric)' if nat_symmetric else 'FAIL'}")
+            print(f"Native Profile  : {nat['bottom'][:18]}")
 
-    if args.check:
-        if not is_symmetric:
-            print("\n[FAIL] Four-side symmetry check failed!")
-            sys.exit(1)
-        if max_dev > 1:
-            print(f"\n[FAIL] Max deviation ({max_dev}) exceeded tolerance (<= 1)!")
-            sys.exit(1)
-        print("\n[OK] Benchmark verification passed: zero regression.")
+        if args.check:
+            if not is_symmetric:
+                print("\n[FAIL] Four-side symmetry check failed!")
+                sys.exit(1)
+            if max_dev > 1:
+                print(f"\n[FAIL] Max deviation ({max_dev}) exceeded tolerance (<= 1)!")
+                sys.exit(1)
+            print("\n[OK] Benchmark verification passed: zero regression.")
+    finally:
+        subprocess.call(["pkill", "-9", "-f", "probe-window.js"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 if __name__ == "__main__":
     main()

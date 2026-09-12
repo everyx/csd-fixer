@@ -16,7 +16,7 @@ tested without a session; the processes only gather inputs and apply results.
 | `lib/window.js` | shell-side identity gathering (`Shell.WindowTracker`, live window list) |
 | `lib/manager.js` | state machine: window lifecycle, focus and display changes to effects |
 | `lib/inspector.js` | the interactive window picker and its D-Bus service |
-| `effects/` | rounded clipping and the SDF Gaussian shadow (`Shell.GLSLEffect`) |
+| `effects/` | rounded clipping (`clipEffect.js`), shadow actor geometry (`shadowActor.js`), and baked GPU shadow textures (`shadowTexture.js`, `shadowShader.generated.js`) |
 
 ## The two processes
 
@@ -38,9 +38,10 @@ Clutter event grab.
 ## Actors
 
 Every decorated window gets a `ShadowActor` inserted below the window actor in
-`global.window_group`, carrying an `SdfShadowEffect` (analytical Gaussian shadow) and,
-when there is something to clip, a `RoundedClipEffect` (offscreen pass). The manager
-keeps one state record per window and reconciles add, remove and update on every
+`global.window_group`, drawing an 8-slice baked Cogl shadow texture (`effects/shadowTexture.js`)
+with Clutter property and constraint bindings (`Clutter.BindConstraint`), and,
+when there is something to clip, a `RoundedClipEffect` (`Shell.GLSLEffect` offscreen pass).
+The manager keeps one state record per window and reconciles add, remove and update on every
 state change.
 
 A rule that the picker refuses, and what the prefs window shows instead, is in

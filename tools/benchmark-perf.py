@@ -223,129 +223,132 @@ def main():
     results_disabled = []
     results_enabled = []
 
-    print(">> Benchmarking with Extension DISABLED...")
-    for r in range(1, rounds + 1):
-        sys.stdout.write(f"   Round {r}/{rounds}... ")
-        sys.stdout.flush()
-        res = run_single_test(False, r, shell_pid, bus, idle_secs=idle_secs, stress_steps=stress_steps)
-        results_disabled.append(res)
-        print(f"Idle CPU: {res['idle_cpu_pct']:.2f}%, Stress CPU: {res['stress_cpu_ms']:.1f}ms ({res['stress_cpu_pct']:.1f}%), Delta PSS: {res['window_delta_pss']:+d}KB")
+    try:
+        print(">> Benchmarking with Extension DISABLED...")
+        for r in range(1, rounds + 1):
+            sys.stdout.write(f"   Round {r}/{rounds}... ")
+            sys.stdout.flush()
+            res = run_single_test(False, r, shell_pid, bus, idle_secs=idle_secs, stress_steps=stress_steps)
+            results_disabled.append(res)
+            print(f"Idle CPU: {res['idle_cpu_pct']:.2f}%, Stress CPU: {res['stress_cpu_ms']:.1f}ms ({res['stress_cpu_pct']:.1f}%), Delta PSS: {res['window_delta_pss']:+d}KB")
 
-    print("\n>> Benchmarking with Extension ENABLED...")
-    for r in range(1, rounds + 1):
-        sys.stdout.write(f"   Round {r}/{rounds}... ")
-        sys.stdout.flush()
-        res = run_single_test(True, r, shell_pid, bus, idle_secs=idle_secs, stress_steps=stress_steps)
-        results_enabled.append(res)
-        print(f"Idle CPU: {res['idle_cpu_pct']:.2f}%, Stress CPU: {res['stress_cpu_ms']:.1f}ms ({res['stress_cpu_pct']:.1f}%), Delta PSS: {res['window_delta_pss']:+d}KB")
+        print("\n>> Benchmarking with Extension ENABLED...")
+        for r in range(1, rounds + 1):
+            sys.stdout.write(f"   Round {r}/{rounds}... ")
+            sys.stdout.flush()
+            res = run_single_test(True, r, shell_pid, bus, idle_secs=idle_secs, stress_steps=stress_steps)
+            results_enabled.append(res)
+            print(f"Idle CPU: {res['idle_cpu_pct']:.2f}%, Stress CPU: {res['stress_cpu_ms']:.1f}ms ({res['stress_cpu_pct']:.1f}%), Delta PSS: {res['window_delta_pss']:+d}KB")
 
-    def avg(lst, key):
-        return sum(x[key] for x in lst) / len(lst)
+        def avg(lst, key):
+            return sum(x[key] for x in lst) / len(lst)
 
-    dis_idle_cpu = avg(results_disabled, "idle_cpu_pct")
-    ena_idle_cpu = avg(results_enabled, "idle_cpu_pct")
-    delta_idle_cpu = ena_idle_cpu - dis_idle_cpu
+        dis_idle_cpu = avg(results_disabled, "idle_cpu_pct")
+        ena_idle_cpu = avg(results_enabled, "idle_cpu_pct")
+        delta_idle_cpu = ena_idle_cpu - dis_idle_cpu
 
-    dis_stress_cpu_ms = avg(results_disabled, "stress_cpu_ms")
-    ena_stress_cpu_ms = avg(results_enabled, "stress_cpu_ms")
-    delta_stress_cpu_ms = ena_stress_cpu_ms - dis_stress_cpu_ms
+        dis_stress_cpu_ms = avg(results_disabled, "stress_cpu_ms")
+        ena_stress_cpu_ms = avg(results_enabled, "stress_cpu_ms")
+        delta_stress_cpu_ms = ena_stress_cpu_ms - dis_stress_cpu_ms
 
-    dis_stress_cpu_pct = avg(results_disabled, "stress_cpu_pct")
-    ena_stress_cpu_pct = avg(results_enabled, "stress_cpu_pct")
-    delta_stress_cpu_pct = ena_stress_cpu_pct - dis_stress_cpu_pct
+        dis_stress_cpu_pct = avg(results_disabled, "stress_cpu_pct")
+        ena_stress_cpu_pct = avg(results_enabled, "stress_cpu_pct")
+        delta_stress_cpu_pct = ena_stress_cpu_pct - dis_stress_cpu_pct
 
-    dis_win_rss = avg(results_disabled, "window_delta_rss")
-    ena_win_rss = avg(results_enabled, "window_delta_rss")
-    delta_win_rss = ena_win_rss - dis_win_rss
+        dis_win_rss = avg(results_disabled, "window_delta_rss")
+        ena_win_rss = avg(results_enabled, "window_delta_rss")
+        delta_win_rss = ena_win_rss - dis_win_rss
 
-    dis_win_pss = avg(results_disabled, "window_delta_pss")
-    ena_win_pss = avg(results_enabled, "window_delta_pss")
-    delta_win_pss = ena_win_pss - dis_win_pss
+        dis_win_pss = avg(results_disabled, "window_delta_pss")
+        ena_win_pss = avg(results_enabled, "window_delta_pss")
+        delta_win_pss = ena_win_pss - dis_win_pss
 
-    dis_win_dirty = avg(results_disabled, "window_delta_dirty")
-    ena_win_dirty = avg(results_enabled, "window_delta_dirty")
-    delta_win_dirty = ena_win_dirty - dis_win_dirty
+        dis_win_dirty = avg(results_disabled, "window_delta_dirty")
+        ena_win_dirty = avg(results_enabled, "window_delta_dirty")
+        delta_win_dirty = ena_win_dirty - dis_win_dirty
 
-    print("\n" + "=" * 76)
-    print("                    PERFORMANCE BENCHMARK RESULTS")
-    print("=" * 76)
-    header = f"{'Metric':<36} | {'Disabled':<14} | {'Enabled':<14} | {'Delta':<12}"
-    print(header)
-    print("-" * 76)
-    print(f"{'Idle CPU Usage':<36} | {dis_idle_cpu:>13.2f}% | {ena_idle_cpu:>13.2f}% | {delta_idle_cpu:>+11.2f}%")
-    print(f"{'Stress Active CPU Time':<36} | {dis_stress_cpu_ms:>11.1f} ms | {ena_stress_cpu_ms:>11.1f} ms | {delta_stress_cpu_ms:>+9.1f} ms")
-    print(f"{'Stress Active CPU Load':<36} | {dis_stress_cpu_pct:>13.1f}% | {ena_stress_cpu_pct:>13.1f}% | {delta_stress_cpu_pct:>+11.1f}%")
-    print("-" * 76)
-    print(f"{'Per-Window RAM (RSS Delta)':<36} | {dis_win_rss:>11.1f} KB | {ena_win_rss:>11.1f} KB | {delta_win_rss:>+9.1f} KB")
-    print(f"{'Per-Window RAM (PSS Delta)':<36} | {dis_win_pss:>11.1f} KB | {ena_win_pss:>11.1f} KB | {delta_win_pss:>+9.1f} KB")
-    print(f"{'Per-Window RAM (Private Dirty)':<36} | {dis_win_dirty:>11.1f} KB | {ena_win_dirty:>11.1f} KB | {delta_win_dirty:>+9.1f} KB")
-    print("=" * 76)
+        print("\n" + "=" * 76)
+        print("                    PERFORMANCE BENCHMARK RESULTS")
+        print("=" * 76)
+        header = f"{'Metric':<36} | {'Disabled':<14} | {'Enabled':<14} | {'Delta':<12}"
+        print(header)
+        print("-" * 76)
+        print(f"{'Idle CPU Usage':<36} | {dis_idle_cpu:>13.2f}% | {ena_idle_cpu:>13.2f}% | {delta_idle_cpu:>+11.2f}%")
+        print(f"{'Stress Active CPU Time':<36} | {dis_stress_cpu_ms:>11.1f} ms | {ena_stress_cpu_ms:>11.1f} ms | {delta_stress_cpu_ms:>+9.1f} ms")
+        print(f"{'Stress Active CPU Load':<36} | {dis_stress_cpu_pct:>13.1f}% | {ena_stress_cpu_pct:>13.1f}% | {delta_stress_cpu_pct:>+11.1f}%")
+        print("-" * 76)
+        print(f"{'Per-Window RAM (RSS Delta)':<36} | {dis_win_rss:>11.1f} KB | {ena_win_rss:>11.1f} KB | {delta_win_rss:>+9.1f} KB")
+        print(f"{'Per-Window RAM (PSS Delta)':<36} | {dis_win_pss:>11.1f} KB | {ena_win_pss:>11.1f} KB | {delta_win_pss:>+9.1f} KB")
+        print(f"{'Per-Window RAM (Private Dirty)':<36} | {dis_win_dirty:>11.1f} KB | {ena_win_dirty:>11.1f} KB | {delta_win_dirty:>+9.1f} KB")
+        print("=" * 76)
 
-    # Re-enable extension at the end of run so developer session remains active
-    set_extension_state(True, bus)
+        # Re-enable extension at the end of run so developer session remains active
+        set_extension_state(True, bus)
 
-    summary_data = {
-        "disabled": results_disabled,
-        "enabled": results_enabled,
-        "averages": {
-            "disabled": {
-                "idle_cpu_pct": dis_idle_cpu,
-                "stress_cpu_ms": dis_stress_cpu_ms,
-                "stress_cpu_pct": dis_stress_cpu_pct,
-                "win_rss_kb": dis_win_rss,
-                "win_pss_kb": dis_win_pss,
-                "win_dirty_kb": dis_win_dirty,
-            },
-            "enabled": {
-                "idle_cpu_pct": ena_idle_cpu,
-                "stress_cpu_ms": ena_stress_cpu_ms,
-                "stress_cpu_pct": ena_stress_cpu_pct,
-                "win_rss_kb": ena_win_rss,
-                "win_pss_kb": ena_win_pss,
-                "win_dirty_kb": ena_win_dirty,
-            },
-            "delta": {
-                "idle_cpu_pct": delta_idle_cpu,
-                "stress_cpu_ms": delta_stress_cpu_ms,
-                "stress_cpu_pct": delta_stress_cpu_pct,
-                "win_rss_kb": delta_win_rss,
-                "win_pss_kb": delta_win_pss,
-                "win_dirty_kb": delta_win_dirty,
+        summary_data = {
+            "disabled": results_disabled,
+            "enabled": results_enabled,
+            "averages": {
+                "disabled": {
+                    "idle_cpu_pct": dis_idle_cpu,
+                    "stress_cpu_ms": dis_stress_cpu_ms,
+                    "stress_cpu_pct": dis_stress_cpu_pct,
+                    "win_rss_kb": dis_win_rss,
+                    "win_pss_kb": dis_win_pss,
+                    "win_dirty_kb": dis_win_dirty,
+                },
+                "enabled": {
+                    "idle_cpu_pct": ena_idle_cpu,
+                    "stress_cpu_ms": ena_stress_cpu_ms,
+                    "stress_cpu_pct": ena_stress_cpu_pct,
+                    "win_rss_kb": ena_win_rss,
+                    "win_pss_kb": ena_win_pss,
+                    "win_dirty_kb": ena_win_dirty,
+                },
+                "delta": {
+                    "idle_cpu_pct": delta_idle_cpu,
+                    "stress_cpu_ms": delta_stress_cpu_ms,
+                    "stress_cpu_pct": delta_stress_cpu_pct,
+                    "win_rss_kb": delta_win_rss,
+                    "win_pss_kb": delta_win_pss,
+                    "win_dirty_kb": delta_win_dirty,
+                }
             }
         }
-    }
 
-    if args.json:
-        with open(args.json, "w") as f:
-            json.dump(summary_data, f, indent=2)
-        print(f"Results saved to {args.json}")
+        if args.json:
+            with open(args.json, "w") as f:
+                json.dump(summary_data, f, indent=2)
+            print(f"Results saved to {args.json}")
 
-    if args.check:
-        print("\n>> Checking Performance Budgets...")
-        failed = False
-        if delta_idle_cpu > BUDGET_MAX_IDLE_CPU_DELTA_PCT:
-            print(f"!! [FAIL] Idle CPU delta ({delta_idle_cpu:+.2f}%) exceeds budget (+{BUDGET_MAX_IDLE_CPU_DELTA_PCT:.1f}%)")
-            failed = True
-        else:
-            print(f"OK [PASS] Idle CPU delta ({delta_idle_cpu:+.2f}%) within budget (+{BUDGET_MAX_IDLE_CPU_DELTA_PCT:.1f}%)")
+        if args.check:
+            print("\n>> Checking Performance Budgets...")
+            failed = False
+            if delta_idle_cpu > BUDGET_MAX_IDLE_CPU_DELTA_PCT:
+                print(f"!! [FAIL] Idle CPU delta ({delta_idle_cpu:+.2f}%) exceeds budget (+{BUDGET_MAX_IDLE_CPU_DELTA_PCT:.1f}%)")
+                failed = True
+            else:
+                print(f"OK [PASS] Idle CPU delta ({delta_idle_cpu:+.2f}%) within budget (+{BUDGET_MAX_IDLE_CPU_DELTA_PCT:.1f}%)")
 
-        if delta_stress_cpu_ms > BUDGET_MAX_STRESS_CPU_DELTA_MS:
-            print(f"!! [FAIL] Stress CPU delta ({delta_stress_cpu_ms:+.1f}ms) exceeds budget (+{BUDGET_MAX_STRESS_CPU_DELTA_MS:.1f}ms)")
-            failed = True
-        else:
-            print(f"OK [PASS] Stress CPU delta ({delta_stress_cpu_ms:+.1f}ms) within budget (+{BUDGET_MAX_STRESS_CPU_DELTA_MS:.1f}ms)")
+            if delta_stress_cpu_ms > BUDGET_MAX_STRESS_CPU_DELTA_MS:
+                print(f"!! [FAIL] Stress CPU delta ({delta_stress_cpu_ms:+.1f}ms) exceeds budget (+{BUDGET_MAX_STRESS_CPU_DELTA_MS:.1f}ms)")
+                failed = True
+            else:
+                print(f"OK [PASS] Stress CPU delta ({delta_stress_cpu_ms:+.1f}ms) within budget (+{BUDGET_MAX_STRESS_CPU_DELTA_MS:.1f}ms)")
 
-        if delta_win_pss > BUDGET_MAX_PER_WINDOW_PSS_KB:
-            print(f"!! [FAIL] Per-window PSS RAM delta ({delta_win_pss:+.1f}KB) exceeds budget (+{BUDGET_MAX_PER_WINDOW_PSS_KB:.1f}KB)")
-            failed = True
-        else:
-            print(f"OK [PASS] Per-window PSS RAM delta ({delta_win_pss:+.1f}KB) within budget (+{BUDGET_MAX_PER_WINDOW_PSS_KB:.1f}KB)")
+            if delta_win_pss > BUDGET_MAX_PER_WINDOW_PSS_KB:
+                print(f"!! [FAIL] Per-window PSS RAM delta ({delta_win_pss:+.1f}KB) exceeds budget (+{BUDGET_MAX_PER_WINDOW_PSS_KB:.1f}KB)")
+                failed = True
+            else:
+                print(f"OK [PASS] Per-window PSS RAM delta ({delta_win_pss:+.1f}KB) within budget (+{BUDGET_MAX_PER_WINDOW_PSS_KB:.1f}KB)")
 
-        if failed:
-            print("\n>> Performance budget check FAILED.")
-            sys.exit(1)
-        else:
-            print("\n>> All performance budgets PASSED.")
+            if failed:
+                print("\n>> Performance budget check FAILED.")
+                sys.exit(1)
+            else:
+                print("\n>> All performance budgets PASSED.")
+    finally:
+        subprocess.call(["pkill", "-9", "-f", "perf-client.py"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 if __name__ == "__main__":
     main()
