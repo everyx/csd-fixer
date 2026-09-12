@@ -1,3 +1,5 @@
+![CSD Fixer](assets/logo.svg)
+
 # CSD Fixer
 
 [English](README.md) | [简体中文](README.zh-CN.md)
