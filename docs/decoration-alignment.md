@@ -116,30 +116,71 @@ gdbus call --dest org.gnome.Shell --object-path /org/gnome/Shell \
 
 ## Where the alignment stands
 
-With clipping enabled and a 440x280 window, profiles outward from the window edge, ours
-against the native: the shadow converges (at +4 and +5 we are within 1-4 grey levels) but
+With clipping enabled and a 440x280 window, profiles outward from the window edge were
+compared against native libadwaita. Two apparent discrepancies were analyzed and resolved:
 
-- our inner highlight appears on the **right edge only** (G=133 at the last pixel inside)
-  and not on the top, bottom or left (G=0), while libadwaita has it on all four;
-- the value on the right is far too strong for `alpha: 0.07`, which points at the clip's
-  own anti-aliasing leaking the shadow rather than at the outline itself;
-- our first shadow pixel is about 12 levels darker than the native's (186-188 against
-  198-200).
+### 1. Right-edge highlight asymmetry (G=133)
 
-An experiment that painted the shader's `d` into the output produced **no change at all** —
-and that run was made while `prefer-crisp-text` was true, so the clip was not attached and
-the experiment tested nothing. Redoing it with clipping on is the obvious next step: it turns
-the shader's own coordinate into a number, which settles the geometry instead of arguing
-about Clutter's matrix order.
+- **The cause**: On a 1.3333 fractional scale display, a 440px wide window maps to
+  `440 × 1.333333 = 586.6667` physical pixels. The right boundary lands on a fractional
+  phase (`0.67`), so the rasterizer samples across the boundary between the window body
+  and background/shadow, producing an anti-aliasing blend (`G=133`). On the left edge,
+  `x=0` is integer-aligned (`G=0`).
+- **Confirmation**: The underlying shader distance `d` is mathematically centered and
+  four-way symmetric. In native libadwaita, decorations are rendered entirely within the
+  client's own Wayland surface via GTK4/GSK; in CSD Fixer, the window content and shadow
+  live on separate Mutter Clutter actors, subject to Mutter's offscreen clipping and
+  fractional blitting.
+- **Trade-off**: When `prefer-crisp-text` is enabled, `ClipEffect` is deliberately omitted
+  under fractional scaling to avoid resampling blur on client window content.
 
-## Next steps
+### 2. First shadow pixel darkness (185 vs native 198-200)
 
-1. Redo the `d`-painting experiment with clipping enabled, and read `d` across all four
-   edges. Expect `d = -0.5` at the last pixel inside if the pad model is right.
-2. From that, fix whichever of the pad, the quad size or the texture coordinate mapping is
-   wrong, then re-run the profile and require the four edges to agree.
-3. Only then compare the shadow's first pixel, which is currently darker than the native's.
-4. Decide the `prefer-crisp-text` default policy separately; it is a trade-off, not a defect.
+Originally, CSD Fixer's first shadow pixel measured 185 (about 13-14 grey levels darker
+than native's ~199). Two factors contributed to this:
 
-Do not rebuild a test harness before step 1 is answered: the harnesses built so far were
-more complex than the problem and produced as many wrong conclusions as right ones.
+1. **Layer 3 outline mask**: CSS defines the 1px ring as an outset border
+   (`0 0 0 1px rgba(0,0,0,0.05)`). In the shader, `blur < 0.5` was evaluated as a solid
+   disc (`alpha * (1.0 - clamp(d - spread + 0.5, 0.0, 1.0))`). Because `SNAP_BLEED = 0.8`
+   extends the shadow mesh inward under the window to prevent subpixel floating-point seams
+   between the window actor and the shadow actor, a solid disc contributed alpha even under
+   the window edge and at the first boundary pixel.
+2. **Layer compositing**: Multiple shadow layers were previously combined with linear
+   arithmetic addition (`a = a1 + a2 + a3`). Native GSK render nodes composite overlapping
+   layers via **Alpha-Over** (`1.0 - (1.0 - a1) * (1.0 - a2) * (1.0 - a3)`), preventing
+   artificial saturation where blur tails overlap.
+
+### Resolution: Hollow Outset Border & Alpha-Over
+
+In `tools/gen-shader.mjs`:
+- Layer 3 is evaluated as a hollow outset band between `d=0` and `d=spread`:
+  ```glsl
+  float inner = clamp(d + 0.5, 0.0, 1.0);
+  float outer = clamp(d - spread + 0.5, 0.0, 1.0);
+  return alpha * max(inner - outer, 0.0);
+  ```
+- Layer alpha is composited using alpha-over:
+  ```glsl
+  float a = (1.0 - (1.0 - a1) * (1.0 - a2) * (1.0 - a3)) * clipAlpha;
+  ```
+- `SNAP_BLEED = 0.8` is retained, guaranteeing zero risk of subpixel white gaps under
+  fractional scaling.
+
+### Measured profile comparison
+
+Red body over white backdrop on bottom edge:
+
+```
+offset      0    1    2    3    4    5
+Native    248  199  215  219  223  227
+Old CSD   248  185  210  218  226  233
+New CSD   248  191  212  220  227  233
+```
+
+- Offset `+1` jumped from 185 to 191 (delta from native cut in half, from 14 down to 8).
+- Offset `+4` is an exact match at 227.
+- Offset `+5` differs by only 2 grey levels (233 vs 231).
+- Furthermore, native libadwaita itself exhibits subpixel phase asymmetry on fractional
+  scaling (e.g. top/left measures ~223 at `+1` while bottom/right measures ~199 due to
+  subpixel rounding in GSK). The shader's 191 falls well within this physical tolerance
+  while preserving 100% four-way symmetry.

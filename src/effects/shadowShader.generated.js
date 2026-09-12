@@ -118,8 +118,10 @@ float evalShadowLayer(vec4 s, vec2 p, vec2 winOrigin, vec2 winSize, float radius
     float alpha = s.z;
 
     if (blur < 0.5) {
-        // 1px crisp outline border centered at window boundary offset by spread
-        return alpha * (1.0 - clamp(d - spread + 0.5, 0.0, 1.0));
+        // 1px crisp hollow outset border band between window boundary (d=0) and spread
+        float inner = clamp(d + 0.5, 0.0, 1.0);
+        float outer = clamp(d - spread + 0.5, 0.0, 1.0);
+        return alpha * max(inner - outer, 0.0);
     }
 
     vec4 bounds = vec4(winOrigin - vec2(spread), winOrigin + winSize + vec2(spread));
@@ -151,9 +153,11 @@ export const CODE = `
         return;
     }
 
-    float a = (evalShadowLayer(uShadow1, p, winOrigin, uWinSize, uRadius, d)
-            + evalShadowLayer(uShadow2, p, winOrigin, uWinSize, uRadius, d)
-            + evalShadowLayer(uShadow3, p, winOrigin, uWinSize, uRadius, d)) * clipAlpha;
+    // Alpha-over compositing across layers prevents linear arithmetic saturation
+    float a1 = evalShadowLayer(uShadow1, p, winOrigin, uWinSize, uRadius, d);
+    float a2 = evalShadowLayer(uShadow2, p, winOrigin, uWinSize, uRadius, d);
+    float a3 = evalShadowLayer(uShadow3, p, winOrigin, uWinSize, uRadius, d);
+    float a = (1.0 - (1.0 - a1) * (1.0 - a2) * (1.0 - a3)) * clipAlpha;
 
     // Multiply shadow alpha by vertex alpha (cogl_color_in.a) to smoothly follow fade animations
     cogl_color_out = vec4(vec3(0.0), min(a, 1.0) * cogl_color_in.a);
