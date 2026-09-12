@@ -17,6 +17,8 @@
     "test:e2e": "tools/test-e2e.sh",
     "benchmark": "python3 tools/benchmark-decoration.py",
     "benchmark:check": "python3 tools/benchmark-decoration.py --check",
+    "benchmark:perf": "python3 tools/benchmark-perf.py",
+    "benchmark:perf:check": "python3 tools/benchmark-perf.py --check",
     "lint": "eslint src/",
     "shell": "tools/dev.sh shell",
     "log": "tools/dev.sh log",
