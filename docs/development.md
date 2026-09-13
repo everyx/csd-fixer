@@ -17,7 +17,7 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
 
 | Command | What it does |
 |---|---|
-| `pnpm run lint` | ESLint static syntax and style checks for `src/` |
+| `pnpm run lint` | ESLint static syntax and style checks for `src/`, `tests/` and `tools/` |
 | `pnpm test` | unit tests, run under gjs |
 | `pnpm run test:e2e` | headless end-to-end run in a nested session: lifecycle, resize/move stress, a zero-warning audit of the log |
 | `pnpm run benchmark` | visual decoration attenuation benchmark against 1.0x golden baseline |
@@ -40,6 +40,18 @@ meson setup jasmine-gjs/build jasmine-gjs && ninja -C jasmine-gjs/build install
   cannot cover.
 
 Either can be skipped with `--no-verify` when that is what you mean.
+
+## Commit messages
+
+Conventional Commits, matching the history: `type(scope): verb …`, no trailing
+period, body in the imperative explaining why. release-please derives the next
+version and the CHANGELOG from them.
+
+A `BREAKING CHANGE:` footer must be **one paragraph**. release-please reads the
+footer only up to the first blank line, so a second paragraph - typically the
+migration commands - is silently dropped from the CHANGELOG. Keep the whole
+explanation in one paragraph and put commands inline in `backticks`, not in a
+fenced block.
 
 ## Measuring in the nested session
 

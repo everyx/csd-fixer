@@ -44,7 +44,7 @@ gnome-extensions enable window-nativizer@everyx.github.io
 
 - **静默零开销**：静态窗口不触发 JS，不额外重绘。
 - **阴影预烘焙**：每种风格共用一张纹理，不再逐帧模糊；缩放只改纹理坐标。数字见 [docs/decoration-model.md](docs/decoration-model.md)。
-- **最大化即退出**：最大化 / 全屏 / 贴边平铺时，阴影与离屏裁剪均跳过；`pnpm run benchmark:perf` 在 CI 守护。
+- **最大化即退出**：最大化 / 全屏 / 贴边平铺时，阴影与离屏裁剪均跳过；`pnpm run benchmark:perf` 可核对预算。
 
 ## 遇到问题
 

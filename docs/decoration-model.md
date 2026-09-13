@@ -61,10 +61,10 @@ inference, not to overrule a fact or a policy.
   structural fact as it once was: a `force` rule may override it.
   X11 windows that *do* declare frame extents (WeChat's 4px resize grip) make Mutter drop its
   native shadow, so those receive both shadow and rounded corners.
-- **A snap-tiled window keeps its corners but loses its shadow** when it has an
-  adjacent match, following Mutter's own reasoning that the shadow would obstruct
-  the neighbour (`meta-window-actor-x11.c`). A lone half-tiled window keeps the
-  shadow on its outer edge.
+- **A snap-tiled window loses its shadow** when it has an adjacent match, following
+  Mutter's own reasoning that the shadow would obstruct the neighbour
+  (`meta-window-actor-x11.c`). A lone half-tiled window keeps the shadow on its outer
+  edge. Tiled windows are flat-cornered either way (*Which style applies*).
 - **Corner clipping is skipped under fractional scaling** when the user prefers
   crisp text: the offscreen pass is what blurs text at non-integer scales.
 

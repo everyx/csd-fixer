@@ -44,7 +44,7 @@ Not on extensions.gnome.org yet.
 
 - **No idle cost.** Static windows: no JavaScript, no extra redraws.
 - **Baked shadows.** One shared texture per style instead of a per-frame blur; resizing only moves texture coordinates. Numbers: [docs/decoration-model.md](docs/decoration-model.md).
-- **Drops out when maximized.** Maximized, fullscreen, snap-tiled: shadow and offscreen clip skipped. `pnpm run benchmark:perf` guards it in CI.
+- **Drops out when maximized.** Maximized, fullscreen, snap-tiled: shadow and offscreen clip skipped. `pnpm run benchmark:perf` checks the budgets.
 
 ## Troubleshooting
 

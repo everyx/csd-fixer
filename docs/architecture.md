@@ -47,6 +47,3 @@ to the surface child actor (`actor.get_first_child()`) so the native / frames-cl
 and coordinates align accurately.
 The manager keeps one state record per window and reconciles add, remove and update on every
 state change.
-
-A rule that the picker refuses, and what the prefs window shows instead, is in
-[rule-model.md](rule-model.md).

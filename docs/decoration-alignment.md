@@ -211,7 +211,7 @@ To measure the current decoration against this baseline and prevent visual regre
 
 ```bash
 pnpm run benchmark          # Print full comparison report against golden baseline
-pnpm run benchmark:check    # CI check: exit 1 if deviation > 1 grey level
+pnpm run benchmark:check    # exit 1 if deviation > 1 grey level
 ```
 
 Source: `tools/benchmark-decoration.py`.
