@@ -19,13 +19,24 @@ import {
 import {extractWindowProperties} from './pick.js';
 import {getWindowRules, SETTINGS_KEY_SUPPRESS_RULES, SETTINGS_KEY_FORCE_RULES} from './settings.js';
 import {resolveWindowIdentity} from './window.js';
-import {styleForWindow} from './style.js';
 import * as adwaitaDetector from './adwaitaDetector.js';
-import {RoundedClipEffect} from '../effects/clipEffect.js';
-import {ShadowActor} from '../effects/shadowActor.js';
+import {RoundedClipEffect, ROUNDED_CLIP_G_TYPE} from '../effects/clipEffect.js';
+import {ShadowActor, SHADOW_ACTOR_G_TYPE} from '../effects/shadowActor.js';
 import * as shadowTexture from '../effects/shadowTexture.js';
 
+// The typelib's enum value, for this shell-side module. Pure modules take the same
+// value from mutterRules.generated.js instead (pick.js) - they cannot import
+// gi://Meta - and check-style keeps that copy in step with window.h.
 const CLIENT_TYPE_X11 = Meta.WindowClientType.X11;
+
+/**
+ * An object's registered type name, or undefined when it has none. Comparing the
+ * name rather than using `instanceof` stays valid across a re-evaluation of the
+ * module, which replaces the JS class.
+ */
+function gtypeName(object) {
+    return object?.constructor?.$gtype?.name;
+}
 
 export class Manager {
     /** @param {import('../extension.js').default} ext */
@@ -38,6 +49,9 @@ export class Manager {
     }
 
     enable() {
+        // destroy() on disable seals the shadow cache; re-arm it before any paint.
+        shadowTexture.reset();
+
         // Display-level events (global). Workspace switches are deliberately absent:
         // no decoration input depends on the workspace, so switching cannot change
         // what any window looks like.
@@ -88,8 +102,44 @@ export class Manager {
         this._settingsHandlerIds?.forEach(id => this._settings.disconnect(id));
         this._settingsHandlerIds = [];
         this._rules = null;
+        // Only once nothing can re-add them: with the global signals gone, no reconcile
+        // can run mid-sweep.
+        this._tearDownStrays();
         adwaitaDetector.clearAdwaitaCache();
         shadowTexture.destroy();
+    }
+
+    /**
+     * Takes down effects and actors that outlived their window's entry in `_windows`.
+     * A window that closed while the extension was live kept its clip and shadow to
+     * fade with the window actor, so disable() would otherwise leave them - and the
+     * shadow's fade source - behind, which docs/shell-compatibility.md promises it
+     * does not.
+     */
+    _tearDownStrays() {
+        for (const actor of global.window_group?.get_children?.() ?? []) {
+            if (gtypeName(actor) === SHADOW_ACTOR_G_TYPE)
+                actor.destroy();
+        }
+        for (const winActor of global.get_window_actors?.() ?? []) {
+            // Walk the whole subtree: the clip sits on the window actor or on a surface
+            // child, and which one is not this sweep's business to hard-code.
+            const pending = [winActor];
+            while (pending.length > 0) {
+                const target = pending.pop();
+                for (const effect of target.get_effects?.() ?? []) {
+                    if (gtypeName(effect) !== ROUNDED_CLIP_G_TYPE)
+                        continue;
+                    try {
+                        target.remove_effect(effect);
+                    } catch {
+                        // Actor already going away; the effect goes with it.
+                    }
+                }
+                const children = target.get_children?.() ?? [];
+                pending.push(...children);
+            }
+        }
     }
 
     /** Keeps the per-window scan reading the same values for a whole batch. */
@@ -289,7 +339,7 @@ export class Manager {
                 state.clipTarget = this._getClipTarget(win, actor);
                 state.clipTarget.add_effect(state.clip);
             } else {
-                state.clipTarget.remove_effect(state.clip);
+                this._removeClipEffect(state);
                 state.clip = null;
                 state.clipTarget = null;
             }
@@ -299,10 +349,22 @@ export class Manager {
             // A missing child falls back to the window actor until one appears.
             const target = this._getClipTarget(win, actor);
             if (target !== state.clipTarget) {
-                state.clipTarget.remove_effect(state.clip);
+                this._removeClipEffect(state);
                 state.clipTarget = target;
                 target.add_effect(state.clip);
             }
+        }
+    }
+
+    /**
+     * Removes the clip effect from its target, tolerating an actor the compositor
+     * already destroyed: X11 swaps the surface child, and the effect goes with it.
+     */
+    _removeClipEffect(state) {
+        try {
+            state.clipTarget?.remove_effect(state.clip);
+        } catch {
+            // Target actor already gone; nothing left to detach from.
         }
     }
 
@@ -337,17 +399,14 @@ export class Manager {
 
         const inputs = this._decorationInputs(win);
         const actions = evaluateWindowActions(inputs);
-        const style = this._styleFrom(inputs);
 
-        // The clip effect only earns its offscreen pass when there is something to
-        // draw: a corner to round or an outline to paint. Tiled and maximized states
-        // set radius 0 and no outline, so attaching it there is pure waste.
-        const wantClip = actions.applyClip && (style.radius > 0 || Boolean(style.outline));
-        this._syncClip(win, wantClip);
-        this._syncShadow(win, actions.applyShadow);
+        // The decision and the style it was made with come from the same call, so
+        // there is no second derivation here to keep in step with it.
+        this._syncClip(win, actions.drawClip);
+        this._syncShadow(win, actions.drawShadow);
 
         if (state.clip || state.shadow)
-            this._applyStyle(win, style);
+            this._applyStyle(win, actions.style);
     }
 
     /** Full idempotent re-evaluation: synchronizes clip and shadow for each tracked window */
@@ -411,7 +470,7 @@ export class Manager {
 
             // Style inputs, read here so that one pass does not read them twice
             focused: win.appears_focused,
-            isTiled: isWindowTiled(win, {isMaximized, hasTileMatch}),
+            tiled: isWindowTiled(win, {isMaximized, hasTileMatch}),
             highContrast: St.Settings.get().high_contrast,
 
             // Preferences & rules
@@ -432,17 +491,6 @@ export class Manager {
     _undecorate(win) {
         this._syncClip(win, false);
         this._syncShadow(win, false);
-    }
-
-    /** Style for a window, from the state the caller already read. */
-    _styleFrom(inputs) {
-        return styleForWindow({
-            focused: inputs.focused,
-            maximized: inputs.isMaximized,
-            fullscreen: inputs.isFullscreen,
-            tiled: inputs.isTiled,
-            highContrast: inputs.highContrast,
-        });
     }
 
     /** Applies style -> shader uniforms and the shadow's baked texture */
