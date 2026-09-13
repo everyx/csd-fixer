@@ -57,18 +57,33 @@ describe('adwaitaDetector', () => {
             expect(probePidMaps(9999999)).toBeFalse();
         });
 
-        it('caches probe result for subsequent calls', () => {
-            const dummyPid = 8888888;
-            expect(probePidMaps(dummyPid)).toBeFalse();
-            // Second call hits cache
-            expect(probePidMaps(dummyPid)).toBeFalse();
+        it('reports linkage from the maps text', () => {
+            expect(probePidMaps(424242, () => '/usr/lib/libadwaita-1.so.0\n')).toBeTrue();
         });
 
-        it('clears specific pid or whole cache', () => {
-            const dummyPid = 7777777;
-            probePidMaps(dummyPid);
-            clearAdwaitaCache(dummyPid);
-            clearAdwaitaCache();
+        it('reads a pid once, then serves the cache', () => {
+            let reads = 0;
+            const read = () => { reads++; return ''; };
+            probePidMaps(515151, read);
+            probePidMaps(515151, read);
+            expect(reads).toBe(1);
+        });
+
+        it('re-reads a pid after its cache entry is cleared', () => {
+            let reads = 0;
+            const read = () => { reads++; return ''; };
+            probePidMaps(616161, read);
+            clearAdwaitaCache(616161);
+            probePidMaps(616161, read);
+            expect(reads).toBe(2);
+        });
+
+        it('returns false but does not cache when the read fails', () => {
+            let reads = 0;
+            const read = () => { reads++; throw new Error('EACCES'); };
+            expect(probePidMaps(717171, read)).toBeFalse();
+            expect(probePidMaps(717171, read)).toBeFalse();
+            expect(reads).toBe(2);
         });
     });
 

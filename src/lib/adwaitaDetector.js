@@ -25,30 +25,37 @@ export function hasAdwaitaLibraries(mapsText) {
            mapsText.includes('libhandy-1.so');
 }
 
+/** Reads /proc/<pid>/maps; throws when it cannot be read. */
+function readMaps(pid) {
+    const file = Gio.File.new_for_path(`/proc/${pid}/maps`);
+    const [ok, bytes] = file.load_contents(null);
+    if (!ok || !bytes)
+        throw new Error(`could not read /proc/${pid}/maps`);
+    return new TextDecoder().decode(bytes);
+}
+
 /**
  * Probes /proc/{pid}/maps for a process to check for native Libadwaita or Libhandy.
  * Results are cached in-memory per PID for fast subsequent lookups.
  *
  * @param {number} pid - Process ID
+ * @param {(pid: number) => string} [read=readMaps] - maps reader, injectable for tests
  * @returns {boolean}
  */
-export function probePidMaps(pid) {
+export function probePidMaps(pid, read = readMaps) {
     if (!pid || typeof pid !== 'number' || pid <= 0)
         return false;
     if (pidAdwaitaCache.has(pid))
         return pidAdwaitaCache.get(pid);
 
-    let isAdw = false;
+    let isAdw;
     try {
-        const file = Gio.File.new_for_path(`/proc/${pid}/maps`);
-        const [ok, bytes] = file.load_contents(null);
-        if (ok && bytes) {
-            const text = new TextDecoder().decode(bytes);
-            isAdw = hasAdwaitaLibraries(text);
-        }
+        isAdw = hasAdwaitaLibraries(read(pid));
     } catch {
-        // E.g. Permission denied, process died, or sandbox restriction.
-        isAdw = false;
+        // Permission denied, dead process, or sandbox restriction. Not cached: the
+        // read may succeed next time, and a cached "not linked" would decorate a
+        // native libadwaita window a second time.
+        return false;
     }
 
     pidAdwaitaCache.set(pid, isAdw);
