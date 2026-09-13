@@ -26,6 +26,7 @@ import {
     shadowGeometry,
     shadowPipelineFor,
     shadowSlices,
+    styleKey,
     SHADOW_PAD,
 } from './shadowTexture.js';
 
@@ -63,13 +64,11 @@ const SYNCED_PROPERTIES = [
     'opacity', 'visible', 'pivot-point', 'scale-x', 'scale-y', 'translation-x', 'translation-y',
 ];
 
-/** One style being drawn: its baked pipeline, and the geometry for the current size. */
-function styleKey(radius, shadows) {
-    return `${radius}|${shadows.map(s => `${s.blur},${s.spread},${s.alpha}`).join(';')}`;
-}
+/** Registered type name, the stable identity of one of our actors. */
+export const SHADOW_ACTOR_G_TYPE = 'WindowNativizerShadowActor';
 
 export const ShadowActor = GObject.registerClass({
-    GTypeName: 'WindowNativizerShadowActor',
+    GTypeName: SHADOW_ACTOR_G_TYPE,
 }, class ShadowActor extends Clutter.Actor {
     /**
      * @param {Clutter.Actor} windowActor - Actor of the window being decorated

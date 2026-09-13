@@ -53,8 +53,11 @@ const CODE = `
     cogl_color_out *= 1.0 - clamp(d + 0.5, 0.0, 1.0);
 `;
 
+/** Registered type name, the stable identity of one of our effects. */
+export const ROUNDED_CLIP_G_TYPE = 'WindowNativizerRoundedClipEffect';
+
 export const RoundedClipEffect = GObject.registerClass({
-    GTypeName: 'WindowNativizerRoundedClipEffect',
+    GTypeName: ROUNDED_CLIP_G_TYPE,
 }, class RoundedClipEffect extends Shell.GLSLEffect {
     _init() {
         super._init();

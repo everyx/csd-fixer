@@ -102,12 +102,33 @@ export function shadowSlices({corner, window, buffer}, width, height) {
 /** Pipelines, one per shadow style; each holds its own baked buffer as its layer. */
 const pipelines = new Map();
 
+/** Set once disabled, so a late paint cannot re-bake into the cleared cache. */
+let destroyed = false;
+
 /**
- * Clears the baked pipeline cache. Called when the extension is disabled
- * so no module-scope pipeline or texture handles survive in memory.
+ * Clears the baked pipeline cache and seals it. Called when the extension is
+ * disabled so no module-scope pipeline or texture handles survive in memory.
  */
 export function destroy() {
+    destroyed = true;
     pipelines.clear();
+}
+
+/** Re-arms the cache after destroy(), for a disable()/enable() cycle in one session. */
+export function reset() {
+    destroyed = false;
+}
+
+/**
+ * Cache key for one shadow style, shared with ShadowActor so both agree on when
+ * two styles are the same.
+ *
+ * @param {number} radius - Corner radius
+ * @param {Array<object>} shadows - Style shadow layers
+ * @returns {string}
+ */
+export function styleKey(radius, shadows) {
+    return `${radius}|${shadows.map(s => `${s.blur},${s.spread},${s.alpha}`).join(';')}`;
 }
 
 /**
@@ -120,7 +141,10 @@ export function destroy() {
  * @returns {Cogl.Pipeline|null} null when the buffer could not be allocated
  */
 function shadowPipeline(context, radius, shadows) {
-    const key = `${radius}|${shadows.map(s => `${s.blur},${s.spread},${s.alpha}`).join(';')}`;
+    if (destroyed)
+        return null;
+
+    const key = styleKey(radius, shadows);
     const cached = pipelines.get(key);
     if (cached)
         return cached;
