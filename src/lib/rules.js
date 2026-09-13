@@ -127,18 +127,27 @@ export function chooseWindowIdentity({declared = '', peer = '', tracked = '', pi
  * deliberately no app-wide form, and field order is part of the format
  * (docs/rule-model.md).
  */
-const FP_CLIENT_TYPE = 'client_type';
-const FP_WINDOW_TYPE = 'window_type';
-const FP_HAS_PARENT = 'has_parent';
-const FP_ALLOWS_RESIZE = 'allows_resize';
-const FP_ATTACHED_DIALOG = 'attached_dialog';
-const FINGERPRINT_SPECIFIER_PATTERN = [
-    `${FP_CLIENT_TYPE}=(?:${CLIENT_TYPE_TOKEN_WAYLAND}|${CLIENT_TYPE_TOKEN_X11})`,
-    `${FP_WINDOW_TYPE}=\\d+`,
-    `${FP_HAS_PARENT}=(?:true|false)`,
-    `${FP_ALLOWS_RESIZE}=(?:true|false)`,
-    `${FP_ATTACHED_DIALOG}=(?:true|false)`,
-].join(',');
+const BOOL_FIELD = '(?:true|false)';
+/**
+ * The window-kind fingerprint fields, in grammar order. One entry drives all three
+ * places that must agree on them: the validation pattern, buildRuleKey() and
+ * parseRuleKey().
+ */
+const FINGERPRINT_FIELDS = [
+    {
+        name: 'client_type',
+        render: o => o.clientType,
+        pattern: `(?:${CLIENT_TYPE_TOKEN_WAYLAND}|${CLIENT_TYPE_TOKEN_X11})`,
+        parse: raw => raw,
+    },
+    {name: 'window_type', render: o => o.windowType, pattern: '\\d+', parse: raw => Number(raw)},
+    {name: 'has_parent', render: o => boolString(o.hasParent), pattern: BOOL_FIELD, parse: raw => raw === 'true'},
+    {name: 'allows_resize', render: o => boolString(o.allowsResize), pattern: BOOL_FIELD, parse: raw => raw === 'true'},
+    {name: 'attached_dialog', render: o => boolString(o.isAttachedDialog), pattern: BOOL_FIELD, parse: raw => raw === 'true'},
+];
+const FINGERPRINT_SPECIFIER_PATTERN = FINGERPRINT_FIELDS
+    .map(field => `${field.name}=${field.pattern}`)
+    .join(',');
 const VALID_RULE_KEY_PATTERN = new RegExp(
     `^[^\\s:]+:${FINGERPRINT_SPECIFIER_PATTERN}$`
 );
@@ -164,13 +173,10 @@ export function buildRuleKey(wmClass, {
     if (!wmClass)
         return '';
 
-    const specifier = [
-        `${FP_CLIENT_TYPE}=${clientType}`,
-        `${FP_WINDOW_TYPE}=${windowType}`,
-        `${FP_HAS_PARENT}=${boolString(hasParent)}`,
-        `${FP_ALLOWS_RESIZE}=${boolString(allowsResize)}`,
-        `${FP_ATTACHED_DIALOG}=${boolString(isAttachedDialog)}`,
-    ].join(',');
+    const fields = {clientType, windowType, hasParent, allowsResize, isAttachedDialog};
+    const specifier = FINGERPRINT_FIELDS
+        .map(field => `${field.name}=${field.render(fields)}`)
+        .join(',');
 
     // ':' and whitespace are delimiters in the key grammar, so the identity is
     // encoded rather than assumed key-safe; parseRuleKey() decodes it back.
@@ -288,15 +294,10 @@ export function parseRuleKey(key) {
     const properties = {};
     for (const pair of specifier.split(',')) {
         const eqIdx = pair.indexOf('=');
-        const propName = pair.slice(0, eqIdx);
-        const rawValue = pair.slice(eqIdx + 1);
-
-        if (propName === FP_WINDOW_TYPE)
-            properties[propName] = Number(rawValue);
-        else if (propName === FP_CLIENT_TYPE)
-            properties[propName] = rawValue;
-        else
-            properties[propName] = rawValue === 'true';
+        const name = pair.slice(0, eqIdx);
+        const field = FINGERPRINT_FIELDS.find(f => f.name === name);
+        if (field)
+            properties[name] = field.parse(pair.slice(eqIdx + 1));
     }
 
     return {baseWmClass, specifier, properties};
