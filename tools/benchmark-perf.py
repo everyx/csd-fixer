@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 benchmark-perf.py - Measures GNOME Shell CPU and memory footprint with
-CSD Fixer enabled vs disabled for a single undecorated window.
+Window Nativizer enabled vs disabled for a single undecorated window.
 
 Usage:
   python3 tools/benchmark-perf.py            # Run full performance benchmark (3 rounds)
@@ -18,7 +18,7 @@ import subprocess
 import json
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-STATE_DIR = "/tmp/csd-fixer-dev"
+STATE_DIR = "/tmp/window-nativizer-dev"
 PID_FILE = os.path.join(STATE_DIR, "shell.pid")
 CLIENT_SCRIPT = os.path.join(ROOT, "tools", "perf-client.py")
 CLK_TCK = os.sysconf(os.sysconf_names['SC_CLK_TCK'])
@@ -52,7 +52,7 @@ def trigger_gc(bus):
 
 def set_extension_state(enabled, bus):
     subcmd = "enable" if enabled else "disable"
-    subprocess.check_call(["gnome-extensions", subcmd, "csd-fixer@everyx.github.io"],
+    subprocess.check_call(["gnome-extensions", subcmd, "window-nativizer@everyx.github.io"],
                           env=dict(os.environ, DBUS_SESSION_BUS_ADDRESS=bus),
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     is_active = not enabled
@@ -60,7 +60,7 @@ def set_extension_state(enabled, bus):
         time.sleep(0.3)
         out = subprocess.check_output(["gnome-extensions", "list", "--enabled"],
                                       env=dict(os.environ, DBUS_SESSION_BUS_ADDRESS=bus)).decode()
-        is_active = "csd-fixer@everyx.github.io" in out
+        is_active = "window-nativizer@everyx.github.io" in out
         if is_active == enabled:
             return
     raise RuntimeError(f"Failed to set extension state: expected enabled={enabled}, but got active={is_active}")
@@ -107,7 +107,7 @@ def stop_process(proc):
             proc.wait()
 
 def run_single_test(enabled, round_idx, shell_pid, bus, idle_secs=4.0, stress_steps=150):
-    env = dict(os.environ, WAYLAND_DISPLAY="wayland-csd-fixer")
+    env = dict(os.environ, WAYLAND_DISPLAY="wayland-window-nativizer")
 
     # Clean previous processes
     subprocess.call(["pkill", "-9", "-f", "perf-client.py"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -199,7 +199,7 @@ def run_single_test(enabled, round_idx, shell_pid, bus, idle_secs=4.0, stress_st
     }
 
 def main():
-    parser = argparse.ArgumentParser(description="CSD Fixer CPU and Memory Performance Benchmark")
+    parser = argparse.ArgumentParser(description="Window Nativizer CPU and Memory Performance Benchmark")
     parser.add_argument("--rounds", type=int, default=3, help="Number of benchmark rounds (default: 3)")
     parser.add_argument("--quick", action="store_true", help="Run quick 1-round benchmark")
     parser.add_argument("--check", action="store_true", help="Enforce performance regression budgets (exit 1 if violated)")

@@ -6,12 +6,12 @@
 // decoration. The size is fixed and the content is the theme's box background, so
 // two screenshots of the same session are comparable.
 //
-// CSD_FIXER_MODE=native draws the same size and content through libadwaita instead, which
+// WINDOW_NATIVIZER_MODE=native draws the same size and content through libadwaita instead, which
 // is what the decoration is aligned with: same shadow, same corners, drawn by GTK. It also
 // has a headerbar, so a virtual pointer can drag it into a tiled state -- the undecorated
 // subject has no drag region and cannot be moved that way.
 //
-// CSD_FIXER_BACKDROP=1 makes it the uniform surface a shadow is measured against: white,
+// WINDOW_NATIVIZER_BACKDROP=1 makes it the uniform surface a shadow is measured against: white,
 // a separate application id, and meant to be maximized, a state the detector never
 // decorates.
 imports.gi.versions.Gtk = '4.0';
@@ -22,15 +22,15 @@ const GLib = imports.gi.GLib;
 const Gdk = imports.gi.Gdk;
 const Gtk = imports.gi.Gtk;
 
-const native = GLib.getenv('CSD_FIXER_MODE') === 'native';
-const backdrop = Boolean(GLib.getenv('CSD_FIXER_BACKDROP'));
-// CSD_FIXER_BODY=#rrggbb paints the window body a known colour. Against a white backdrop and
+const native = GLib.getenv('WINDOW_NATIVIZER_MODE') === 'native';
+const backdrop = Boolean(GLib.getenv('WINDOW_NATIVIZER_BACKDROP'));
+// WINDOW_NATIVIZER_BODY=#rrggbb paints the window body a known colour. Against a white backdrop and
 // a black shadow the three channels then separate three different things in one profile, and
 // a missing corner clip becomes visible, which it is not when everything is white.
-const bodyColor = GLib.getenv('CSD_FIXER_BODY') || null;
-// CSD_FIXER_SIZE=WxH fixes the window size (so subject and native can be measured at the
+const bodyColor = GLib.getenv('WINDOW_NATIVIZER_BODY') || null;
+// WINDOW_NATIVIZER_SIZE=WxH fixes the window size (so subject and native can be measured at the
 // same geometry without compositor-side positioning).
-const sizeMatch = GLib.getenv('CSD_FIXER_SIZE')?.match(/^(\d+)x(\d+)$/);
+const sizeMatch = GLib.getenv('WINDOW_NATIVIZER_SIZE')?.match(/^(\d+)x(\d+)$/);
 const sizeW = sizeMatch ? parseInt(sizeMatch[1], 10) : 900;
 const sizeH = sizeMatch ? parseInt(sizeMatch[2], 10) : 600;
 
@@ -61,7 +61,7 @@ app.connect('activate', () => {
     const Window = native ? Adw.ApplicationWindow : Gtk.ApplicationWindow;
     const win = new Window({
         application: app,
-        title: native ? 'csd-fixer native' : (backdrop ? 'csd-fixer backdrop' : 'csd-fixer probe'),
+        title: native ? 'window-nativizer native' : (backdrop ? 'window-nativizer backdrop' : 'window-nativizer probe'),
         default_width: sizeW,
         default_height: sizeH,
     });

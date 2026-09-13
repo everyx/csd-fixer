@@ -54,7 +54,7 @@ const CODE = `
 `;
 
 export const RoundedClipEffect = GObject.registerClass({
-    GTypeName: 'CsdFixerRoundedClipEffect',
+    GTypeName: 'WindowNativizerRoundedClipEffect',
 }, class RoundedClipEffect extends Shell.GLSLEffect {
     _init() {
         super._init();

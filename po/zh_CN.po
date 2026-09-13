@@ -1,10 +1,10 @@
-# Chinese (Simplified) translation for csd-fixer.
+# Chinese (Simplified) translation for window-nativizer.
 # Copyright (C) 2026 everyx
-# This file is distributed under the same license as the csd-fixer package.
+# This file is distributed under the same license as the window-nativizer package.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: csd-fixer\n"
+"Project-Id-Version: window-nativizer\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2026-09-12 04:26+0800\n"
 "PO-Revision-Date: 2026-09-08 22:50+0800\n"
@@ -143,9 +143,9 @@ msgstr "窗口拾取失败"
 
 #: src/prefs.js:401
 msgid ""
-"Could not connect to CSD Fixer extension. Please ensure the extension is "
-"enabled."
-msgstr "无法连接到 CSD Fixer 扩展，请确认该扩展已在 GNOME 扩展中启用。"
+"Could not connect to Window Nativizer extension. Please ensure the extension "
+"is enabled."
+msgstr "无法连接到 Window Nativizer 扩展，请确认该扩展已在 GNOME 扩展中启用。"
 
 #: src/prefs.js:415
 msgid "No rule added: this window could not be identified."

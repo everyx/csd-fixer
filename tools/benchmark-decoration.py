@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-benchmark-decoration.py - Measures CSD Fixer window decoration profile and
+benchmark-decoration.py - Measures Window Nativizer window decoration profile and
 verifies the attenuation gradient against the 1.0x golden baseline.
 
 Usage:
@@ -17,7 +17,7 @@ import argparse
 from PIL import Image
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-STATE_DIR = "/tmp/csd-fixer-dev"
+STATE_DIR = "/tmp/window-nativizer-dev"
 PID_FILE = os.path.join(STATE_DIR, "shell.pid")
 SHOT_PATH = os.path.join(STATE_DIR, "shot_benchmark.png")
 
@@ -79,17 +79,17 @@ def measure_target(is_native, env):
 
     # Launch white backdrop
     subprocess.Popen([
-        os.path.join(ROOT, "tools", "dev.sh"), "app", "env", "CSD_FIXER_BACKDROP=1",
+        os.path.join(ROOT, "tools", "dev.sh"), "app", "env", "WINDOW_NATIVIZER_BACKDROP=1",
         "gjs", os.path.join(ROOT, "tools", "probe-window.js")
     ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(1.5)
 
     # Launch test target
-    extra_env = ["CSD_FIXER_MODE=native"] if is_native else []
+    extra_env = ["WINDOW_NATIVIZER_MODE=native"] if is_native else []
     subprocess.Popen([
         os.path.join(ROOT, "tools", "dev.sh"), "app", "env"
     ] + extra_env + [
-        "CSD_FIXER_BODY=#ff0000", "CSD_FIXER_SIZE=440x280",
+        "WINDOW_NATIVIZER_BODY=#ff0000", "WINDOW_NATIVIZER_SIZE=440x280",
         "gjs", os.path.join(ROOT, "tools", "probe-window.js")
     ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(1.5)
@@ -165,15 +165,15 @@ def measure_target(is_native, env):
     }
 
 def main():
-    parser = argparse.ArgumentParser(description="CSD Fixer Decoration Benchmark Tool")
-    parser.add_argument("--check", action="store_true", help="Verify CSD Fixer against baseline with zero regression")
+    parser = argparse.ArgumentParser(description="Window Nativizer Decoration Benchmark Tool")
+    parser.add_argument("--check", action="store_true", help="Verify Window Nativizer against baseline with zero regression")
     parser.add_argument("--native", action="store_true", help="Also run live measurement of native Libadwaita")
     args = parser.parse_args()
 
     env = ensure_session()
 
     try:
-        print(">> Measuring CSD Fixer decoration profile...")
+        print(">> Measuring Window Nativizer decoration profile...")
         csd = measure_target(False, env)
 
         # Check symmetry

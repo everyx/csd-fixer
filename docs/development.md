@@ -50,7 +50,7 @@ is enough to measure the effects from outside, with no probe code added to the
 extension:
 
 ```sh
-PID=$(cat /tmp/csd-fixer-dev/shell.pid)
+PID=$(cat /tmp/window-nativizer-dev/shell.pid)
 BUS=$(tr '\0' '\n' < /proc/$PID/environ | grep '^DBUS_SESSION_BUS_ADDRESS=' | cut -d= -f2-)
 gdbus call --address "$BUS" --dest org.gnome.Shell --object-path /org/gnome/Shell \
     --method org.gnome.Shell.Eval 'global.get_window_actors().length + " windows"'
@@ -99,13 +99,13 @@ so two screenshots of one session are comparable.
 ./tools/dev.sh app gjs tools/probe-window.js
 ```
 
-With `CSD_FIXER_BACKDROP=1` the same script becomes a uniform white surface to measure a
+With `WINDOW_NATIVIZER_BACKDROP=1` the same script becomes a uniform white surface to measure a
 shadow against, under a separate application id so it can run beside the subject, and
 meant to be maximized: a maximized window is one the detector never decorates, so it is
 background rather than subject. That beats changing the desktop background, which alters
 something outside the session under test.
 
-`CSD_FIXER_BODY=#rrggbb` paints the window body a known colour. Against the white backdrop
+`WINDOW_NATIVIZER_BODY=#rrggbb` paints the window body a known colour. Against the white backdrop
 and a black shadow the three channels then separate the body, the 1px outline and the shadow
 in one profile, and a missing corner clip becomes visible — none of which can be seen when
 the window and the background are both white.

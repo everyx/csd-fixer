@@ -88,7 +88,7 @@ if (isCheck) {
         process.exit(1);
     }
 
-    // 1. Verify that po/csd-fixer.pot matches current source code exactly
+    // 1. Verify that po/window-nativizer.pot matches current source code exactly
     const diskPot = fs.readFileSync(potFile, 'utf8');
     let freshPot = '';
     try {

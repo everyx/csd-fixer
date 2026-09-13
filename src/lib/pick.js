@@ -32,8 +32,8 @@ export const WindowClientType = Object.freeze({
  * runs in a separate Gtk process and cannot import inspector.js (which requires
  * Shell-only resource:///org/gnome/shell/ui/main.js).
  */
-export const INSPECTOR_DBUS_NAME = 'org.gnome.Shell.Extensions.CsdFixer';
-export const INSPECTOR_DBUS_PATH = '/org/gnome/Shell/Extensions/CsdFixer';
+export const INSPECTOR_DBUS_NAME = 'org.gnome.Shell.Extensions.WindowNativizer';
+export const INSPECTOR_DBUS_PATH = '/org/gnome/Shell/Extensions/WindowNativizer';
 /**
  * Extracts the normalized inspection properties dictionary for the picker.
  * Values are strings because the dictionary crosses D-Bus as `a{ss}`; prefs.js

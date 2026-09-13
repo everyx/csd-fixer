@@ -195,7 +195,7 @@ export function sanitizeWindowRules({suppress = {}, force = {}} = {}) {
         const colliding = lookupRuleKey(clean.suppress, key);
         if (!colliding)
             continue;
-        console.warn(`[csd-fixer] "${key}" is in both rule groups; keeping the suppression`);
+        console.warn(`[window-nativizer] "${key}" is in both rule groups; keeping the suppression`);
         delete clean.force[key];
     }
 
@@ -210,20 +210,20 @@ function sanitizeRuleGroup(rawRules, direction) {
 
     for (const [key, value] of Object.entries(rawRules)) {
         if (!VALID_RULE_KEY_PATTERN.test(key)) {
-            console.warn(`[csd-fixer] Dropping invalid ${direction} rule key: "${key}"`);
+            console.warn(`[window-nativizer] Dropping invalid ${direction} rule key: "${key}"`);
             continue;
         }
 
         const axes = parseRuleAxes(value);
         if (!axes) {
-            console.warn(`[csd-fixer] Dropping ${direction} rule with invalid value: "${value}" for key "${key}"`);
+            console.warn(`[window-nativizer] Dropping ${direction} rule with invalid value: "${value}" for key "${key}"`);
             continue;
         }
 
         const canonicalKey = normalizeRuleKey(key);
         if (seenKeys.has(canonicalKey)) {
             const existingKey = seenKeys.get(canonicalKey);
-            console.warn(`[csd-fixer] Dropping case-colliding ${direction} rule key "${key}" (conflicts with "${existingKey}")`);
+            console.warn(`[window-nativizer] Dropping case-colliding ${direction} rule key "${key}" (conflicts with "${existingKey}")`);
             continue;
         }
 

@@ -1,5 +1,5 @@
 /**
- * Settings - GSettings IO adapter for CSD Fixer.
+ * Settings - GSettings IO adapter for Window Nativizer.
  *
  * Responsibilities:
  *   - Reads and deserializes both window rule groups (a{ss})

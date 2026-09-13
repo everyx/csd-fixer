@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# csd-fixer development helper: runs GNOME Shell + test applications in headless nested session
+# window-nativizer development helper: runs GNOME Shell + test applications in headless nested session
 # Usage (or equivalent pnpm scripts, see package.json):
-#   ./tools/dev.sh shell        # Starts headless nested shell in background (log: /tmp/csd-fixer-dev/shell.log)
+#   ./tools/dev.sh shell        # Starts headless nested shell in background (log: /tmp/window-nativizer-dev/shell.log)
 #   ./tools/dev.sh log          # Streams nested shell log (Ctrl+C to exit)
 #   ./tools/dev.sh app <cmd>    # Launches test application inside nested session (same WAYLAND_DISPLAY)
 #   ./tools/dev.sh ext <subcmd> # Runs gnome-extensions command inside nested session D-Bus
@@ -18,8 +18,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"   # Repository root (script is under to
 SRC_DIR="${SRC_DIR:-$ROOT/src}"              # Extension source directory
 UUID="$(python3 -c "import json; print(json.load(open('$SRC_DIR/metadata.json'))['uuid'])")"
 EXT_DIR="$HOME/.local/share/gnome-shell/extensions/$UUID"
-WL_DISPLAY="wayland-csd-fixer"
-STATE_DIR="/tmp/csd-fixer-dev"
+WL_DISPLAY="wayland-window-nativizer"
+STATE_DIR="/tmp/window-nativizer-dev"
 PIDFILE="$STATE_DIR/shell.pid"
 LOG="$STATE_DIR/shell.log"
 
@@ -47,7 +47,7 @@ cmd_shell() {
 
     echo ">> Starting headless nested shell (background, log: $LOG)"
     chmod +x "$ROOT/tools/dev-shell.sh"
-    CSD_FIXER_UUID="$UUID" setsid nohup dbus-run-session -- bash "$ROOT/tools/dev-shell.sh" > "$LOG" 2>&1 < /dev/null &
+    WINDOW_NATIVIZER_UUID="$UUID" setsid nohup dbus-run-session -- bash "$ROOT/tools/dev-shell.sh" > "$LOG" 2>&1 < /dev/null &
     disown
     # Wait until ready
     for i in $(seq 1 30); do

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Full-screen white backdrop for CSD Fixer screenshots.
+Full-screen white backdrop for Window Nativizer screenshots.
 """
 import sys
 import gi
@@ -25,7 +25,7 @@ def on_activate(app):
     )
 
     win = Gtk.ApplicationWindow(application=app)
-    win.set_title("CSD Fixer Backdrop")
+    win.set_title("Window Nativizer Backdrop")
     win.set_decorated(False)
     win.add_css_class("backdrop-window")
     win.set_default_size(1920, 1080)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CSD Fixer E2E Test Client
+Window Nativizer E2E Test Client
 Creates a non-CSD GTK4 window and executes a deterministic sequence of operations:
 1. Window map (set_decorated(False))
 2. Multi-step dynamic resizing (enlarge, shrink, extreme aspect ratios)
@@ -18,7 +18,7 @@ app = Gtk.Application(application_id='org.test.csdfixer.e2e')
 
 def on_activate(app):
     win = Gtk.ApplicationWindow(application=app)
-    win.set_title("CSD Fixer E2E Client")
+    win.set_title("Window Nativizer E2E Client")
     win.set_decorated(False)
 
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)

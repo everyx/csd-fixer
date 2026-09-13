@@ -195,7 +195,7 @@ function showError(parentWindow, heading, body) {
 }
 
 
-export default class CsdFixerPreferences extends ExtensionPreferences {
+export default class WindowNativizerPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
         const installedApps = getInstalledApps();
@@ -398,7 +398,7 @@ export default class CsdFixerPreferences extends ExtensionPreferences {
                 if (err) {
                     showError(window,
                         _('Window Inspection Failed'),
-                        _('Could not connect to CSD Fixer extension. Please ensure the extension is enabled.'));
+                        _('Could not connect to Window Nativizer extension. Please ensure the extension is enabled.'));
                     return;
                 }
 

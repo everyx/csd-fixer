@@ -117,7 +117,7 @@ export class InspectorService {
     _startInteractivePick() {
         // 1. Overlay to capture global mouse and keyboard events
         this._overlay = new St.Widget({
-            name: 'CsdFixerInspectorOverlay',
+            name: 'WindowNativizerInspectorOverlay',
             reactive: true,
             x: 0,
             y: 0,
@@ -128,7 +128,7 @@ export class InspectorService {
 
         // 2. Visual highlight border box
         this._highlight = new St.Widget({
-            name: 'CsdFixerInspectorHighlight',
+            name: 'WindowNativizerInspectorHighlight',
             style: 'border: 3px solid #3584e4; background-color: rgba(53, 132, 228, 0.15); border-radius: 12px;',
             visible: false,
         });
@@ -228,7 +228,7 @@ export class InspectorService {
             if (this._activeGrab)
                 Main.popModal(this._activeGrab);
         } catch (e) {
-            logError(e, '[csd-fixer] Failed to release the window picker grab');
+            logError(e, '[window-nativizer] Failed to release the window picker grab');
         } finally {
             this._activeGrab = null;
         }

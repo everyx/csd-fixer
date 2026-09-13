@@ -69,7 +69,7 @@ function styleKey(radius, shadows) {
 }
 
 export const ShadowActor = GObject.registerClass({
-    GTypeName: 'CsdFixerShadowActor',
+    GTypeName: 'WindowNativizerShadowActor',
 }, class ShadowActor extends Clutter.Actor {
     /**
      * @param {Clutter.Actor} windowActor - Actor of the window being decorated
@@ -77,7 +77,7 @@ export const ShadowActor = GObject.registerClass({
      *   is inserted below
      */
     _init(windowActor, container) {
-        super._init({name: 'CsdFixerShadowActor', reactive: false, opacity: 255});
+        super._init({name: 'WindowNativizerShadowActor', reactive: false, opacity: 255});
 
         this._windowActor = windowActor;
         this._container = container;

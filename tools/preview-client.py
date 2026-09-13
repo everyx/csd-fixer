@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CSD Fixer Preview Client
+Window Nativizer Preview Client
 Renders a clean, solid-color undecorated window in GTK4
 for generating the assets/preview.webp comparison screenshot.
 """
@@ -30,7 +30,7 @@ def on_activate(app):
     )
 
     win = Gtk.ApplicationWindow(application=app)
-    win.set_title("CSD Fixer Preview Subject")
+    win.set_title("Window Nativizer Preview Subject")
     win.set_decorated(False)
     win.add_css_class("solid-preview-window")
     win.set_default_size(210, 276)

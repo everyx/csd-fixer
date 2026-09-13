@@ -15,7 +15,7 @@ from PIL import Image, ImageDraw, ImageFont
 import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-STATE_DIR = "/tmp/csd-fixer-dev"
+STATE_DIR = "/tmp/window-nativizer-dev"
 PID_FILE = os.path.join(STATE_DIR, "shell.pid")
 PREVIEW_OUTPUT = os.path.join(ROOT, "assets", "preview.webp")
 CLIENT_SCRIPT = os.path.join(ROOT, "tools", "preview-client.py")
@@ -69,7 +69,7 @@ def hide_overview_and_banners(env):
 def set_extension_state(enabled, env):
     subcmd = "enable" if enabled else "disable"
     subprocess.check_call(
-        ["gnome-extensions", subcmd, "csd-fixer@everyx.github.io"],
+        ["gnome-extensions", subcmd, "window-nativizer@everyx.github.io"],
         env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     )
     time.sleep(0.8)

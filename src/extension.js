@@ -1,5 +1,5 @@
 /**
- * CSD Fixer - restores GNOME native rounded corners and drop shadows to undecorated windows.
+ * Window Nativizer - restores GNOME native rounded corners and drop shadows to undecorated windows.
  *
  * Architecture (module responsibilities):
  *   detector  determines whether a window needs decoration (geometry criteria)
@@ -14,7 +14,7 @@ import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import {Manager} from './lib/manager.js';
 import {InspectorService} from './lib/inspector.js';
 
-export default class CsdFixerExtension extends Extension {
+export default class WindowNativizerExtension extends Extension {
     enable() {
         this._manager = new Manager(this);
         this._manager.enable();

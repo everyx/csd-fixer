@@ -170,7 +170,7 @@ function bake(context, radius, shadows) {
     const texture = Cogl.Texture2D.new_with_size(context, buffer, buffer);
     const framebuffer = Cogl.Offscreen.new_with_texture(texture);
     if (!framebuffer.allocate()) {
-        console.warn(`[csd-fixer] Could not allocate a ${buffer}x${buffer} shadow buffer`);
+        console.warn(`[window-nativizer] Could not allocate a ${buffer}x${buffer} shadow buffer`);
         return null;
     }
 

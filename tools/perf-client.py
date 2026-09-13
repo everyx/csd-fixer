@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CSD Fixer Performance Benchmark Client
+Window Nativizer Performance Benchmark Client
 Runs an undecorated GTK4 window in idle or dynamic resize stress mode.
 """
 
@@ -22,7 +22,7 @@ def main():
 
     def on_activate(app):
         win = Gtk.ApplicationWindow(application=app)
-        win.set_title("CSD Fixer Perf Target")
+        win.set_title("Window Nativizer Perf Target")
         win.set_decorated(False)
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)

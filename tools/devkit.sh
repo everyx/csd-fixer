@@ -17,7 +17,7 @@ ROOT="$(pwd)"
 SRC_DIR="$ROOT/src"
 UUID="$(python3 -c "import json; print(json.load(open('$SRC_DIR/metadata.json'))['uuid'])")"
 EXT_DIR="$HOME/.local/share/gnome-shell/extensions/$UUID"
-LOG=/tmp/csd-fixer-devkit.log
+LOG=/tmp/window-nativizer-devkit.log
 
 deploy_ext() {
     mkdir -p "$EXT_DIR"
@@ -38,12 +38,12 @@ deploy_ext
 
 if [ "$1" = "bg" ]; then
     setsid dbus-run-session gnome-shell --devkit --wayland >"$LOG" 2>&1 < /dev/null &
-    echo $! > /tmp/csd-fixer-devkit.pid
+    echo $! > /tmp/window-nativizer-devkit.pid
     sleep 7
     if ! pgrep -f "gnome-shell --devkit" > /dev/null; then
         echo "FAILED: Session failed to start, log tail:"; tail -5 "$LOG"; exit 1
     fi
-    echo "OK: PID $(cat /tmp/csd-fixer-devkit.pid), log: $LOG"
+    echo "OK: PID $(cat /tmp/window-nativizer-devkit.pid), log: $LOG"
     grep -a "display name" "$LOG" | tail -1
     exit 0
 fi
@@ -56,5 +56,5 @@ echo ""
 dbus-run-session gnome-shell --devkit --wayland 2>&1 \
   | tee "$LOG" \
   | grep -v -E '(^$|a11y|dbus-daemon|gvfs|systemd1|fusermount|AT-SPI|XKEYBOARD)' \
-  | grep --line-buffered -E '(csd-fixer|Gjs|JS ERROR|libmutter|CRITICAL|Warning|Running GNOME|display name|extension)' \
+  | grep --line-buffered -E '(window-nativizer|Gjs|JS ERROR|libmutter|CRITICAL|Warning|Running GNOME|display name|extension)' \
     || true

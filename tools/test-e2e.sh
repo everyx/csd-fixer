@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Headless E2E Test Suite for csd-fixer
+# Headless E2E Test Suite for window-nativizer
 # Tests full window lifecycle: Map -> Dynamic Resizing -> Compositor Moving -> Maximize/Unmaximize -> Close -> Extension Toggle
 # Validates 0 ERROR, 0 CRITICAL, 0 WARNING with zero tolerance.
 
@@ -8,7 +8,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEV="$ROOT/tools/dev.sh"
 UUID="$(python3 -c "import json; print(json.load(open('$ROOT/src/metadata.json'))['uuid'])")"
-STATE_DIR="/tmp/csd-fixer-dev"
+STATE_DIR="/tmp/window-nativizer-dev"
 PIDFILE="$STATE_DIR/shell.pid"
 LOG="$STATE_DIR/shell.log"
 
@@ -86,7 +86,7 @@ CHECK_RESULT="$(shell_eval '
     
     const parent = winActor.get_parent();
     const children = parent ? parent.get_children().map(c => c.toString()) : [];
-    const hasShadow = children.some(c => c.includes("CsdFixerShadowActor"));
+    const hasShadow = children.some(c => c.includes("WindowNativizerShadowActor"));
     return JSON.stringify({
         hasClip,
         hasShadow,
@@ -101,7 +101,7 @@ if ! echo "$CHECK_RESULT" | grep -q 'hasClip.*true'; then
     exit 1
 fi
 if ! echo "$CHECK_RESULT" | grep -q 'hasShadow.*true'; then
-    echo "!! CsdFixerShadowActor was not inserted below window actor!"
+    echo "!! WindowNativizerShadowActor was not inserted below window actor!"
     exit 1
 fi
 echo ">> Clip effect and shadow actor successfully verified on active window."
@@ -130,7 +130,7 @@ CLEANUP_CHECK="$(shell_eval '
 (() => {
     const actors = global.get_window_actors();
     const windowGroupChildren = global.window_group.get_children().map(c => c.toString());
-    const leakedShadows = windowGroupChildren.filter(c => c.includes("CsdFixerShadowActor"));
+    const leakedShadows = windowGroupChildren.filter(c => c.includes("WindowNativizerShadowActor"));
     return JSON.stringify({
         actorsLength: actors.length,
         leakedShadowCount: leakedShadows.length
@@ -172,8 +172,8 @@ noise = re.compile(
 
 # Detect true GLib / Gjs / Clutter / Mutter warnings, criticals, and errors
 glib_issue = re.compile(r'(-WARNING\b|-CRITICAL\b|-ERROR\b|\b(WARNING|CRITICAL|ERROR)\s*\*\*:|JS ERROR)', re.I)
-# Detect any log message from csd-fixer containing error, critical, or warning
-csd_issue = re.compile(r'csd-fixer.*(warning|critical|error|exception)', re.I)
+# Detect any log message from window-nativizer containing error, critical, or warning
+csd_issue = re.compile(r'window-nativizer.*(warning|critical|error|exception)', re.I)
 
 offending = []
 for idx, line in enumerate(lines, start=1):
@@ -193,7 +193,7 @@ if offending:
 print(">> [PASS] ZERO unexpected Warnings, Errors, or Criticals detected.")
 PYEOF
 echo ">> Lifecycle Summary:"
-echo "   - Window Map: PASSED (CsdFixerRoundedClipEffect & CsdFixerShadowActor attached)"
+echo "   - Window Map: PASSED (WindowNativizerRoundedClipEffect & WindowNativizerShadowActor attached)"
 echo "   - Compositor Move: PASSED (Positions tracked synchronously)"
 echo "   - Dynamic Resize Stress: PASSED (No allocation stalls or crashes)"
 echo "   - Maximize / Unmaximize: PASSED"

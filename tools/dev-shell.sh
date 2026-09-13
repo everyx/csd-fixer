@@ -3,15 +3,15 @@
 set -u
 
 # UUID passed from caller (dev.sh) via environment variable
-UUID="${CSD_FIXER_UUID:-csd-fixer@everyx.github.io}"
-WL_DISPLAY="wayland-csd-fixer"
-STATE_DIR="/tmp/csd-fixer-dev"
+UUID="${WINDOW_NATIVIZER_UUID:-window-nativizer@everyx.github.io}"
+WL_DISPLAY="wayland-window-nativizer"
+STATE_DIR="/tmp/window-nativizer-dev"
 PIDFILE="$STATE_DIR/shell.pid"
 EXT_DIR="$HOME/.local/share/gnome-shell/extensions/$UUID"
 
 # Note: this script runs inside dbus-run-session bash (see dev.sh)
 export G_MESSAGES_DEBUG='GNOME Shell'
-export CSD_FIXER_UUID="$UUID"
+export WINDOW_NATIVIZER_UUID="$UUID"
 
 gnome-shell --headless --wayland --wayland-display="$WL_DISPLAY" \
     --virtual-monitor 1920x1080 --unsafe-mode &

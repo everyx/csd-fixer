@@ -146,6 +146,6 @@ jobs:
       - name: Upload extension zip artifact
         uses: actions/upload-artifact@v7
         with:
-          name: csd-fixer-extension
+          name: window-nativizer-extension
           path: dist/*.zip
           if-no-files-found: error

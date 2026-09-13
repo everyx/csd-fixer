@@ -1,7 +1,7 @@
 /*
- * csd-fixer stylesheet
+ * window-nativizer stylesheet
  *
- * EGO review guidelines: extension CSS class names must be prefixed (e.g. .csd-fixer-*),
+ * EGO review guidelines: extension CSS class names must be prefixed (e.g. .window-nativizer-*),
  * preventing unnamespaced selectors (e.g. button, label, .shadow) from polluting global Shell UI.
  *
  * The extension currently styles everything through its own shaders and the

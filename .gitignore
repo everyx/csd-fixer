@@ -2,7 +2,7 @@
 node_modules/
 
 # 嵌套会话运行时
-/tmp/csd-fixer-dev/
+/tmp/window-nativizer-dev/
 
 # 调研备查仓库（mutter/gnome-shell/libadwaita/rwc/gtk，浅 clone，不入库）
 research/
