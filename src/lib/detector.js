@@ -11,6 +11,7 @@ import {
     withRule,
 } from './rules.js';
 import {buildRuleKeyFromProperties} from './pick.js';
+import {styleForWindow} from './style.js';
 import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
 
 /**
@@ -189,6 +190,9 @@ export function isWindowTiled(win, options = {}) {
  * @property {boolean} [isAttachedDialog=false] - Whether modal dialog attached to parent
  * @property {boolean} [allowsResize=true] - Whether window allows resizing
  * @property {boolean} [hasTileMatch=false] - Whether window is snap-tiled with an adjacent matching window
+ * @property {boolean} [focused=false] - Whether the window is focused (backdrop otherwise)
+ * @property {boolean} [tiled=false] - Whether the window is snap-tiled (half-tiled or matched)
+ * @property {boolean} [highContrast=false] - Whether the high-contrast theme is on
  * @property {string} [wmClass] - Window WM_CLASS / app ID
  * @property {{suppress?: Record<string, string>, force?: Record<string, string>}} [rules={}] - Both rule groups
  * @property {boolean} [preferCrispText=false] - Subpixel crisp text setting
@@ -198,7 +202,7 @@ export function isWindowTiled(win, options = {}) {
  * Evaluates decoration actions based on geometric criteria and exclusion rules.
  *
  * @param {WindowEvaluationParams} params
- * @returns {{ applyShadow: boolean, applyClip: boolean, reason: string }}
+ * @returns {{ drawShadow: boolean, drawClip: boolean, style: object, reason: string }}
  */
 export function evaluateWindowActions({
     bufferWidth, bufferHeight, frameWidth, frameHeight,
@@ -212,18 +216,26 @@ export function evaluateWindowActions({
     isAttachedDialog = false,
     allowsResize = true,
     hasTileMatch = false,
+    focused = false,
+    tiled = false,
+    highContrast = false,
     wmClass,
     rules = {},
     preferCrispText = false,
     insetThreshold = MUTTER_CSD_MIN_INSET_THRESHOLD,
 }) {
+    // The state's style is resolved here, once, and returned with the decision, so a
+    // caller paints from the very object the decision was made from rather than
+    // deriving the style a second time (docs/decoration-model.md).
+    const style = styleForWindow({focused, maximized: isMaximized, fullscreen: isFullscreen, tiled, highContrast});
+
     // 1. Structural eligibility - no rule may override it.
     // 2. Inferred baseline - what we would do with no rule at all.
     // 3. User rule - moves the axes it names; the only layer that can turn one on.
     // 4. State modifiers - policies, not inferences (docs/decoration-model.md).
     const eligibility = checkDecorationEligibility({windowType, isMaximized, isFullscreen, frameWidth, frameHeight});
     if (!eligibility.eligible)
-        return {applyShadow: false, applyClip: false, reason: eligibility.reason};
+        return {drawShadow: false, drawClip: false, style, reason: eligibility.reason};
 
     const {w, h} = computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight);
     const baseline = inferDecorationBaseline({
@@ -249,10 +261,13 @@ export function evaluateWindowActions({
     }
 
     // 4. State modifiers, applied last: policies, not inferences about who already
-    //    paints what (docs/decoration-model.md).
+    //    paints what (docs/decoration-model.md). The clip axis also needs the style to
+    //    have something to draw: tiled and maximized give radius 0 and no outline, so
+    //    the offscreen pass would be pure waste there.
     const shadowBeforeTiling = shadow;
     shadow = shadow && !hasTileMatch;
-    corners = corners && shouldClipWindow({preferCrispText, scale: monitorScale});
+    corners = corners && shouldClipWindow({preferCrispText, scale: monitorScale}) &&
+        (style.radius > 0 || Boolean(style.outline));
 
     let reason = rule
         ? `rule-applied(${wmClass}:${rule.direction}:${buildRuleValue(rule.axes)})`
@@ -260,7 +275,7 @@ export function evaluateWindowActions({
     if (shadowBeforeTiling && !shadow)
         reason = `tile-match(suppress-shadow,${reason})`;
 
-    return {applyShadow: shadow, applyClip: corners, reason};
+    return {drawShadow: shadow, drawClip: corners, style, reason};
 }
 /**
  * Whether a rule would change the actions we take for a window.
@@ -280,17 +295,21 @@ function ruleWouldChangeActions(params, {direction, key, axes}) {
         rules: withRule(params.rules, direction, key, axes),
     });
 
-    return before.applyShadow !== after.applyShadow ||
-        before.applyClip !== after.applyClip;
+    return before.drawShadow !== after.drawShadow ||
+        before.drawClip !== after.drawClip;
 }
 /**
  * Whether the rule a pick would add for `properties`' window kind would change
  * what we draw for the window `params` describes.
  *
  * A fresh pick names every axis (RULE_AXIS_ORDER) and the user narrows it down
- * from there. State that comes and goes must not decide this: a rule worth
- * creating for a restored window is worth creating while it is maximized, so the
- * kind's attributes and the margins it declares are what count. *
+ * from there. Transient window state must not decide this: a rule worth creating
+ * for a restored window is worth creating while it is maximized or tiled, so those
+ * are normalized away and the kind's attributes and the margins it declares are
+ * what count. A policy that stands for the whole session is left live instead -
+ * with crisp text on a fractional scale the clip is skipped entirely, so a corners
+ * rule really is ineffective there and the picker refuses it.
+ *
  * @param {Record<string, string>} properties - extractWindowProperties() output
  * @param {WindowEvaluationParams} params - The window as the runtime sees it
  * @param {string} direction - RuleDirection
@@ -306,6 +325,7 @@ export function pickedRuleWouldChange(properties, params, direction) {
         isMaximized: false,
         isFullscreen: false,
         hasTileMatch: false,
+        tiled: false,
     };
 
     return ruleWouldChangeActions(asKind, {direction, key, axes: RULE_AXIS_ORDER});

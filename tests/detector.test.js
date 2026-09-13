@@ -240,15 +240,33 @@ describe('evaluateWindowActions', () => {
             ...baseWin,
             bufferWidth: 1, bufferHeight: 1, frameWidth: 1, frameHeight: 1,
         });
-        expect(res.applyShadow).toBeFalse();
-        expect(res.applyClip).toBeFalse();
+        expect(res.drawShadow).toBeFalse();
+        expect(res.drawClip).toBeFalse();
         expect(res.reason).toBe('too-small(1x1)');
+    });
+
+    it('tiled window: flat corners, so no clip is drawn', () => {
+        // The clip axis is on, but the tiled style is radius 0 with no outline, so
+        // there is nothing to draw - the decision now lives in evaluateWindowActions().
+        const lone = evaluateWindowActions({...baseWin, tiled: true});
+        expect(lone.drawClip).toBeFalse();
+        expect(lone.drawShadow).toBeTrue();
+
+        const matched = evaluateWindowActions({...baseWin, tiled: true, hasTileMatch: true});
+        expect(matched.drawClip).toBeFalse();
+        expect(matched.drawShadow).toBeFalse();
+    });
+
+    it('returns the style the decision was made with, so a caller cannot re-derive it', () => {
+        const res = evaluateWindowActions({...baseWin, tiled: true});
+        expect(res.style.radius).toBe(0);
+        expect(res.style.outline).toBeNull();
     });
 
     it('default normal non-CSD window: both shadow and clip enabled', () => {
         const res = evaluateWindowActions(baseWin);
-        expect(res.applyShadow).toBeTrue();
-        expect(res.applyClip).toBeTrue();
+        expect(res.drawShadow).toBeTrue();
+        expect(res.drawClip).toBeTrue();
         expect(res.reason).toContain('no-csd');
     });
 
@@ -258,8 +276,8 @@ describe('evaluateWindowActions', () => {
             isX11: true,
             wmClass: 'wps',
         });
-        expect(res.applyShadow).toBeFalse();
-        expect(res.applyClip).toBeTrue();
+        expect(res.drawShadow).toBeFalse();
+        expect(res.drawClip).toBeTrue();
         expect(res.reason).toBe('x11-mutter-native-shadow');
     });
 
@@ -269,8 +287,8 @@ describe('evaluateWindowActions', () => {
             hasSsd: true,
             wmClass: 'xclock',
         });
-        expect(res.applyShadow).toBeFalse();
-        expect(res.applyClip).toBeTrue();
+        expect(res.drawShadow).toBeFalse();
+        expect(res.drawClip).toBeTrue();
         expect(res.reason).toBe('has-ssd-frame');
     });
 
@@ -280,8 +298,8 @@ describe('evaluateWindowActions', () => {
             isAdwaita: true,
             wmClass: 'org.gnome.Nautilus',
         });
-        expect(res.applyShadow).toBeFalse();
-        expect(res.applyClip).toBeFalse();
+        expect(res.drawShadow).toBeFalse();
+        expect(res.drawClip).toBeFalse();
         expect(res.reason).toBe('has-adwaita-csd');
     });
 
@@ -293,8 +311,8 @@ describe('evaluateWindowActions', () => {
             bufferWidth: 1156, bufferHeight: 852,
             frameWidth: 1148, frameHeight: 844,
         });
-        expect(res.applyShadow).toBeTrue();
-        expect(res.applyClip).toBeTrue();
+        expect(res.drawShadow).toBeTrue();
+        expect(res.drawClip).toBeTrue();
         expect(res.reason).toContain('no-csd');
     });
 
@@ -304,8 +322,8 @@ describe('evaluateWindowActions', () => {
             wmClass: 'overlay-app',
             rules: {suppress: {[buildRuleKey('overlay-app')]: 'shadow,corners'}},
         });
-        expect(res.applyShadow).toBeFalse();
-        expect(res.applyClip).toBeFalse();
+        expect(res.drawShadow).toBeFalse();
+        expect(res.drawClip).toBeFalse();
         expect(res.reason).toContain('rule-applied');
     });
 
@@ -315,8 +333,8 @@ describe('evaluateWindowActions', () => {
             wmClass: 'wechat',
             rules: {suppress: {[buildRuleKey('wechat')]: 'corners'}},
         });
-        expect(res.applyShadow).toBeTrue();
-        expect(res.applyClip).toBeFalse();
+        expect(res.drawShadow).toBeTrue();
+        expect(res.drawClip).toBeFalse();
         expect(res.reason).toContain('rule-applied');
     });
 
@@ -326,8 +344,8 @@ describe('evaluateWindowActions', () => {
             wmClass: 'custom-tool',
             rules: {suppress: {[buildRuleKey('custom-tool')]: 'shadow'}},
         });
-        expect(res.applyShadow).toBeFalse();
-        expect(res.applyClip).toBeTrue();
+        expect(res.drawShadow).toBeFalse();
+        expect(res.drawClip).toBeTrue();
         expect(res.reason).toContain('rule-applied');
     });
 
@@ -340,8 +358,8 @@ describe('evaluateWindowActions', () => {
                 force: {[buildRuleKey('wechat')]: 'shadow,corners'},
             },
         });
-        expect(res.applyShadow).toBeTrue();
-        expect(res.applyClip).toBeFalse();
+        expect(res.drawShadow).toBeTrue();
+        expect(res.drawClip).toBeFalse();
         expect(res.reason).toBe('rule-applied(wechat:suppress:corners)');
     });
 
@@ -353,8 +371,8 @@ describe('evaluateWindowActions', () => {
             rules: {suppress: {[buildRuleKey('gtk4-app')]: 'corners'}},
         };
         const res = evaluateWindowActions(csdWin);
-        expect(res.applyShadow).toBeFalse();
-        expect(res.applyClip).toBeFalse();
+        expect(res.drawShadow).toBeFalse();
+        expect(res.drawClip).toBeFalse();
     });
 
     it('CSD window (GTK4): the has-csd baseline reason surfaces when no rule matches', () => {
@@ -363,8 +381,8 @@ describe('evaluateWindowActions', () => {
             bufferWidth: 460, bufferHeight: 360, // single side 30px >= 8px
             wmClass: 'gtk4-app',
         });
-        expect(res.applyShadow).toBeFalse();
-        expect(res.applyClip).toBeFalse();
+        expect(res.drawShadow).toBeFalse();
+        expect(res.drawClip).toBeFalse();
         expect(res.reason).toContain('has-csd');
     });
 
@@ -375,8 +393,8 @@ describe('evaluateWindowActions', () => {
             wmClass: 'gtk4-app',
             rules: {force: {[buildRuleKey('gtk4-app')]: 'shadow,corners'}},
         });
-        expect(res.applyShadow).toBeTrue();
-        expect(res.applyClip).toBeTrue();
+        expect(res.drawShadow).toBeTrue();
+        expect(res.drawClip).toBeTrue();
         expect(res.reason).toBe('rule-applied(gtk4-app:force:shadow,corners)');
     });
 
@@ -387,8 +405,8 @@ describe('evaluateWindowActions', () => {
             wmClass: 'wps',
             rules: {force: {[buildRuleKey('wps', {clientType: 'x11'})]: 'shadow,corners'}},
         });
-        expect(res.applyShadow).toBeTrue();
-        expect(res.applyClip).toBeTrue();
+        expect(res.drawShadow).toBeTrue();
+        expect(res.drawClip).toBeTrue();
         expect(res.reason).toContain('rule-applied');
     });
 
@@ -399,8 +417,8 @@ describe('evaluateWindowActions', () => {
             wmClass: 'gtk4-app',
             rules: {force: {[buildRuleKey('gtk4-app')]: 'corners'}},
         });
-        expect(res.applyShadow).toBeFalse();
-        expect(res.applyClip).toBeTrue();
+        expect(res.drawShadow).toBeFalse();
+        expect(res.drawClip).toBeTrue();
         expect(res.reason).toBe('rule-applied(gtk4-app:force:corners)');
     });
 
@@ -411,8 +429,8 @@ describe('evaluateWindowActions', () => {
             wmClass: 'gtk4-app',
             rules: {force: {[buildRuleKey('gtk4-app')]: 'shadow'}},
         });
-        expect(res.applyShadow).toBeTrue();
-        expect(res.applyClip).toBeFalse();
+        expect(res.drawShadow).toBeTrue();
+        expect(res.drawClip).toBeFalse();
         expect(res.reason).toBe('rule-applied(gtk4-app:force:shadow)');
     });
 
@@ -423,8 +441,8 @@ describe('evaluateWindowActions', () => {
             wmClass: 'wps',
             rules: {suppress: {[buildRuleKey('wps', {clientType: 'x11'})]: 'corners'}},
         });
-        expect(res.applyShadow).toBeFalse();
-        expect(res.applyClip).toBeFalse();
+        expect(res.drawShadow).toBeFalse();
+        expect(res.drawClip).toBeFalse();
         expect(res.reason).toBe('rule-applied(wps:suppress:corners)');
     });
 
@@ -435,8 +453,8 @@ describe('evaluateWindowActions', () => {
             wmClass: 'wechat',
             rules: {force: {[buildRuleKey('wechat')]: 'shadow,corners'}},
         });
-        expect(res.applyShadow).toBeFalse();
-        expect(res.applyClip).toBeFalse();
+        expect(res.drawShadow).toBeFalse();
+        expect(res.drawClip).toBeFalse();
         expect(res.reason).toBe('maximized/fullscreen');
     });
 
@@ -447,8 +465,8 @@ describe('evaluateWindowActions', () => {
             wmClass: 'wechat',
             rules: {force: {[buildRuleKey('wechat')]: 'shadow,corners'}},
         });
-        expect(res.applyShadow).toBeFalse();
-        expect(res.applyClip).toBeFalse();
+        expect(res.drawShadow).toBeFalse();
+        expect(res.drawClip).toBeFalse();
         expect(res.reason).toBe('maximized/fullscreen');
     });
 
@@ -459,8 +477,8 @@ describe('evaluateWindowActions', () => {
             wmClass: 'dock-app',
             rules: {force: {[buildRuleKey('dock-app', {windowType: WindowType.DOCK})]: 'shadow,corners'}},
         });
-        expect(res.applyShadow).toBeFalse();
-        expect(res.applyClip).toBeFalse();
+        expect(res.drawShadow).toBeFalse();
+        expect(res.drawClip).toBeFalse();
         expect(res.reason).toBe(`window-type=${WindowType.DOCK}`);
     });
 
@@ -471,8 +489,8 @@ describe('evaluateWindowActions', () => {
             wmClass: 'legacy-x11',
             rules: {suppress: {[buildRuleKey('legacy-x11')]: 'corners'}},
         });
-        expect(res.applyShadow).toBeFalse();
-        expect(res.applyClip).toBeFalse();
+        expect(res.drawShadow).toBeFalse();
+        expect(res.drawClip).toBeFalse();
         expect(res.reason).toBe('rule-applied(legacy-x11:suppress:corners)');
     });
 
@@ -482,16 +500,16 @@ describe('evaluateWindowActions', () => {
             monitorScale: 1.0,
             preferCrispText: true,
         });
-        expect(res1.applyShadow).toBeTrue();
-        expect(res1.applyClip).toBeTrue();
+        expect(res1.drawShadow).toBeTrue();
+        expect(res1.drawClip).toBeTrue();
 
         const res2 = evaluateWindowActions({
             ...baseWin,
             monitorScale: 2.0,
             preferCrispText: true,
         });
-        expect(res2.applyShadow).toBeTrue();
-        expect(res2.applyClip).toBeTrue();
+        expect(res2.drawShadow).toBeTrue();
+        expect(res2.drawClip).toBeTrue();
     });
 
     it('preferCrispText skips corner clipping on fractional scale displays (1.25x, 1.333x, 1.5x) while retaining shadow', () => {
@@ -501,8 +519,8 @@ describe('evaluateWindowActions', () => {
                 monitorScale: fracScale, // monitor physical scale
                 preferCrispText: true,
             });
-            expect(res.applyShadow).toBeTrue();
-            expect(res.applyClip).toBeFalse();
+            expect(res.drawShadow).toBeTrue();
+            expect(res.drawClip).toBeFalse();
         }
     });
 
@@ -512,8 +530,8 @@ describe('evaluateWindowActions', () => {
             monitorScale: 1.333333,
             preferCrispText: false,
         });
-        expect(res.applyShadow).toBeTrue();
-        expect(res.applyClip).toBeTrue();
+        expect(res.drawShadow).toBeTrue();
+        expect(res.drawClip).toBeTrue();
     });
 
     it('rule for one window kind leaves other kinds of the same app decorated', () => {
@@ -531,8 +549,8 @@ describe('evaluateWindowActions', () => {
             allowsResize: true,
             rules,
         });
-        expect(mainWin.applyShadow).toBeTrue();
-        expect(mainWin.applyClip).toBeTrue();
+        expect(mainWin.drawShadow).toBeTrue();
+        expect(mainWin.drawClip).toBeTrue();
 
         // Fixed child dialog matches the rule
         const dialogWin = evaluateWindowActions({
@@ -542,8 +560,8 @@ describe('evaluateWindowActions', () => {
             allowsResize: false,
             rules,
         });
-        expect(dialogWin.applyShadow).toBeFalse();
-        expect(dialogWin.applyClip).toBeFalse();
+        expect(dialogWin.drawShadow).toBeFalse();
+        expect(dialogWin.drawClip).toBeFalse();
         expect(dialogWin.reason).toContain('rule-applied');
 
         // Resizable child of the same app is a different kind -> untouched
@@ -554,8 +572,8 @@ describe('evaluateWindowActions', () => {
             allowsResize: true,
             rules,
         });
-        expect(resizableChild.applyShadow).toBeTrue();
-        expect(resizableChild.applyClip).toBeTrue();
+        expect(resizableChild.drawShadow).toBeTrue();
+        expect(resizableChild.drawClip).toBeTrue();
     });
 
     it('client type is part of the window kind: an X11 window does not match a Wayland rule', () => {
@@ -573,7 +591,7 @@ describe('evaluateWindowActions', () => {
             allowsResize: false,
             rules,
         });
-        expect(waylandChild.applyShadow).toBeFalse();
+        expect(waylandChild.drawShadow).toBeFalse();
 
         // XWayland variant with 4px frame extents: decorated, because the stored
         // rule targets the Wayland kind only.
@@ -587,8 +605,8 @@ describe('evaluateWindowActions', () => {
             allowsResize: false,
             rules,
         });
-        expect(x11Child.applyShadow).toBeTrue();
-        expect(x11Child.applyClip).toBeTrue();
+        expect(x11Child.drawShadow).toBeTrue();
+        expect(x11Child.drawClip).toBeTrue();
     });
 
     it('GNOME tiling alignment: hasTileMatch suppresses shadow to prevent adjacent window obstruction', () => {
@@ -598,8 +616,8 @@ describe('evaluateWindowActions', () => {
             isMaximized: false,
             hasTileMatch: true,
         });
-        expect(snapTiledWin.applyShadow).toBeFalse();
-        expect(snapTiledWin.applyClip).toBeTrue();
+        expect(snapTiledWin.drawShadow).toBeFalse();
+        expect(snapTiledWin.drawClip).toBeTrue();
         expect(snapTiledWin.reason).toContain('tile-match(suppress-shadow');
     });
 
@@ -609,8 +627,8 @@ describe('evaluateWindowActions', () => {
             isMaximized: false,
             hasTileMatch: false,
         });
-        expect(singleTiledWin.applyShadow).toBeTrue();
-        expect(singleTiledWin.applyClip).toBeTrue();
+        expect(singleTiledWin.drawShadow).toBeTrue();
+        expect(singleTiledWin.drawClip).toBeTrue();
     });
 
     it('GNOME tiling alignment: full maximized window skips all decorations', () => {
@@ -619,8 +637,8 @@ describe('evaluateWindowActions', () => {
             isMaximized: true,
             hasTileMatch: false,
         });
-        expect(maximizedWin.applyShadow).toBeFalse();
-        expect(maximizedWin.applyClip).toBeFalse();
+        expect(maximizedWin.drawShadow).toBeFalse();
+        expect(maximizedWin.drawClip).toBeFalse();
         expect(maximizedWin.reason).toBe('maximized/fullscreen');
     });
 });
