@@ -89,5 +89,28 @@ describe('getWindowRules', () => {
             [buildRuleKey('gtk4-app')]: 'shadow,corners',
         });
     });
+
+    it('skips writing a group whose stored value already matches', () => {
+        let writes = 0;
+        const mockSettings = {
+            get_value: () => ({equal: () => true}),
+            set_value: () => { writes++; },
+        };
+        setWindowRules(mockSettings, {
+            suppress: {[buildRuleKey('wechat')]: 'corners'},
+            force: {[buildRuleKey('gtk4-app')]: 'shadow'},
+        });
+        expect(writes).toBe(0);
+    });
+
+    it('writes a group whose stored value differs', () => {
+        let writes = 0;
+        const mockSettings = {
+            get_value: () => ({equal: () => false}),
+            set_value: () => { writes++; },
+        };
+        setWindowRules(mockSettings, {suppress: {[buildRuleKey('wechat')]: 'corners'}});
+        expect(writes).toBe(2);
+    });
 });
 
