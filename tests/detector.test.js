@@ -80,6 +80,12 @@ describe('checkDecorationEligibility', () => {
             .toEqual({eligible: false, reason: 'maximized/fullscreen'});
     });
 
+    it('degenerate helper surfaces (e.g. wl-clipboard 1x1) -> ineligible', () => {
+        const r = checkDecorationEligibility({...base, frameWidth: 1, frameHeight: 1});
+        expect(r.eligible).toBeFalse();
+        expect(r.reason).toBe('too-small(1x1)');
+    });
+
     it('non-normal window type -> ineligible and names the offending type', () => {
         const r = checkDecorationEligibility({...base, windowType: WindowType.DOCK});
         expect(r.eligible).toBeFalse();
@@ -228,6 +234,16 @@ describe('evaluateWindowActions', () => {
         windowType: WindowType.NORMAL,
         wmClass: 'test-app',
     };
+
+    it('degenerate helper surface (wl-clipboard 1x1): no decoration', () => {
+        const res = evaluateWindowActions({
+            ...baseWin,
+            bufferWidth: 1, bufferHeight: 1, frameWidth: 1, frameHeight: 1,
+        });
+        expect(res.applyShadow).toBeFalse();
+        expect(res.applyClip).toBeFalse();
+        expect(res.reason).toBe('too-small(1x1)');
+    });
 
     it('default normal non-CSD window: both shadow and clip enabled', () => {
         const res = evaluateWindowActions(baseWin);

@@ -11,6 +11,16 @@ import {
     withRule,
 } from './rules.js';
 import {buildRuleKeyFromProperties} from './pick.js';
+import {ADWAITA_STYLE} from './adwaitaStyle.generated.js';
+
+/**
+ * A window narrower or shorter than two corner radii cannot carry a rounded
+ * rectangle - the two arcs on that axis would overlap - so it is a helper
+ * surface, not a window. wl-clipboard maps a 1x1 transparent toplevel to hold
+ * the selection; rounding or shadowing it paints a phantom decoration. Derived
+ * from libadwaita's own radius so it tracks the real decoration.
+ */
+const MIN_DECORABLE_SIZE = 2 * ADWAITA_STYLE.window.radius;
 
 /**
  * Decoration detection: what we would draw for a window, and whether a rule would
@@ -40,11 +50,15 @@ export function computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight
  * @param {number} [params.windowType=WindowType.NORMAL] - Meta.WindowType
  * @param {boolean} [params.isMaximized=false]
  * @param {boolean} [params.isFullscreen=false]
+ * @param {number} [params.frameWidth=Infinity] - On-screen window width, logical px
+ * @param {number} [params.frameHeight=Infinity] - On-screen window height, logical px
  * @returns {{eligible: boolean, reason: string}}
  */
 export function checkDecorationEligibility({
     windowType = WindowType.NORMAL,
     isMaximized = false, isFullscreen = false,
+    frameWidth = Number.POSITIVE_INFINITY,
+    frameHeight = Number.POSITIVE_INFINITY,
 } = {}) {
     // Only normal, dialog, modal and utility windows are ours to decorate.
     if (windowType !== WindowType.NORMAL && windowType !== WindowType.DIALOG &&
@@ -54,6 +68,11 @@ export function checkDecorationEligibility({
     // Maximized / fullscreen: libadwaita gives them square corners and no shadow.
     if (isMaximized || isFullscreen)
         return {eligible: false, reason: 'maximized/fullscreen'};
+
+    // Helper surfaces are not windows: decorating a 1x1 transparent toplevel
+    // paints a shadow over nothing. wl-clipboard is the known case.
+    if (frameWidth < MIN_DECORABLE_SIZE || frameHeight < MIN_DECORABLE_SIZE)
+        return {eligible: false, reason: `too-small(${frameWidth}x${frameHeight})`};
 
     return {eligible: true, reason: ''};
 }
@@ -202,7 +221,7 @@ export function evaluateWindowActions({
     // 2. Inferred baseline - what we would do with no rule at all.
     // 3. User rule - moves the axes it names; the only layer that can turn one on.
     // 4. State modifiers - policies, not inferences (docs/decoration-model.md).
-    const eligibility = checkDecorationEligibility({windowType, isMaximized, isFullscreen});
+    const eligibility = checkDecorationEligibility({windowType, isMaximized, isFullscreen, frameWidth, frameHeight});
     if (!eligibility.eligible)
         return {applyShadow: false, applyClip: false, reason: eligibility.reason};
 

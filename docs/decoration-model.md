@@ -11,7 +11,7 @@ Mutter does, so a change there does not have to rediscover them.
 ## Four layers, applied in order
 
 ```
-can we decorate it?   window type, maximized, fullscreen                 ── no ──▶ leave it
+can we decorate it?   window type, maximized, fullscreen, tiny helper    ── no ──▶ leave it
 is it already drawn?  declared margins, Mutter native shadow (X11), Libadwaita / Libhandy maps ── yes ─▶ leave it
 your rules?           suppress / force, moving only the axes they name
 any policy?           tiled neighbour, crisp text on fractional scaling
@@ -19,8 +19,9 @@ any policy?           tiled neighbour, crisp text on fractional scaling
 ```
 
 1. **Structural eligibility** — `checkDecorationEligibility()`. Window type,
-   maximized/fullscreen. These are facts about the window, and a user rule must
-   never override them.
+   maximized/fullscreen, and a degenerate size (helper surfaces such as
+   wl-clipboard's 1x1 transparent toplevel). These are facts about the window,
+   and a user rule must never override them.
 2. **Inferred baseline** — `inferDecorationBaseline()`. Answered per axis:
    - **Shadows**: Only drawn when the window has neither a client-side CSD shadow
      nor a Mutter native shadow nor a frames-client frame (SSD).
