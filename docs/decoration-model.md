@@ -11,21 +11,25 @@ Mutter does, so a change there does not have to rediscover them.
 ## Four layers, applied in order
 
 ```
-can we decorate it?   window type, maximized, already server-decorated   ── no ──▶ leave it
-is it already drawn?  declared margins, X11 native shadow                ── yes ─▶ leave it
+can we decorate it?   window type, maximized, fullscreen                 ── no ──▶ leave it
+is it already drawn?  declared margins, Mutter native shadow (X11), Libadwaita / Libhandy maps ── yes ─▶ leave it
 your rules?           suppress / force, moving only the axes they name
 any policy?           tiled neighbour, crisp text on fractional scaling
                       └───────────────────────────────▶ draw
 ```
 
 1. **Structural eligibility** — `checkDecorationEligibility()`. Window type,
-   maximized/fullscreen, server-side decorations. These are facts about the
-   window, and a user rule must never override them.
-2. **Inferred baseline** — `inferDecorationBaseline()`. Whether the client already
-   draws its own shadow (it reserved content margins for one) or, on X11, whether
-   Mutter draws one itself. Both axes answer alike, because every reason here is
-   about the window as a whole; they are kept separate so a rule can move one and
-   leave the other to this layer.
+   maximized/fullscreen. These are facts about the window, and a user rule must
+   never override them.
+2. **Inferred baseline** — `inferDecorationBaseline()`. Answered per axis:
+   - **Shadows**: Only drawn when the window has neither a client-side CSD shadow
+     nor a Mutter native shadow nor a frames-client frame (SSD).
+   - **Rounded corners**: Applied to all windows lacking native rounded corners.
+     Windows using Libadwaita / Libhandy already draw native rounded corners and
+     are skipped (per-process pid linkage, so mixed windows of one process share
+     one answer). Server-side decorated (SSD) windows keep the frames-client shadow
+     and X11 windows without custom frame extents keep Mutter's native shadow, while
+     both receive rounded corners clipped at the surface level.
 3. **User rules** — `src/lib/rules.js`. `suppress-rules` and `force-rules` move the
    axes they name, in one direction. The only layer that may turn an axis back on.
 4. **State modifiers** — inside `evaluateWindowActions()`. Applied last, on top of
@@ -37,14 +41,25 @@ inference, not to overrule a fact or a policy.
 
 ## Where we deliberately differ from Mutter
 
-- **X11 / XWayland without custom frame extents.** Mutter's C core draws the box
-  shadow itself (`meta-window-actor-x11.c`, `has_shadow()`), so we decorate nothing
-  at all — corners included. Rounding the contents while Mutter's square shadow
-  follows the square frame would leave shadow corners poking out past the rounded
-  content. That is a consistency call rather than a fact, which is exactly why a
-  `force` rule is allowed to override it. X11 windows that *do* declare frame
-  extents (WeChat's 4px resize grip) make Mutter drop its native shadow, so those
-  are decorated like any other window.
+- **X11 / XWayland without custom frame extents & Server-Side Decorations (SSD).**
+  We never paint a redundant shadow (`shadow: false`); who owns the visible one
+  depends on the case. For SSD, Mutter's compositor draws none — `has_shadow()`
+  (`meta-window-actor-x11.c`) returns FALSE once a frame exists (*"Let the frames
+  client put a shadow around frames"*), and the frames client draws its own:
+  a GTK window carrying the `ssd-frame` CSS class (`src/frames/meta-frame.c:570`),
+  whose shadow comes from the GTK/Adwaita theme (`window.csd { box-shadow: … }`
+  in libadwaita's `src/stylesheet/widgets/_window.scss`), not from the compositor. For bare X11 windows Mutter does draw
+  one, but strictly outside the window square: it is painted only into the
+  beneath-region (`shadow_clip`, strict clip), and it is a soft Gaussian blur of the
+  window shape (`default_shadow_classes[]` in `src/x11/meta-shadow-factory.c` gives a
+  normal window `{radius 10, opacity 128}` focused), not an opaque square. Either way
+  no square shadow sits under the corners we cut, so we clip the window's surface
+  child actor (`actor.get_first_child()`) with `RoundedClipEffect` to the native
+  15px (`window.radius` in `adwaitaStyle.generated.js`, `$button_radius(9)+6`), and
+  the cut corners reveal desktop background. SSD is an inference (layer 2), not a
+  structural fact as it once was: a `force` rule may override it.
+  X11 windows that *do* declare frame extents (WeChat's 4px resize grip) make Mutter drop its
+  native shadow, so those receive both shadow and rounded corners.
 - **A snap-tiled window keeps its corners but loses its shadow** when it has an
   adjacent match, following Mutter's own reasoning that the shadow would obstruct
   the neighbour (`meta-window-actor-x11.c`). A lone half-tiled window keeps the
@@ -93,7 +108,7 @@ session:
 
 | Part | Where | Size |
 |---|---|---|
-| clip | `clipEffect.js`, on the window actor | window size + 3px, ~8.3 MB at 1920x1080 |
+| clip | `clipEffect.js`, on the window actor (surface actor on X11) | window size + 3px, ~8.3 MB at 1920x1080 |
 | shadow | `shadowTexture.js`, baked once per style | 145x145, ~82 KB, shared by every window |
 
 The clip pass is skipped when there is nothing to clip (radius 0 and no outline) and a

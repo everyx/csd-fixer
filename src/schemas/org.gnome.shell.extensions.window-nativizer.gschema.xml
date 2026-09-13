@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<schemalist gettext-domain="csd-fixer">
-  <schema id="org.gnome.shell.extensions.csd-fixer"
-          path="/org/gnome/shell/extensions/csd-fixer/"
-          gettext-domain="csd-fixer">
+<schemalist gettext-domain="window-nativizer">
+  <schema id="org.gnome.shell.extensions.window-nativizer"
+          path="/org/gnome/shell/extensions/window-nativizer/"
+          gettext-domain="window-nativizer">
     <key name="suppress-rules" type="a{ss}">
       <default>{}</default>
       <summary>Windows that must not be decorated</summary>
@@ -15,7 +15,9 @@
         attributes, so a rule never generalizes to every window of an application.
         Value: which decorations to suppress — 'shadow', 'corners', or
         'shadow,corners' for both. Structural disqualifiers (non-decorable window
-        type, maximized/fullscreen, server-side decorations) are never affected.
+        type, maximized/fullscreen) are never affected. Server-side decorated
+        windows keep their native shadow by default but take rounded corners,
+        and either axis may still be moved by a rule.
         A key present here must not also appear in 'force-rules'; on conflict the
         suppression wins.
       </description>

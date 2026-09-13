@@ -51,7 +51,6 @@ describe('checkDecorationEligibility', () => {
         windowType: WindowType.NORMAL,
         isMaximized: false,
         isFullscreen: false,
-        hasSsd: false,
     };
 
     it('plain normal window -> eligible', () => {
@@ -66,10 +65,12 @@ describe('checkDecorationEligibility', () => {
             expect(checkDecorationEligibility({...base, windowType}).eligible).toBeTrue();
     });
 
-    it('server-side decorations (SSD, traditional X11 app with system titlebar) -> ineligible', () => {
-        const r = checkDecorationEligibility({...base, hasSsd: true});
-        expect(r.eligible).toBeFalse();
-        expect(r.reason).toBe('has-ssd-frame');
+    it('server-side decorations (SSD) are not a structural gate: gating lives in the baseline', () => {
+        // checkDecorationEligibility() takes no hasSsd parameter; SSD windows stay
+        // eligible here and are resolved per-axis by inferDecorationBaseline().
+        expect(checkDecorationEligibility(base)).toEqual({eligible: true, reason: ''});
+        const r = inferDecorationBaseline({hasSsd: true, ...marginsFromRects(800, 600, 800, 600)});
+        expect(r).toEqual({shadow: false, corners: true, reason: 'has-ssd-frame'});
     });
 
     it('maximized / fullscreen -> ineligible', () => {
@@ -124,11 +125,25 @@ describe('inferDecorationBaseline', () => {
         expect(r.reason).toContain(`4.0x4.0 < ${MUTTER_CSD_MIN_INSET_THRESHOLD}`);
     });
 
-    it('X11 / XWayland windows without frame extents (WPS Office, Dida) -> Mutter C core manages native shadow, baseline off', () => {
+    it('X11 / XWayland windows without frame extents (WPS Office, Dida) -> Mutter C core manages native shadow, clips corners', () => {
         const r = inferDecorationBaseline({isX11: true, ...marginsFromRects(800, 600, 800, 600)});
         expect(r.shadow).toBeFalse();
-        expect(r.corners).toBeFalse();
+        expect(r.corners).toBeTrue();
         expect(r.reason).toBe('x11-mutter-native-shadow');
+    });
+
+    it('server-side decorations (SSD, traditional X11 app with system titlebar) -> retains native shadow, clips corners', () => {
+        const r = inferDecorationBaseline({hasSsd: true, ...marginsFromRects(800, 600, 800, 600)});
+        expect(r.shadow).toBeFalse();
+        expect(r.corners).toBeTrue();
+        expect(r.reason).toBe('has-ssd-frame');
+    });
+
+    it('native Libadwaita / Libhandy apps -> skips shadow and corners', () => {
+        const r = inferDecorationBaseline({isAdwaita: true, ...marginsFromRects(800, 600, 800, 600)});
+        expect(r.shadow).toBeFalse();
+        expect(r.corners).toBeFalse();
+        expect(r.reason).toBe('has-adwaita-csd');
     });
 
     it('X11 with a small non-zero grip declares custom frame extents -> baseline still decorates', () => {
@@ -221,15 +236,37 @@ describe('evaluateWindowActions', () => {
         expect(res.reason).toContain('no-csd');
     });
 
-    it('X11 window without frame extents (WPS, dida): skips both shadow and clip due to native Mutter shadow', () => {
+    it('X11 window without frame extents (WPS, dida): skips shadow due to native Mutter shadow, clips corners', () => {
         const res = evaluateWindowActions({
             ...baseWin,
             isX11: true,
             wmClass: 'wps',
         });
         expect(res.applyShadow).toBeFalse();
-        expect(res.applyClip).toBeFalse();
+        expect(res.applyClip).toBeTrue();
         expect(res.reason).toBe('x11-mutter-native-shadow');
+    });
+
+    it('SSD window: retains native shadow and clips corners', () => {
+        const res = evaluateWindowActions({
+            ...baseWin,
+            hasSsd: true,
+            wmClass: 'xclock',
+        });
+        expect(res.applyShadow).toBeFalse();
+        expect(res.applyClip).toBeTrue();
+        expect(res.reason).toBe('has-ssd-frame');
+    });
+
+    it('native Libadwaita window: skips both shadow and clip', () => {
+        const res = evaluateWindowActions({
+            ...baseWin,
+            isAdwaita: true,
+            wmClass: 'org.gnome.Nautilus',
+        });
+        expect(res.applyShadow).toBeFalse();
+        expect(res.applyClip).toBeFalse();
+        expect(res.reason).toBe('has-adwaita-csd');
     });
 
     it('X11 window with small frame extents (WeChat 4px resize grip): decorates with shadow and clip', () => {
@@ -354,13 +391,25 @@ describe('evaluateWindowActions', () => {
     it('per-axis force: shadow turned ON while corners keeps the inferred baseline', () => {
         const res = evaluateWindowActions({
             ...baseWin,
-            isX11: true,
-            wmClass: 'wps',
-            rules: {force: {[buildRuleKey('wps', {clientType: 'x11'})]: 'shadow'}},
+            bufferWidth: 460, bufferHeight: 360, // has-csd baseline: shadow=false, corners=false
+            wmClass: 'gtk4-app',
+            rules: {force: {[buildRuleKey('gtk4-app')]: 'shadow'}},
         });
         expect(res.applyShadow).toBeTrue();
         expect(res.applyClip).toBeFalse();
-        expect(res.reason).toBe('rule-applied(wps:force:shadow)');
+        expect(res.reason).toBe('rule-applied(gtk4-app:force:shadow)');
+    });
+
+    it('per-axis suppress: corners turned OFF while shadow keeps the inferred baseline', () => {
+        const res = evaluateWindowActions({
+            ...baseWin,
+            isX11: true,
+            wmClass: 'wps',
+            rules: {suppress: {[buildRuleKey('wps', {clientType: 'x11'})]: 'corners'}},
+        });
+        expect(res.applyShadow).toBeFalse();
+        expect(res.applyClip).toBeFalse();
+        expect(res.reason).toBe('rule-applied(wps:suppress:corners)');
     });
 
     it('force rules cannot override structural ineligibility: maximized', () => {
@@ -399,16 +448,16 @@ describe('evaluateWindowActions', () => {
         expect(res.reason).toBe(`window-type=${WindowType.DOCK}`);
     });
 
-    it('force rules cannot override structural ineligibility: SSD', () => {
+    it('user rules can suppress corners on SSD windows', () => {
         const res = evaluateWindowActions({
             ...baseWin,
             hasSsd: true,
             wmClass: 'legacy-x11',
-            rules: {force: {[buildRuleKey('legacy-x11')]: 'shadow,corners'}},
+            rules: {suppress: {[buildRuleKey('legacy-x11')]: 'corners'}},
         });
         expect(res.applyShadow).toBeFalse();
         expect(res.applyClip).toBeFalse();
-        expect(res.reason).toBe('has-ssd-frame');
+        expect(res.reason).toBe('rule-applied(legacy-x11:suppress:corners)');
     });
 
     it('preferCrispText retains rounded corners on integer scale displays (1.0x, 2.0x)', () => {
@@ -685,6 +734,16 @@ describe('pickedRuleWouldChange', () => {
         // A maximized window is never decorated, but the rule outlives the state.
         const maximized = {...plainWindow, isMaximized: true};
         expect(pickedRuleWouldChange(propertiesFor(maximized), maximized, RuleDirection.SUPPRESS)).toBeTrue();
+    });
+
+    it('preserves the hasSsd / isAdwaita kind attributes while normalizing transient state', () => {
+        // Maximized (transient) is normalized away, but hasSsd (kind) is kept:
+        // suppressing corners on an SSD window still changes the outcome.
+        const ssd = {...plainWindow, hasSsd: true, isMaximized: true, wmClass: 'xclock'};
+        expect(pickedRuleWouldChange(propertiesFor(ssd), ssd, RuleDirection.SUPPRESS)).toBeTrue();
+        // Libadwaita draws everything itself: suppressing changes nothing.
+        const adw = {...plainWindow, isAdwaita: true, isMaximized: true, wmClass: 'adw-app'};
+        expect(pickedRuleWouldChange(propertiesFor(adw), adw, RuleDirection.SUPPRESS)).toBeFalse();
     });
 
     it('returns null when the window declares no identity', () => {

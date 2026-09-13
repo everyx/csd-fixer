@@ -20,6 +20,7 @@ import {extractWindowProperties} from './pick.js';
 import {getWindowRules, SETTINGS_KEY_SUPPRESS_RULES, SETTINGS_KEY_FORCE_RULES} from './settings.js';
 import {resolveWindowIdentity} from './window.js';
 import {styleForWindow} from './style.js';
+import * as adwaitaDetector from './adwaitaDetector.js';
 import {RoundedClipEffect} from '../effects/clipEffect.js';
 import {ShadowActor} from '../effects/shadowActor.js';
 import * as shadowTexture from '../effects/shadowTexture.js';
@@ -87,6 +88,7 @@ export class Manager {
         this._settingsHandlerIds?.forEach(id => this._settings.disconnect(id));
         this._settingsHandlerIds = [];
         this._rules = null;
+        adwaitaDetector.clearAdwaitaCache();
         shadowTexture.destroy();
     }
 
@@ -147,7 +149,7 @@ export class Manager {
         if (this._windows.has(win))
             return;
         const state = {
-            clip: null, shadow: null,
+            clip: null, clipTarget: null, shadow: null,
             idleId: null, reconcileTimeout: null,
             firstFrameDone: false, signals: [],
         };
@@ -202,7 +204,19 @@ export class Manager {
             this._disconnectSignals(state.signals);
             // Retain clipEffect and shadowActor to fade naturally with windowActor on close
         }
+        const pid = win.get_pid?.();
         this._windows.delete(win);
+        if (pid) {
+            let hasPeer = false;
+            for (const other of this._windows.keys()) {
+                if (other.get_pid?.() === pid) {
+                    hasPeer = true;
+                    break;
+                }
+            }
+            if (!hasPeer)
+                adwaitaDetector.clearAdwaitaCache(pid);
+        }
     }
 
     /** Debounced full pass, for the events that can affect more than one window. */
@@ -240,6 +254,25 @@ export class Manager {
         return 1;
     }
 
+    /**
+     * Gets the actor to which the clipping effect should be attached.
+     * In Wayland, the effect is applied directly to MetaWindowActorWayland.
+     * In X11 / XWayland, MetaWindowActorX11 is an outer container whose paint
+     * volume includes Mutter's native shadow; applying the offscreen clip to it
+     * causes coordinate mismatch with the shadow margins. Applying to its
+     * surface child (actor.get_first_child()) cleanly clips the window texture
+     * while preserving Mutter's native drop shadow.
+     *
+     * @param {Meta.Window} win
+     * @param {Clutter.Actor} actor
+     * @returns {Clutter.Actor}
+     */
+    _getClipTarget(win, actor) {
+        if (win.get_client_type?.() === CLIENT_TYPE_X11)
+            return actor.get_first_child?.() ?? actor;
+        return actor;
+    }
+
     /** Dynamically synchronize window clipEffect */
     _syncClip(win, wantClip) {
         const state = this._windows.get(win);
@@ -253,10 +286,22 @@ export class Manager {
         if (wantClip !== hasClip) {
             if (wantClip) {
                 state.clip = new RoundedClipEffect();
-                actor.add_effect(state.clip);
+                state.clipTarget = this._getClipTarget(win, actor);
+                state.clipTarget.add_effect(state.clip);
             } else {
-                actor.remove_effect(state.clip);
+                state.clipTarget.remove_effect(state.clip);
                 state.clip = null;
+                state.clipTarget = null;
+            }
+        } else if (wantClip) {
+            // X11 may replace the surface child (assign_surface_actor); the effect
+            // would otherwise stay orphaned on the dead actor. Re-pin when moved.
+            // A missing child falls back to the window actor until one appears.
+            const target = this._getClipTarget(win, actor);
+            if (target !== state.clipTarget) {
+                state.clipTarget.remove_effect(state.clip);
+                state.clipTarget = target;
+                target.add_effect(state.clip);
             }
         }
     }
@@ -356,6 +401,7 @@ export class Manager {
             isFullscreen: win.is_fullscreen(),
             hasSsd: Boolean(win.decorated),
             isX11: clientType === CLIENT_TYPE_X11,
+            isAdwaita: adwaitaDetector.isWindowAdwaita(win),
             windowType: win.get_window_type(),
             hasParent: Boolean(win.get_transient_for?.()),
             isAttachedDialog: Boolean(win.is_attached_dialog?.()),
@@ -407,7 +453,7 @@ export class Manager {
             return;
 
         if (state.clip)
-            state.clip.setParams(actor.width, actor.height, style.radius, style.outline);
+            state.clip.setParams(state.clipTarget.width, state.clipTarget.height, style.radius, style.outline);
         if (state.shadow) {
             // If corner clipping is skipped (square corners), the shadow fits a square
             // outline instead. The actor cross-fades to a new style on its own.

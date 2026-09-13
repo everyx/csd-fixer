@@ -16,10 +16,10 @@ Two things are drawn, and they have different mechanisms:
 
 | Part | Where it lives | Notes |
 | --- | --- | --- |
-| Rounded clip + inner outline | `RoundedClipEffect` on the window actor | skipped entirely under some settings, see below |
-| Shadow | `CsdFixerShadowActor` (`ShadowActor`), a **sibling** of the window actor | one baked 145x145 texture per style, 8-slice |
+| Rounded clip + inner outline | `RoundedClipEffect` on the window actor (surface actor on X11) | skipped entirely under some settings, see below |
+| Shadow | `WindowNativizerShadowActor` (`ShadowActor`), a **sibling** of the window actor | one baked 145x145 texture per style, 8-slice; only where we paint it — SSD keeps the frames-client shadow, bare X11 keeps Mutter's |
 
-Because the shadow is a sibling and the clip is an effect, a window-scoped screenshot
+Because our shadow is a sibling and the clip is an effect, a window-scoped screenshot
 (`ScreenshotWindow`) can never contain the shadow. Only a full-desktop screenshot shows both.
 
 ## The measurement that works
@@ -28,8 +28,8 @@ A window with a **known body colour** over a **white backdrop**, profiled pixel 
 outward from the window edge, all three channels. Red body + white background + black shadow
 separate three things in one profile: body, outline, shadow.
 
-`tools/probe-window.js` takes `CSD_FIXER_BODY=#ff0000` for exactly this; with
-`CSD_FIXER_BACKDROP=1` it is the white surface. `CSD_FIXER_MODE=native` renders the same
+`tools/probe-window.js` takes `WINDOW_NATIVIZER_BODY=#ff0000` for exactly this; with
+`WINDOW_NATIVIZER_BACKDROP=1` it is the white surface. `WINDOW_NATIVIZER_MODE=native` renders the same
 window through libadwaita as the reference.
 
 Profiles must step **outward** on all four sides (top and left step negative) and must be
@@ -63,7 +63,7 @@ pixel edge offset" that was chased for a long time.
 Before measuring corners or the outline:
 
 ```bash
-gsettings set org.gnome.shell.extensions.csd-fixer prefer-crisp-text false   # and restore it
+gsettings set org.gnome.shell.extensions.window-nativizer prefer-crisp-text false   # and restore it
 ```
 
 This is a real trade-off, not a bug: clipping is an offscreen per window, and the option
@@ -128,7 +128,7 @@ compared against native libadwaita. Two apparent discrepancies were analyzed and
   `x=0` is integer-aligned (`G=0`).
 - **Confirmation**: The underlying shader distance `d` is mathematically centered and
   four-way symmetric. In native libadwaita, decorations are rendered entirely within the
-  client's own Wayland surface via GTK4/GSK; in CSD Fixer, the window content and shadow
+  client's own Wayland surface via GTK4/GSK; in Window Nativizer, the window content and shadow
   live on separate Mutter Clutter actors, subject to Mutter's offscreen clipping and
   fractional blitting.
 - **Trade-off**: When `prefer-crisp-text` is enabled, `RoundedClipEffect` is deliberately omitted
@@ -136,7 +136,7 @@ compared against native libadwaita. Two apparent discrepancies were analyzed and
 
 ### 2. First shadow pixel darkness (185 vs native 198-200)
 
-Originally, CSD Fixer's first shadow pixel measured 185 (about 13-14 grey levels darker
+Originally, Window Nativizer's first shadow pixel measured 185 (about 13-14 grey levels darker
 than native's ~199). Two factors contributed to this:
 
 1. **Layer 3 outline mask**: CSS defines the 1px ring as an outset border
@@ -181,7 +181,7 @@ SCSS definition (`box-shadow: 0 0 14px 5px ..., 0 0 5px 2px ..., 0 0 0 1px ...`)
 
 #### Attenuation Profile (0 to 22px outwards, Red body over White backdrop)
 
-| Offset (px) | CSD Fixer (4-way symmetric) | Native Libadwaita (4-way symmetric) | Delta (G) | Notes |
+| Offset (px) | Window Nativizer (4-way symmetric) | Native Libadwaita (4-way symmetric) | Delta (G) | Notes |
 | :---: | :---: | :---: | :---: | :--- |
 | **0 (outline)** | **9** | **18** | -9 | 1px inner outline (G channel over Red body) |
 | **+1** | **191** | **199** | **-8** | First shadow pixel outside window |
@@ -197,11 +197,11 @@ SCSS definition (`box-shadow: 0 0 14px 5px ..., 0 0 5px 2px ..., 0 0 0 1px ...`)
 | **+11** | **253** | **247** | **+6** | |
 | **+12** | **254** | **248** | **+6** | |
 | **+13** | **254** | **250** | **+4** | |
-| **+14** | **255 (white)** | **251** | **+4** | CSD Fixer fades into pure white |
+| **+14** | **255 (white)** | **251** | **+4** | Window Nativizer fades into pure white |
 | **+15 ~ +21** | 255 | 252 ~ 254 | +1 ~ +3 | Sub-1% native tail |
 | **+22** | 255 | **255 (white)** | **±0** | Native fades into pure white |
 
-Both curves are strictly monotonic. Across the primary visible range (+1 to +10px), CSD Fixer
+Both curves are strictly monotonic. Across the primary visible range (+1 to +10px), Window Nativizer
 tracks native curvature closely with an average deviation under 5 grey levels, zero banding,
 and 100% four-way symmetry.
 

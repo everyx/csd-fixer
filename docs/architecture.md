@@ -9,6 +9,7 @@ tested without a session; the processes only gather inputs and apply results.
 | Module | Responsibility |
 |---|---|
 | `lib/detector.js` | whether a window needs decoration, and whether a rule would change that (pure) |
+| `lib/adwaitaDetector.js` | shell-side probe: detects Libadwaita / Libhandy process linking (`/proc/pid/maps`) |
 | `lib/rules.js` | the window-kind rule model: keys, matching, sanitising (pure) |
 | `lib/pick.js` | the picker's D-Bus contract and the dictionary it returns (pure) |
 | `lib/style.js` | which decoration parameters a window state gets (pure) |
@@ -41,6 +42,9 @@ Every decorated window gets a `ShadowActor` inserted below the window actor in
 `global.window_group`, drawing an 8-slice baked Cogl shadow texture (`effects/shadowTexture.js`)
 with Clutter property and constraint bindings (`Clutter.BindConstraint`), and,
 when there is something to clip, a `RoundedClipEffect` (`Shell.GLSLEffect` offscreen pass).
+On Wayland, the clip effect attaches directly to the window actor; on X11 / XWayland, it attaches
+to the surface child actor (`actor.get_first_child()`) so the native / frames-client drop shadow is preserved
+and coordinates align accurately.
 The manager keeps one state record per window and reconciles add, remove and update on every
 state change.
 

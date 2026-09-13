@@ -40,13 +40,11 @@ export function computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight
  * @param {number} [params.windowType=WindowType.NORMAL] - Meta.WindowType
  * @param {boolean} [params.isMaximized=false]
  * @param {boolean} [params.isFullscreen=false]
- * @param {boolean} [params.hasSsd=false] - Mutter already draws frame/titlebar
  * @returns {{eligible: boolean, reason: string}}
  */
 export function checkDecorationEligibility({
     windowType = WindowType.NORMAL,
     isMaximized = false, isFullscreen = false,
-    hasSsd = false,
 } = {}) {
     // Only normal, dialog, modal and utility windows are ours to decorate.
     if (windowType !== WindowType.NORMAL && windowType !== WindowType.DIALOG &&
@@ -57,43 +55,54 @@ export function checkDecorationEligibility({
     if (isMaximized || isFullscreen)
         return {eligible: false, reason: 'maximized/fullscreen'};
 
-    // Server-side decorations: Mutter already drew the whole decoration.
-    if (hasSsd)
-        return {eligible: false, reason: 'has-ssd-frame'};
-
     return {eligible: true, reason: ''};
 }
 /**
  * The decoration we would apply with no user rule, answered per axis.
+ * The four-layer model behind this is in docs/decoration-model.md.
  *
- * Both axes answer the same, because each reason below is about the window as a
- * whole; they are returned separately so a `force` rule may flip one and leave the
- * other here. The X11 case covers corners too, and is a consistency call rather
- * than a fact - see docs/decoration-model.md.
+ * Both axes answer independently based on window structural facts:
+ * - Shadows are only drawn for windows lacking a native compositor or CSD shadow.
+ * - Rounded corners are applied to all windows lacking native rounded corners.
  *
  * @param {object} params
  * @param {boolean} [params.isX11=false]
  * @param {number} params.sideW - per-side content margin, logical px
  * @param {number} params.sideH - per-side content margin, logical px
  * @param {number} [params.insetThreshold]
+ * @param {boolean} [params.hasSsd=false] - Mutter already draws frame/titlebar
+ * @param {boolean} [params.isAdwaita=false] - Libadwaita / Libhandy native app (per-process pid linkage, see adwaitaDetector.js)
  * @returns {{shadow: boolean, corners: boolean, reason: string}}
  */
 export function inferDecorationBaseline({
     isX11 = false,
     sideW, sideH,
     insetThreshold = MUTTER_CSD_MIN_INSET_THRESHOLD,
+    hasSsd = false,
+    isAdwaita = false,
 }) {
+    // Native Libadwaita / Libhandy apps already draw their own rounded corners
+    // and drop shadows; skip both so we do not double-clip or double-shadow them.
+    if (isAdwaita)
+        return {shadow: false, corners: false, reason: 'has-adwaita-csd'};
+
+    // Server-side decorations (SSD, traditional X11 app with Mutter frame/titlebar):
+    // The frames client draws the frame and its own shadow (the compositor draws
+    // none: has_shadow() returns FALSE once a frame exists), but corners are square.
+    // Keep their shadow and clip corners to match libadwaita.
+    if (hasSsd)
+        return {shadow: false, corners: true, reason: 'has-ssd-frame'};
+
     // A genuine client-side shadow reserves margin on every side; an oversized
     // margin on a single axis is instead a resize grip or partial decoration.
     if (sideW >= insetThreshold && sideH >= insetThreshold)
         return {shadow: false, corners: false, reason: `has-csd(insets=${sideW.toFixed(1)}x${sideH.toFixed(1)} >= ${insetThreshold})`};
 
     // X11 / XWayland without custom frame extents (e.g. WPS Office, Dida): Mutter
-    // draws the box shadow itself (meta-window-actor-x11.c:has_shadow), and ours
-    // would duplicate it. A declared extent makes Mutter drop its own, so those
-    // windows are decorated like any other.
+    // draws the box shadow itself (meta-window-actor-x11.c:has_shadow), but the window
+    // itself has sharp square corners. Retain native shadow and clip corners.
     if (isX11 && sideW <= 0 && sideH <= 0)
-        return {shadow: false, corners: false, reason: 'x11-mutter-native-shadow'};
+        return {shadow: false, corners: true, reason: 'x11-mutter-native-shadow'};
 
     return {shadow: true, corners: true, reason: `no-csd(insets=${sideW.toFixed(1)}x${sideH.toFixed(1)} < ${insetThreshold})`};
 }
@@ -155,6 +164,7 @@ export function isWindowTiled(win, options = {}) {
  * @property {boolean} [isFullscreen=false] - Whether window is fullscreen
  * @property {boolean} [hasSsd=false] - Whether native server-side decorations exist
  * @property {boolean} [isX11=false] - Whether client is X11 / XWayland
+ * @property {boolean} [isAdwaita=false] - Whether window is native Libadwaita / Libhandy app (per-process pid linkage)
  * @property {number} [windowType=WindowType.NORMAL] - Wayland/Meta window type
  * @property {boolean} [hasParent=false] - Whether window has transient parent
  * @property {boolean} [isAttachedDialog=false] - Whether modal dialog attached to parent
@@ -177,6 +187,7 @@ export function evaluateWindowActions({
     isMaximized = false, isFullscreen = false,
     hasSsd = false,
     isX11 = false,
+    isAdwaita = false,
     windowType = WindowType.NORMAL,
     hasParent = false,
     isAttachedDialog = false,
@@ -191,13 +202,13 @@ export function evaluateWindowActions({
     // 2. Inferred baseline - what we would do with no rule at all.
     // 3. User rule - moves the axes it names; the only layer that can turn one on.
     // 4. State modifiers - policies, not inferences (docs/decoration-model.md).
-    const eligibility = checkDecorationEligibility({windowType, isMaximized, isFullscreen, hasSsd});
+    const eligibility = checkDecorationEligibility({windowType, isMaximized, isFullscreen});
     if (!eligibility.eligible)
         return {applyShadow: false, applyClip: false, reason: eligibility.reason};
 
     const {w, h} = computeInsets(bufferWidth, bufferHeight, frameWidth, frameHeight);
     const baseline = inferDecorationBaseline({
-        isX11, sideW: w / 2, sideH: h / 2, insetThreshold,
+        isX11, sideW: w / 2, sideH: h / 2, insetThreshold, hasSsd, isAdwaita,
     });
 
     const rule = resolveRule(wmClass, rules, {
@@ -276,7 +287,6 @@ export function pickedRuleWouldChange(properties, params, direction) {
         isMaximized: false,
         isFullscreen: false,
         hasTileMatch: false,
-        hasSsd: false,
     };
 
     return ruleWouldChangeActions(asKind, {direction, key, axes: RULE_AXIS_ORDER});
