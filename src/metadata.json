@@ -1,8 +1,8 @@
 {
-    "uuid": "csd-fixer@everyx.github.io",
-    "name": "CSD Fixer",
-    "description": "Native GNOME rounded corners and drop shadows for undecorated windows.",
-    "url": "https://github.com/everyx/csd-fixer",
+    "uuid": "window-nativizer@everyx.github.io",
+    "name": "Window Nativizer",
+    "description": "Fills in missing GNOME rounded corners and shadows, each only where absent.",
+    "url": "https://github.com/everyx/gnome-shell-extension-window-nativizer",
     "shell-version": [
         "45",
         "46",
@@ -11,7 +11,7 @@
         "49",
         "50"
     ],
-    "settings-schema": "org.gnome.shell.extensions.csd-fixer",
-    "gettext-domain": "csd-fixer",
+    "settings-schema": "org.gnome.shell.extensions.window-nativizer",
+    "gettext-domain": "window-nativizer",
     "version-name": "0.2.0"
 }

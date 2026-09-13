@@ -1,59 +1,68 @@
-![CSD Fixer](assets/logo.svg)
+![](assets/logo.svg)
 
-# CSD Fixer
+# Window Nativizer
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-Gives GNOME's rounded corners and drop shadows to undecorated windows.
+A GNOME Shell extension. Native rounded corners and shadows, only where missing — so every window looks native to GNOME.
 
-![CSD Fixer Preview](assets/preview.webp)
+![Before/after: a square window next to the same window with rounded corners and a drop shadow](assets/preview.webp)
 
-## What it does
+## Features
 
-- **Fills the gaps, nothing else.** Decorates windows that neither draw their own decoration
-  nor get one from Mutter: WeChat, most Qt and Electron apps, frameless X11 clients. Two
-  shadows can't stack on one window.
-- **Native GNOME experience.** Rounded corners, shadow and outline match a GNOME window in
-  every state: focused, backdrop, tiled, maximized, fullscreen, high contrast. The values
-  come from libadwaita.
-- **Stays sharp under fractional scaling.** An option drops the rounding and keeps the
-  shadow, for sharper text.
-
-## Performance
-
-- **Zero idle CPU overhead.** Static windows do not trigger JavaScript evaluation or extra redraw passes.
-- **Baked GPU shadow textures.** Instead of recalculating Gaussian blur shaders per-frame across the entire window area, shadows are baked once per style into a compact 145×145 Cogl texture (~82 KB, shared across all windows in the session) and drawn using 8-slice quads. Resizing a window stretches texture coordinates without re-running blur shaders.
-- **Smooth dynamic resizing.** Under 60 FPS continuous window resizing stress tests, extra CPU overhead is under 0.6 ms per frame.
-- **Zero overhead when maximized or tiled.** Shadows and offscreen clipping passes are automatically dropped when windows are maximized, fullscreen, or snap-tiled with adjacent neighbors.
-- **Guarded by benchmarks.** Integrated regression test suite (`pnpm run benchmark:perf`) enforces strict performance budgets.
-
-## Rules
-
-- **Force Rules.** Use its pick button on a window that's still square, because it draws
-  its own decoration or because CSD Fixer can't tell, and the rule covers that window kind
-  from then on.
-- **Suppress Rules.** The reverse: pick a window that has a decoration, and the rule
-  strips it for that kind.
-- **Per window kind, not per app.** A rule made for one of WeChat's dialogs does not apply
-  to its main window.
+- **Only fills gaps.**
+  - Missing shadow → native shadow: WeChat, most Qt/Electron apps, frameless X11 and Wayland clients.
+  - Missing corners → native corners: X11 with a system title bar, bare XWayland clients.
+  - Shadow and corners are independent axes.
+- **Never double-decorates.**
+  - Two shadows → darker and misaligned.
+  - A second rounded clip → cut content, or a fringe.
+  - Unsure → skip. A false skip costs one rule; a wrong decoration is a visual bug. [Why →](docs/decoration-model.md)
+- **Hand-fixable.** Wrong guess → pick the window, make a force or suppress rule. [Troubleshooting →](#troubleshooting)
+- **Matches GNOME.** Corners, shadow and outline track a native window in every state: focused, backdrop, tiled, maximized, fullscreen, high contrast. Values from libadwaita.
 
 ## Installation
 
 GNOME Shell 45–50, Wayland or X11.
 
 ```sh
-git clone https://github.com/everyx/csd-fixer.git
-cd csd-fixer
+git clone https://github.com/everyx/gnome-shell-extension-window-nativizer.git
+cd window-nativizer
 pnpm install
 pnpm run install-ext
 ```
 
-extensions.gnome.org: soon.
+Enable, then re-login (X11: Alt+F2, `r`):
+
+```sh
+gnome-extensions enable window-nativizer@everyx.github.io
+```
+
+Not on extensions.gnome.org yet.
+
+## Performance
+
+- **No idle cost.** Static windows: no JavaScript, no extra redraws.
+- **Baked shadows.** One shared texture per style instead of a per-frame blur; resizing only moves texture coordinates. Numbers: [docs/decoration-model.md](docs/decoration-model.md).
+- **Drops out when maximized.** Maximized, fullscreen, snap-tiled: shadow and offscreen clip skipped. `pnpm run benchmark:perf` guards it in CI.
+
+## Troubleshooting
+
+- **Missing corners or shadow** → pick the window, **force** the decoration.
+- **Decorated when it shouldn't be** → pick the window, **suppress** the decoration.
+- **Soft text on a fractional scale** → enable **Prioritize crisp text** (trades corners for sharpness).
+
+Rules come from the pick button in the preferences, and apply per window kind, not per app.
 
 ## Development
 
-- **Commits run the CI checks.** `pnpm install` points git at `.githooks/`.
-- **Model docs.** [docs/development.md](docs/development.md).
+- **Commit = CI.** `pnpm install` sets `core.hooksPath` to `.githooks/`.
+- **Docs.** [docs/development.md](docs/development.md).
+
+## Credits
+
+- Values generated from [libadwaita](https://gitlab.gnome.org/GNOME/libadwaita); shadow shader from [GTK4](https://gitlab.gnome.org/GNOME/gtk); window behaviour follows [Mutter](https://gitlab.gnome.org/GNOME/mutter).
+- Related: [Rounded Window Corners Reborn](https://github.com/flexagoon/rounded-window-corners).
 
 ## License
 

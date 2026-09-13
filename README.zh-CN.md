@@ -1,50 +1,68 @@
-![CSD Fixer](assets/logo.svg)
+![](assets/logo.svg)
 
-# CSD Fixer
+# Window Nativizer
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-给 GNOME 下没有装饰的窗口补上原生圆角与投影。
+一个 GNOME Shell 扩展。只补缺失的圆角与阴影，让每个窗口都像 GNOME 原生的。
 
-![CSD Fixer 预览](assets/preview.webp)
+![对比：方角窗口 vs. 同一窗口补上圆角与投影](assets/preview.webp)
 
-## 它做什么
+## 功能
 
-- **只补缺口**：只处理既没自己画、也没从 Mutter 拿到装饰的窗口，例如微信、多数 Qt 与 Electron 应用、无边框的 X11 客户端。同一个窗口不会叠出两层阴影。
-- **原生 GNOME 体验**：圆角、阴影、描边都和 GNOME 窗口相同，激活、失焦、贴边、最大化、全屏、高对比度下也一样。取值来自 libadwaita。
-- **分数缩放下不糊**：可以舍掉圆角、保留阴影，换取文字清晰。
-
-## 性能
-
-- **静默状态零 CPU 开销**：静态窗口不触发任何多余的 JavaScript 计算或额外重绘。
-- **GPU 阴影纹理烘焙**：不在每一帧对整个窗口面积重复运行高斯模糊着色器，而是按风格在全局预烘焙一张微型 145×145 纹理（仅约 82 KB 显存，全会话共用），通过 8 切片（8-slice，类似九宫格）四边形拼贴渲染。窗口缩放拉伸只变换纹理坐标，无需重新烘焙。
-- **极低的动态缩放损耗**：在 60 FPS 连续调整窗口大小（Resize）的高压测试下，每帧额外 CPU 耗时小于 0.6 ms。
-- **全屏与平铺零开销**：窗口在最大化、全屏或贴边平铺时，自动卸载阴影与离屏裁剪通道，开销立即归零。
-- **基准测试守卫**：内置自动化性能基准测试与预算守卫（`pnpm run benchmark:perf`），防止性能退化。
-
-## 规则
-
-- **强制规则**：用它的拾取按钮点一个还是方角的窗口（它自己画了装饰，或 CSD Fixer 判断不了），规则此后作用于这一类窗口。
-- **屏蔽规则**：反过来，点一个有装饰的窗口，规则把这一类窗口的装饰去掉。
-- **按窗口种类，不按应用**：给微信某个对话框做的规则，不会作用于它的主窗口。
+- **只补缺口**：
+  - 缺阴影 → 原生阴影：微信、多数 Qt/Electron 应用、无边框 X11 / Wayland 客户端；
+  - 缺圆角 → 原生圆角：带系统标题栏的 X11 应用、裸 XWayland 客户端；
+  - 两轴独立。
+- **绝不重复装饰**：
+  - 两层阴影 → 更黑、边缘错位；
+  - 第二刀圆角 → 切内容或留毛边；
+  - 拿不准 → 跳过。误漏一条规则可补，误画是观感 bug。[为什么 →](docs/decoration-model.md)
+- **可手动修正**：误判 → 拾取窗口，建一条强制或屏蔽规则。[遇到问题 →](#遇到问题)
+- **对齐 GNOME**：圆角、阴影、描边在各状态下与原生窗口一致——激活、失焦、贴边、最大化、全屏、高对比度。取值来自 libadwaita。
 
 ## 安装
 
 GNOME Shell 45–50，Wayland 或 X11。
 
 ```sh
-git clone https://github.com/everyx/csd-fixer.git
-cd csd-fixer
+git clone https://github.com/everyx/gnome-shell-extension-window-nativizer.git
+cd window-nativizer
 pnpm install
 pnpm run install-ext
 ```
 
-GNOME 扩展商店：即将上架。
+启用后注销重登（X11：Alt+F2、`r`）：
+
+```sh
+gnome-extensions enable window-nativizer@everyx.github.io
+```
+
+尚未上架 extensions.gnome.org。
+
+## 性能
+
+- **静默零开销**：静态窗口不触发 JS，不额外重绘。
+- **阴影预烘焙**：每种风格共用一张纹理，不再逐帧模糊；缩放只改纹理坐标。数字见 [docs/decoration-model.md](docs/decoration-model.md)。
+- **最大化即退出**：最大化 / 全屏 / 贴边平铺时，阴影与离屏裁剪均跳过；`pnpm run benchmark:perf` 在 CI 守护。
+
+## 遇到问题
+
+- **缺圆角或阴影** → 拾取窗口，**强制**加上。
+- **被多画了一层装饰** → 拾取窗口，**屏蔽**掉。
+- **分数缩放下文字发虚** → 打开「优先保证文字清晰」（用圆角换清晰）。
+
+规则在首选项里用拾取按钮创建，按窗口种类生效，不按应用。
 
 ## 开发
 
-- **提交即跑 CI 检查**：`pnpm install` 会把 git 指向 `.githooks/`。
-- **模型文档**：见 [docs/development.md](docs/development.md)。
+- **提交即 CI**：`pnpm install` 把 `core.hooksPath` 指向 `.githooks/`。
+- **文档**：[docs/development.md](docs/development.md)。
+
+## 致谢
+
+- 取值生成自 [libadwaita](https://gitlab.gnome.org/GNOME/libadwaita)，阴影着色器取自 [GTK4](https://gitlab.gnome.org/GNOME/gtk)，窗口行为遵循 [Mutter](https://gitlab.gnome.org/GNOME/mutter)。
+- 同类：[Rounded Window Corners Reborn](https://github.com/flexagoon/rounded-window-corners)。
 
 ## 开源许可
 

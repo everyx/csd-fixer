@@ -1,13 +1,13 @@
 {
-  "name": "csd-fixer",
+  "name": "window-nativizer",
   "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "GNOME Shell extension: native rounded corners and drop shadows for undecorated windows",
+  "description": "GNOME Shell extension: fills in missing GNOME rounded corners and shadows, each only where absent",
   "license": "GPL-2.0-or-later",
   "repository": {
     "type": "git",
-    "url": "https://github.com/everyx/csd-fixer.git"
+    "url": "https://github.com/everyx/gnome-shell-extension-window-nativizer.git"
   },
   "packageManager": "pnpm@11.3.0",
   "scripts": {
@@ -33,8 +33,8 @@
     "check-style": "node tools/gen-style.mjs --check && node tools/gen-shader.mjs --check && node tools/gen-mutter.mjs --check && node tools/gen-locale.mjs --check",
     "ego-lint": "bash \"${EGO_LINT:-$HOME/.local/share/gnome-extension-reviewer/ego-lint}\" src/",
     "pack": "pnpm run compile-locales && mkdir -p dist && cp LICENSE src/LICENSE && gnome-extensions pack src --force --extra-source=lib --extra-source=effects --extra-source=stylesheet.css --extra-source=locale --extra-source=LICENSE --out-dir=dist && rm -f src/LICENSE",
-    "shexli": "uvx --with 'tree-sitter<0.26.0' shexli dist/csd-fixer@everyx.github.io.shell-extension.zip || (pipx install --force shexli && pipx runpip shexli install 'tree-sitter<0.26.0' && shexli dist/csd-fixer@everyx.github.io.shell-extension.zip)",
-    "install-ext": "pnpm run pack && gnome-extensions install --force dist/csd-fixer@everyx.github.io.shell-extension.zip"
+    "shexli": "uvx --with 'tree-sitter<0.26.0' shexli dist/window-nativizer@everyx.github.io.shell-extension.zip || (pipx install --force shexli && pipx runpip shexli install 'tree-sitter<0.26.0' && shexli dist/window-nativizer@everyx.github.io.shell-extension.zip)",
+    "install-ext": "pnpm run pack && gnome-extensions install --force dist/window-nativizer@everyx.github.io.shell-extension.zip"
   },
   "devDependencies": {
     "eslint": "^9.0.0",
