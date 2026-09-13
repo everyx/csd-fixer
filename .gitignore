@@ -15,3 +15,4 @@ src/locale/
 dist/
 *.zip
 *.tgz
+__pycache__/
