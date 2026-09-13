@@ -30,6 +30,14 @@ export const WindowType = Object.freeze({
 });
 
 /**
+ * Mutter Window Client Type enum (MetaWindowClientType from vendor/mutter/window.h)
+ */
+export const WindowClientType = Object.freeze({
+    "WAYLAND": 0,
+    "X11": 1
+});
+
+/**
  * Mutter preset shadow style class metadata (MetaShadowClassInfo default_shadow_classes)
  */
 export const MUTTER_SHADOW_CLASSES = Object.freeze({

@@ -170,7 +170,15 @@ export class InspectorService {
         });
 
         // 4. Modal grab and crosshair cursor
-        this._activeGrab = Main.pushModal(this._overlay);
+        try {
+            this._activeGrab = Main.pushModal(this._overlay);
+        } catch (e) {
+            // A failed grab must still answer the D-Bus call, or the prefs window
+            // stays hidden waiting on a reply that never comes.
+            logError(e, '[window-nativizer] Could not grab the window picker');
+            this._finishInteractivePick(null);
+            return;
+        }
         try {
             global.stage?.set_cursor_type?.(Clutter.CursorType.CROSSHAIR);
         } catch {

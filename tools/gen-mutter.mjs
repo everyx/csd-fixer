@@ -114,11 +114,41 @@ function parseWindowTypes(headerCode) {
     return types;
 }
 
+function parseClientTypes(headerCode) {
+    const enumMatch = /typedef\s+enum\s*\{([^}]+)\}\s*MetaWindowClientType;/m.exec(headerCode);
+    if (!enumMatch)
+        throw new Error('[gen-mutter] Assertion failed: MetaWindowClientType enum not found in window.h');
+
+    const types = {};
+    let currentIndex = 0;
+
+    for (const rawLine of enumMatch[1].split('\n')) {
+        const line = rawLine.replace(/\/\*.*?\*\//g, '').trim();
+        if (!line)
+            continue;
+
+        const match = /^META_WINDOW_CLIENT_TYPE_([A-Z0-9_]+)(?:\s*=\s*(\d+))?,?$/.exec(line);
+        if (match) {
+            const name = match[1];
+            if (match[2] !== undefined)
+                currentIndex = parseInt(match[2], 10);
+            types[name] = currentIndex;
+            currentIndex++;
+        }
+    }
+
+    if (types.WAYLAND === undefined || types.X11 === undefined)
+        throw new Error('[gen-mutter] Assertion failed: Expected WindowClientType values missing');
+
+    return types;
+}
+
 function main() {
     const cCode = read('meta-shadow-factory.c');
     const headerCode = read('window.h');
     const classes = parseShadowClasses(cCode);
     const windowTypes = parseWindowTypes(headerCode);
+    const clientTypes = parseClientTypes(headerCode);
 
     const normalUnfocused = classes.normal.unfocused;
     const normalFocused = classes.normal.focused;
@@ -142,6 +172,11 @@ function main() {
  * Mutter Window Type enum (MetaWindowType from vendor/mutter/window.h)
  */
 export const WindowType = Object.freeze(${JSON.stringify(windowTypes, null, 4)});
+
+/**
+ * Mutter Window Client Type enum (MetaWindowClientType from vendor/mutter/window.h)
+ */
+export const WindowClientType = Object.freeze(${JSON.stringify(clientTypes, null, 4)});
 
 /**
  * Mutter preset shadow style class metadata (MetaShadowClassInfo default_shadow_classes)

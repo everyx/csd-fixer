@@ -15,9 +15,9 @@ import {chooseWindowIdentity} from './rules.js';
  * @returns {string} '' when the window declares nothing usable
  */
 function readDeclaredIdentity(win) {
-    return win?.get_wm_class?.() ??
-        win?.get_sandboxed_app_id?.() ??
-        win?.get_gtk_application_id?.() ??
+    return win?.get_wm_class?.() ||
+        win?.get_sandboxed_app_id?.() ||
+        win?.get_gtk_application_id?.() ||
         '';
 }
 

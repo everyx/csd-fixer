@@ -7,7 +7,7 @@
  * Pure logic module: no shell globals, unit-testable.
  */
 
-import {WindowType} from './mutterRules.generated.js';
+import {WindowType, WindowClientType} from './mutterRules.generated.js';
 
 import {
     CLIENT_TYPE_TOKEN_WAYLAND,
@@ -17,14 +17,11 @@ import {
 } from './rules.js';
 
 /**
- * MetaWindowClientType (vendor/mutter/window.h). Values are stable across the
- * typelib (`Meta.WindowClientType`); defined here so the pure modules can classify
- * client types without importing Shell/Meta.
+ * MetaWindowClientType, generated from vendor/mutter/window.h so it cannot drift
+ * from the enum the typelib reports (Meta.WindowClientType). Re-exported so the
+ * pure modules keep classifying client types without importing Shell/Meta.
  */
-export const WindowClientType = Object.freeze({
-    WAYLAND: 0,
-    X11: 1,
-});
+export {WindowClientType};
 /**
  * D-Bus communication coordinates for the Window Inspector service.
  * Shared between the Shell extension process (InspectorService) and the
@@ -50,7 +47,7 @@ export function extractWindowProperties(win, wmClassOverride = null) {
     if (!win)
         return {};
 
-    const wmClass = wmClassOverride ?? win.get_wm_class?.() ?? win.get_sandboxed_app_id?.() ?? '';
+    const wmClass = wmClassOverride || win.get_wm_class?.() || win.get_sandboxed_app_id?.() || win.get_gtk_application_id?.() || '';
     const windowType = win.get_window_type?.() ?? WindowType.NORMAL;
     const isX11 = win.get_client_type?.() === WindowClientType.X11;
 
