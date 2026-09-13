@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.3.0](https://github.com/everyx/gnome-shell-extension-window-nativizer/compare/v0.2.0...v0.3.0) (2026-09-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* the UUID becomes window-nativizer@everyx.github.io, so GNOME sees a new extension and existing installs must be reinstalled. Move the old rules across with `dconf dump /org/gnome/shell/extensions/csd-fixer/ | dconf load /org/gnome/shell/extensions/window-nativizer/ && dconf reset -f /org/gnome/shell/extensions/csd-fixer/`, then drop the old install with `gnome-extensions uninstall csd-fixer@everyx.github.io`.
+
+### Features
+
+* **detector:** round corners on X11 and SSD windows, skip libadwaita ([034d038](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/034d0387eb77a18c6ee54c04f24fb6039dd3556f))
+
+
+### Bug Fixes
+
+* **adwaita:** do not cache a failed process probe ([448c253](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/448c2539bc7618d581bde1d73e726cffef98590f))
+* **detector:** skip degenerate helper windows ([3120e42](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/3120e4276dec0830852e6c645483eb0b795a18c9))
+* **effects:** seal the shadow cache and share the style key ([76b4f92](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/76b4f92d1dd2636528d6b4fddbbab894250a69ec))
+* **manager:** harden the clip decision, lifecycle and teardown ([c163509](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/c163509ca3a66bbf00d015882a9df3c7aec265fe))
+* **runtime:** picker, enable, identity and client-type ([8a0e384](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/8a0e38497af2b08c1c0fbcc01bca9e365a5904d2))
+
+
+### Refactoring
+
+* rename the extension to Window Nativizer ([1535dfe](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/1535dfe97a059c47c3d5abf24ca37f6cef5ca58b))
+
+
+### Documentation
+
+* record the commit convention and align the docs with the code ([0687eea](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/0687eea97bdc35d9602122481b35aeb17efaa69d))
+* rewrite the READMEs ([6ffbe7f](https://github.com/everyx/gnome-shell-extension-window-nativizer/commit/6ffbe7fb98900bb27f2a112b771e631a0e0b394c))
+
 ## [0.2.0](https://github.com/everyx/csd-fixer/compare/v0.1.0...v0.2.0) (2026-09-12)
 
 
