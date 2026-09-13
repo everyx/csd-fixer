@@ -15,9 +15,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"   # Repository root (script is under tools/)
-SRC_DIR="${SRC_DIR:-$ROOT/src}"              # Extension source directory
-UUID="$(python3 -c "import json; print(json.load(open('$SRC_DIR/metadata.json'))['uuid'])")"
-EXT_DIR="$HOME/.local/share/gnome-shell/extensions/$UUID"
+# Sets SRC_DIR, UUID, EXT_DIR and deploy_ext().
+source "$ROOT/tools/deploy-ext.sh"
 WL_DISPLAY="wayland-window-nativizer"
 STATE_DIR="/tmp/window-nativizer-dev"
 PIDFILE="$STATE_DIR/shell.pid"
@@ -30,19 +29,8 @@ cmd_shell() {
         echo ">> Nested shell is already running (PID $(cat "$PIDFILE"))"
         return
     fi
-    # Sync latest extension code + compile GSettings schema (skip if schemas/ does not exist)
-    mkdir -p "$EXT_DIR"
-    cp -r "$SRC_DIR/metadata.json" "$SRC_DIR/extension.js" "$EXT_DIR/"
-    [[ -f "$SRC_DIR/prefs.js" ]] && cp "$SRC_DIR/prefs.js" "$EXT_DIR/"
-    [[ -f "$SRC_DIR/stylesheet.css" ]] && cp "$SRC_DIR/stylesheet.css" "$EXT_DIR/"
-    [[ -d "$SRC_DIR/lib" ]] && cp -r "$SRC_DIR/lib" "$EXT_DIR/"
-    [[ -d "$SRC_DIR/effects" ]] && cp -r "$SRC_DIR/effects" "$EXT_DIR/"
-    [[ -d "$SRC_DIR/locale" ]] && cp -r "$SRC_DIR/locale" "$EXT_DIR/"
-    if [[ -d "$SRC_DIR/schemas" ]]; then
-        mkdir -p "$EXT_DIR/schemas"
-        cp "$SRC_DIR/schemas/"*.xml "$EXT_DIR/schemas/"
-        glib-compile-schemas "$EXT_DIR/schemas"
-    fi
+    # Sync latest extension code + compile GSettings schema
+    deploy_ext
     rm -f "$PIDFILE" "$LOG"   # Clear old logs to avoid mixing session outputs
 
     echo ">> Starting headless nested shell (background, log: $LOG)"

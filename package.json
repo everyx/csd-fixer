@@ -20,7 +20,7 @@
     "benchmark:perf": "python3 tools/benchmark-perf.py",
     "benchmark:perf:check": "python3 tools/benchmark-perf.py --check",
     "preview": "python3 tools/generate-preview.py",
-    "lint": "eslint src/",
+    "lint": "eslint src/ tests/ tools/",
     "shell": "tools/dev.sh shell",
     "log": "tools/dev.sh log",
     "app": "tools/dev.sh app",

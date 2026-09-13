@@ -14,30 +14,14 @@ set -e
 cd "$(dirname "$0")/.."
 
 ROOT="$(pwd)"
-SRC_DIR="$ROOT/src"
-UUID="$(python3 -c "import json; print(json.load(open('$SRC_DIR/metadata.json'))['uuid'])")"
-EXT_DIR="$HOME/.local/share/gnome-shell/extensions/$UUID"
+# Sets SRC_DIR, UUID, EXT_DIR and deploy_ext().
+source "$ROOT/tools/deploy-ext.sh"
 LOG=/tmp/window-nativizer-devkit.log
-
-deploy_ext() {
-    mkdir -p "$EXT_DIR"
-    cp "$SRC_DIR/metadata.json" "$SRC_DIR/extension.js" "$EXT_DIR/"
-    [[ -f "$SRC_DIR/prefs.js" ]] && cp "$SRC_DIR/prefs.js" "$EXT_DIR/"
-    [[ -f "$SRC_DIR/stylesheet.css" ]] && cp "$SRC_DIR/stylesheet.css" "$EXT_DIR/"
-    [[ -d "$SRC_DIR/lib" ]] && cp -r "$SRC_DIR/lib" "$EXT_DIR/"
-    [[ -d "$SRC_DIR/effects" ]] && cp -r "$SRC_DIR/effects" "$EXT_DIR/"
-    [[ -d "$SRC_DIR/locale" ]] && cp -r "$SRC_DIR/locale" "$EXT_DIR/"
-    if [[ -d "$SRC_DIR/schemas" ]]; then
-        mkdir -p "$EXT_DIR/schemas"
-        cp "$SRC_DIR/schemas/"*.xml "$EXT_DIR/schemas/"
-        glib-compile-schemas "$EXT_DIR/schemas"
-    fi
-}
 
 deploy_ext
 
 if [ "$1" = "bg" ]; then
-    setsid dbus-run-session gnome-shell --devkit --wayland >"$LOG" 2>&1 < /dev/null &
+    setsid dbus-run-session gnome-shell --devkit --wayland --unsafe-mode >"$LOG" 2>&1 < /dev/null &
     echo $! > /tmp/window-nativizer-devkit.pid
     sleep 7
     if ! pgrep -f "gnome-shell --devkit" > /dev/null; then
@@ -53,7 +37,7 @@ echo "Log: $LOG (Ctrl+C to exit)"
 echo "Connect GUI client in another terminal: /usr/lib/mutter-devkit"
 echo ""
 
-dbus-run-session gnome-shell --devkit --wayland 2>&1 \
+dbus-run-session gnome-shell --devkit --wayland --unsafe-mode 2>&1 \
   | tee "$LOG" \
   | grep -v -E '(^$|a11y|dbus-daemon|gvfs|systemd1|fusermount|AT-SPI|XKEYBOARD)' \
   | grep --line-buffered -E '(window-nativizer|Gjs|JS ERROR|libmutter|CRITICAL|Warning|Running GNOME|display name|extension)' \

@@ -122,7 +122,7 @@ if (isCheck) {
         const basename = path.basename(poFile);
         try {
             execFileSync('msgfmt', ['--check', '-o', '/dev/null', poFile]);
-        } catch (e) {
+        } catch {
             console.error(`[gen-locale] --check failed: syntax error in ${basename}`);
             process.exit(1);
         }
